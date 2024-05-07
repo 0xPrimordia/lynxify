@@ -20,8 +20,7 @@
     "react": "^18",
     "react-dom": "^18",
     "viem": "^2.9.26",
-    "wagmi": "^2.7.0",
-    "wagmi-v1": "npm:wagmi@1.3.9"
+    "wagmi": "^2.7.0"
   },
   "devDependencies": {
     "@types/node": "^20",
