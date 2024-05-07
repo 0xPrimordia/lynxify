@@ -1,0 +1,36 @@
+{
+  "name": "lynxify",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hashgraph/sdk": "^2.44.0",
+    "@privy-io/react-auth": "^1.61.0",
+    "@privy-io/wagmi": "^0.2.3",
+    "@privy-io/wagmi-connector": "^0.1.13",
+    "@rainbow-me/rainbowkit": "^2.0.6",
+    "@tanstack/react-query": "^5.32.0",
+    "hashconnect": "^3.0.13",
+    "next": "14.2.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "viem": "^2.9.26",
+    "wagmi": "^2.7.0",
+    "wagmi-v1": "npm:wagmi@1.3.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.3",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
