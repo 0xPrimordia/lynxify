@@ -46,6 +46,3 @@ To provide liquidity for crypto assets without fuss & fees
 
 ## Roadmap
 ![Pampas screenshots](/public/images/roadmap.png)
-
-## Team
-(need everyones bio's)
