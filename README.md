@@ -27,7 +27,7 @@ Enjoy the low fees and transaction speed of the Hedera network with your erc20 a
 ## Direct Wallet Staking & Trading
 Keep your coins secure in your own wallet as you stake or trade.
 
-![Pampas screenshots](/images/pampas-screens.png)
+![Pampas screenshots](/public/images/pampas-screens.png)
 
 ## MVP
 
