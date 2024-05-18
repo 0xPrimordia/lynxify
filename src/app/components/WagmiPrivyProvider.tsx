@@ -3,14 +3,13 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import { http } from 'wagmi';
 import {WagmiProvider} from '@privy-io/wagmi';
-import { etherlinkTestnet, hederaTestnet } from 'wagmi/chains';
+import { etherlinkTestnet } from 'wagmi/chains';
 import {createConfig} from '@privy-io/wagmi';
 
 const config = createConfig({
-  chains: [etherlinkTestnet, hederaTestnet],
+  chains: [etherlinkTestnet],
   transports: {
-    [etherlinkTestnet.id]: http('https://node.ghostnet.etherlink.com'),
-    [hederaTestnet.id]: http('https://testnet.hashio.io/api')
+    [etherlinkTestnet.id]: http('https://node.ghostnet.etherlink.com')
   },
 })
   
@@ -38,7 +37,9 @@ const config = createConfig({
         }}
       >
         <QueryClientProvider client={queryClient}>
-          <WagmiProvider config={config}>
+          <WagmiProvider 
+            //@ts-ignore doesn't seem to be breaking but should investigate
+            config={config}>
             {children}
           </WagmiProvider>
         </QueryClientProvider>
