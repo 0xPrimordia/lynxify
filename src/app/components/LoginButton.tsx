@@ -19,13 +19,13 @@ export default function LoginButton() {
     <>
         {!authenticated && (
             <button disabled={disableLogin} onClick={login}>
-            Log in
+            Connect Ethereum
             </button>
         )}
 
         {authenticated && (
             <button onClick={logout}>
-                Log out
+                Disconnect Ethereum
             </button>
         )}
     </>

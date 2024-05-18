@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from "react";
-import { createHashPackSigner, useHashConnect, HashportClientProviderWithRainbowKit } from "@hashport/react-client";
-import "../utils/polyfills"
+//import { createHashPackSigner, useHashConnect, HashportClientProviderWithRainbowKit } from "@hashport/react-client";
+//import "../utils/polyfills"
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from '@privy-io/react-auth';
 import { useRouter } from "next/navigation";
@@ -11,8 +11,8 @@ export default function Home() {
     const { ready, authenticated } = usePrivy();
     const { wallets} = useWallets();
     //@ts-ignore
-    const { hashConnect, pairingData } = useHashConnect({ mode: 'testnet' });
-    const hederaSigner = pairingData && createHashPackSigner(hashConnect, pairingData);
+    //const { hashConnect, pairingData } = useHashConnect({ mode: 'testnet' });
+    //const hederaSigner = pairingData && createHashPackSigner(hashConnect, pairingData);
     
     const router = useRouter();
     const embeddedWallet = wallets.find((wallet) => wallet.walletClientType === 'privy');
@@ -22,10 +22,6 @@ export default function Home() {
         router.push("/");
     }
 
-    useEffect(() => {
-        console.log(wallets)
-    })
-
     return (
         
         <main className="flex min-h-screen flex-col items-center justify-between p-24">
@@ -34,11 +30,6 @@ export default function Home() {
             <p>Privy Wallet: {embeddedWallet?.address}</p>
             <LoginButton />
         </div>
-
-        <HashportClientProviderWithRainbowKit mode="testnet" 
-hederaSigner={hederaSigner}>
-      Hello World!
-    </HashportClientProviderWithRainbowKit>
         
         </main>
 
