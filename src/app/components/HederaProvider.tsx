@@ -69,6 +69,7 @@ export function HederaProvider({ children }: any) {
     }
 
     async function connectWallet() {
+        console.log("connecting wallet...")
 		if (account !== undefined) {
 			setConnectTextSt(`🔌 Account ${account} already connected ⚡ ✅`);
 		} else {
