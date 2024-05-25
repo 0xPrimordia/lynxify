@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button } from '@nextui-org/react';
 import {Autocomplete, AutocompleteItem} from "@nextui-org/react";
+import approveToken from './ApproveToken';
 
 type SupportedNetwork = {
     network: Network
@@ -25,7 +26,9 @@ export default function PortingComponent() {
     const [selectedNetworkId, setSelectedNetworkId] = useState<number>();
     const [selectedNetwork, setSelectedNetwork] = useState<SupportedNetwork>();
     const [assets, setAssets] = useState<any>()
-    const [selectedAssetId, setSelectedAssetId] = useState<string>()
+    const [selectedAssetId, setSelectedAssetId] = useState<string>();
+    const [isValid, setIsValid] = useState(false);
+    const [minAmount, setMinAmount] = useState()
 
     useEffect(() => {
         const fetchData = async () => {
@@ -59,9 +62,51 @@ export default function PortingComponent() {
         console.log(supportedAssets)
     }, [supportedAssets])
 
-    const validateSteps = async () => {
+    const assetDetails = async () => {
         if(!selectedNetworkId || !selectedAssetId) return
+        const url = new URL('http://localhost:3000/api/hashport/details/')
+        url.searchParams.append('sourceNetworkId', selectedNetworkId.toString());
+        url.searchParams.append('sourceAssetId', selectedAssetId);
+        try {
+            const response = await fetch(url)
+            if(response) {
+                const data = await response.json()
+                console.log(data)
+                setMinAmount(data.minAmount)
+            }
+        } catch (error) {
+            
+        } 
+    }
+
+    const validateSteps = async () => {
+        if(!selectedNetworkId || !selectedAssetId || !minAmount) return
+        assetDetails()
         const url = new URL('http://localhost:3000/api/hashport/validate/');
+        url.searchParams.append('sourceNetworkId', selectedNetworkId.toString());
+        url.searchParams.append('sourceAssetId', selectedAssetId);
+
+        // Hedera testnet
+        url.searchParams.append('targetNetworkId', "0x128");
+
+        // need a quantity input
+        // fetch token details for min amount
+        url.searchParams.append('amount', minAmount); 
+        
+        // need the user's account ID in state possible from the contract
+        url.searchParams.append('recipient', "0.0.4372449");
+        try {
+            const response = await fetch(url)
+            console.log(response)
+            setIsValid(response.ok)
+        } catch (error) {
+            console.error('Error validating Pre-Flight:', error);
+        }
+    }
+
+    const bridgeAsset = async () => {
+        if(!selectedNetworkId || !selectedAssetId) return
+        const url = new URL('http://localhost:3000/api/hashport/bridge/');
         url.searchParams.append('sourceNetworkId', selectedNetworkId.toString());
         url.searchParams.append('sourceAssetId', selectedAssetId);
 
@@ -75,7 +120,11 @@ export default function PortingComponent() {
         url.searchParams.append('recipient', "0.0.4372449");
         try {
             const response = await fetch(url)
-            console.log(response)
+            if(response) {
+                const data = await response.json()
+                console.log(data[1])
+                approveToken(data[1])
+            }
         } catch (error) {
             console.error('Error validating Pre-Flight:', error);
         }
@@ -84,6 +133,10 @@ export default function PortingComponent() {
     const onSelectionChange = (id:any) => {
         setSelectedAssetId(id);
     };
+
+    useEffect(() => {
+        assetDetails();
+    }, [selectedAssetId])
 
     return(
         <>
@@ -136,7 +189,12 @@ export default function PortingComponent() {
                 </Autocomplete>
             )}
         </div>
-        <Button onClick={validateSteps}>Pre-Flight Check</Button>
+        {selectedNetwork && selectedAssetId && (
+            <Button onClick={validateSteps}>Pre-Flight Check</Button>
+        )}
+        {isValid && (
+            <Button onClick={bridgeAsset}>Bridge Asset</Button>
+        )}
         </>
     )
 }

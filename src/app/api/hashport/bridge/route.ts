@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest ) {
     const { searchParams } = new URL(req.url);
     
     // Extract query parameters
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ message: 'Missing required query parameters from Lynxify' }, { status: 400 });
     }
 
-    const url = new URL('https://testnet.api.hashport.network/api/v1/bridge/validate');
+    const url = new URL('https://testnet.api.hashport.network/api/v1/bridge');
     url.searchParams.append('sourceNetworkId', sourceNetworkId);
     url.searchParams.append('sourceAssetId', sourceAssetId);
     url.searchParams.append('targetNetworkId', "296");
