@@ -18,12 +18,8 @@ export default function RootLayout({
 }>) {
   return (
       <html lang="en">
-        <body className={inter.className}>
-          <HederaProvider>
-            <WagmiPrivyProvider>
-              {children}
-            </WagmiPrivyProvider>
-          </HederaProvider>
+        <body className={inter.className + " dark text-foreground bg-background"}>
+          {children}
         </body>
       </html>
     

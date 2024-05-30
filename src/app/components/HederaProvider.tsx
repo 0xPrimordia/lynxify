@@ -3,6 +3,7 @@ import { Client, PrivateKey, AccountCreateTransaction, AccountBalanceQuery, Hbar
 import { useEffect, useState } from "react";
 import walletConnectFcn from "./HederaWalletConnect";
 import { BrowserProvider } from "ethers";
+import {Card, CardHeader, CardBody, Button, Divider, Link, Image} from "@nextui-org/react";
 
 export function HederaProvider({ children }: any) {
     const [newAccountId, setNewAccountId] = useState<AccountId|null>(null)
@@ -99,28 +100,40 @@ export function HederaProvider({ children }: any) {
     }, [newAccountBalance])
     
     return (
-        <>
-            <h3>Hedera</h3>
-            {connectTextSt !== "" ? (
-                <p>{connectTextSt}</p>
-            ):(
-                <p><button onClick={connectWallet}>Connect Hedera</button></p>
-            )}
-            
-            {!newAccountId?.num.low ? (
-                <p><button onClick={createAccount}>Create Account</button></p>
-            ):(
-                <p>{newAccountBalance} tinybar</p>
-            )}
-            {privateKey && (
-                <>
-                    <label>Private Key</label>  
-                    <input style={{color:"black"}} value={privateKey}></input>
-                </>
-            )}
+        <div>
+            <Card className="max-w-[400px]" style={{marginBottom: "2rem"}}>
+            <CardHeader className="flex gap-3">
+                <Image
+                alt="Port to Hedera"
+                height={40}
+                radius="sm"
+                src="/images/hedera-hbar-logo.png"
+                width={40}
+                />
+                <div className="flex flex-col">
+                <p className="text-md">Manage Hedera Account</p>
+                <p className="text-small text-default-500">Connect or Create Account</p>
+                </div>
+            </CardHeader>
+            <Divider/>
+            <CardBody>
+                
+                {!newAccountId?.num.low ? (
+                    <p><Button onClick={createAccount}>Create Account</Button></p>
+                ):(
+                    <p>{newAccountBalance} tinybar</p>
+                )}
+                {privateKey && (
+                    <div style={{marginTop: "1rem"}}>
+                        <label>Private Key: </label>  
+                        <input value={privateKey}></input>
+                    </div>
+                )}
+                </CardBody>
+            </Card>
             
             
             {children}
-        </>
+        </div>
     )
 }
