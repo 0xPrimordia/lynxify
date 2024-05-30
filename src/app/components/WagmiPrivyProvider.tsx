@@ -3,7 +3,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import { http } from 'wagmi';
 import {WagmiProvider} from '@privy-io/wagmi';
-import { etherlinkTestnet } from 'wagmi/chains';
+import { etherlinkTestnet, sepolia } from 'wagmi/chains';
 import {createConfig} from '@privy-io/wagmi';
 
 const config = createConfig({
