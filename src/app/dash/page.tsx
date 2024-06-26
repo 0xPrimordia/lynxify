@@ -5,7 +5,6 @@ import React, { useState, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from '@privy-io/react-auth';
 import { useRouter } from "next/navigation";
-import LoginButton from "../components/LoginButton";
 
 export default function Home() {
     const { ready, authenticated } = usePrivy();
@@ -28,7 +27,7 @@ export default function Home() {
         <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
             <h2>Dashboard</h2>
             <p>Privy Wallet: {embeddedWallet?.address}</p>
-            <LoginButton />
+
         </div>
         
         </main>
