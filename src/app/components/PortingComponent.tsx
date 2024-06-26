@@ -5,6 +5,8 @@ import {Autocomplete, AutocompleteItem} from "@nextui-org/react";
 import Web3, { ContractAbi } from 'web3';
 import {Card, CardHeader, CardBody, CardFooter, Divider, Link, Image} from "@nextui-org/react";
 
+
+
 type SupportedNetwork = {
     network: Network
     assets: Asset[]
@@ -124,7 +126,7 @@ export default function PortingComponent() {
         const fromAddress = await connectWallet();
         const web3 = new Web3(window.ethereum); // Use MetaMask's provider
         if(!approvalStep?.abi) return
-        const contract = new web3.eth.Contract(JSON.parse(approvalStep.abi), "0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8"); //approvalStep.target
+        const contract = new web3.eth.Contract(JSON.parse(approvalStep.abi), approvalStep.target); //approvalStep.target
     
         try {
             let gasEstimate;
@@ -182,14 +184,14 @@ export default function PortingComponent() {
         try {
             let gasEstimate;
             try {
-                gasEstimate = await contract.methods.lock(param1, param2, param3, param4).estimateGas({ from: fromAddress });
+                gasEstimate = await contract.methods.transfer("0x128", selectedAssetId, lockStep.amount, web3.utils.asciiToHex("0.0.4372449")).estimateGas({ from: fromAddress });
             } catch (error) {
                 console.error('Gas estimate failed, using fallback gas limit:', error);
                 gasEstimate = 5000000
                 //return null;
             }
             console.log(`Sending transaction with gas limit: ${gasEstimate}`);
-            const receipt = await contract.methods.lock("0x128", lockStep.target, lockStep.amount, web3.utils.asciiToHex("0.0.4372449"))
+            const receipt = await contract.methods.lock("0x128", selectedAssetId, lockStep.amount, web3.utils.asciiToHex("0.0.4372449"))
                 .send({ from: fromAddress, gas: gasEstimate.toString() });
             console.log('Transaction receipt:', receipt);
             return receipt.transactionHash;
@@ -321,15 +323,8 @@ export default function PortingComponent() {
 
     return(
         <>
-        <div style={{marginBottom: "2rem"}}>
-            {connectedWallet ? (
-                <p>Connected Wallet: {connectedWallet}</p>
-            ):(
-                <Button onClick={connectWallet}>Connect Wallet</Button>
-            )}
-        </div>
 
-        <Card className="max-w-[400px]">
+        <Card className='pr-1'>
         <CardHeader className="flex gap-3">
         <Image
           alt="Port to Hedera"
@@ -340,7 +335,7 @@ export default function PortingComponent() {
         />
         <div className="flex flex-col">
           <p className="text-md">Port to Hedera</p>
-          <p className="text-small text-default-500">Send your EVM assets to your Hedera account.</p>
+          <p className="text-small text-default-500">Send your EVM assets to your Hedera<br />account.</p>
         </div>
       </CardHeader>
       <Divider/>

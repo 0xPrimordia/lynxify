@@ -1,21 +1,43 @@
 "use client"
-import { Client, PrivateKey, AccountCreateTransaction, AccountBalanceQuery, Hbar, TransferTransaction, AccountId, PublicKey, Key } from "@hashgraph/sdk"
-import { useEffect, useState } from "react";
-import walletConnectFcn from "./HederaWalletConnect";
-import { BrowserProvider } from "ethers";
+import { Client, PrivateKey, AccountCreateTransaction, AccountBalanceQuery, Hbar, LedgerId, TransferTransaction, AccountId, PublicKey, Key } from "@hashgraph/sdk"
+import { useEffect, useState, createContext, useContext, ReactNode } from "react";
+//import walletConnectFcn from "./HederaWalletConnect";
 import {Card, CardHeader, CardBody, Button, Divider, Link, Image} from "@nextui-org/react";
+import { HashConnect, HashConnectConnectionState, SessionData } from 'hashconnect';
 
-export function HederaProvider({ children }: any) {
+const appMetadata = {
+    name: "Lynxify",
+    description: "<Your dapp description>",
+    icons: ["<Image url>"],
+    url: "<Dapp url>"
+}
+
+interface HederaContextType {
+    client: Client;
+}
+
+interface HederaProviderProps {
+    children: ReactNode;
+}
+
+const HederaContext = createContext<HederaContextType | undefined>(undefined);
+
+export const useHederaClient = (): HederaContextType => {
+    const context = useContext(HederaContext);
+    if (!context) {
+      throw new Error("useHederaClient must be used within a HederaProvider");
+    }
+    return context;
+};
+
+export function HederaProvider({ children }: HederaProviderProps) {
+    const hashConnectInstance = new HashConnect(LedgerId.TESTNET, process.env.NEXT_PUBLIC_WALLETCONNECT_ID as string, appMetadata, true);
     const [newAccountId, setNewAccountId] = useState<AccountId|null>(null)
     const [newAccountBalance, setNewAccountBalance] = useState<number>(0)
-    const [walletData, setWalletData] = useState<(string | BrowserProvider | undefined)[]>();
-	const [account, setAccount] = useState<string | BrowserProvider>();
-    const [connectTextSt, setConnectTextSt] = useState("");
-    const [connectLinkSt, setConnectLinkSt] = useState("");
-    const [network, setNetwork] = useState<string | BrowserProvider | undefined>();
-    const [contractTextSt, setContractTextSt] = useState();
     const [privateKey, setPrivateKey] = useState<string>()
-    const [publicKey, setPublicKey] = useState<any>()
+    const [isConnected, setIsConnected] = useState(false);
+    const [hashPairingData, setHashPairingData] = useState<SessionData | null>(null)
+    let state: HashConnectConnectionState = HashConnectConnectionState.Disconnected;
 
     //Grab your Hedera testnet account ID and private key from your .env file
     const myAccountId = process.env.NEXT_PUBLIC_MY_ACCOUNT_ID;
@@ -36,7 +58,7 @@ export function HederaProvider({ children }: any) {
     client.setDefaultMaxTransactionFee(new Hbar(100));
 
     //Set the maximum payment for queries (in Hbar)
-    client.setMaxQueryPayment(new Hbar(50));
+    client.setDefaultMaxQueryPayment(new Hbar(50));
 
     //Create a new account with 1,000 tinybar starting balance
     const createAccount = async () => {
@@ -70,25 +92,44 @@ export function HederaProvider({ children }: any) {
     }
 
     async function connectWallet() {
-        console.log("connecting wallet...")
-		if (account !== undefined) {
-			setConnectTextSt(`🔌 Account ${account} already connected ⚡ ✅`);
-		} else {
-			const wData = await walletConnectFcn();
+        if(hashConnectInstance && hashConnectInstance.connectedAccountIds.length > 0) {
+            const accountIdToPair = hashConnectInstance.connectedAccountIds[0];
+        } else {
+            setUpHashConnectEvents();
+              
 
-			let newAccount = wData[0];
-			let newNetwork = wData[2];
-			if (newAccount !== undefined) {
-				setConnectTextSt(`🔌 Account ${newAccount} connected ⚡ ✅`);
-				setConnectLinkSt(`https://hashscan.io/${newNetwork}/account/${newAccount}`);
+            //initialize
+            await hashConnectInstance.init();
 
-				setWalletData(wData);
-				setAccount(newAccount);
-				setNetwork(newNetwork);
-				//setContractTextSt();
-			}
-		}
+            //localStorage.setItem('hashconnectData', JSON.stringify({ initData }));
+            
+
+            //open pairing modal
+            if(!hashConnectInstance) return
+            
+            await hashConnectInstance.openPairingModal();
+        }
 	}
+
+    function setUpHashConnectEvents() {
+        if(!hashConnectInstance) return
+        hashConnectInstance.pairingEvent.on((newPairing) => {
+            setHashPairingData(newPairing);
+        })
+        
+    
+        hashConnectInstance.disconnectionEvent.on((data) => {
+            setHashPairingData(null);
+        });
+    
+        hashConnectInstance.connectionStatusChangeEvent.on((connectionStatus) => {
+            state = connectionStatus;
+            if(connectionStatus === HashConnectConnectionState.Connected) {
+                setIsConnected(true)
+                
+            }
+        })
+    }
 
     useEffect(() => {
         console.log(newAccountId)
@@ -116,7 +157,7 @@ export function HederaProvider({ children }: any) {
                 </div>
             </CardHeader>
             <Divider/>
-            <CardBody>
+            <CardBody className="text-center p-10">
                 
                 {!newAccountId?.num.low ? (
                     <p><Button onClick={createAccount}>Create Account</Button></p>
@@ -129,11 +170,21 @@ export function HederaProvider({ children }: any) {
                         <input value={privateKey}></input>
                     </div>
                 )}
+                <p className="my-2 font-bold">or</p>
+                {isConnected && hashPairingData?.accountIds ? (
+                    <p>Connected to: {hashPairingData?.accountIds[0]}</p>
+                ):(
+                    <p><Button onClick={connectWallet}>Connect Wallet</Button></p>
+                )}
+                
                 </CardBody>
             </Card>
             
+            <HederaContext.Provider value={{client}}>
+                {children}
+            </HederaContext.Provider>
             
-            {children}
         </div>
     )
 }
+

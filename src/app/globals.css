@@ -31,3 +31,22 @@ body {
     text-wrap: balance;
   }
 }
+
+.box h1::after {
+  content: "";
+  width: 10px;
+  height: 22px;
+  background: #4E94FE;
+  display: inline-block;
+  opacity: 0.45;
+  margin-left: 1rem;
+  margin-top: 8px;
+  margin-bottom: -2px;
+  animation: cursor-blink 2.5s steps(2) infinite;
+}
+
+@keyframes cursor-blink {
+  0% {
+    opacity: 0;
+  }
+}
