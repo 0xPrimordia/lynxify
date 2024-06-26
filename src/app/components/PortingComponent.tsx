@@ -5,14 +5,6 @@ import {Autocomplete, AutocompleteItem} from "@nextui-org/react";
 import Web3, { ContractAbi } from 'web3';
 import {Card, CardHeader, CardBody, CardFooter, Divider, Link, Image} from "@nextui-org/react";
 
-interface Window {
-    ethereum: {
-        isMetaMask?: boolean;
-        request: (...args: any[]) => Promise<any>;
-        // Add any other properties you expect from window.ethereum here
-    };
-}
-
 type SupportedNetwork = {
     network: Network
     assets: Asset[]
@@ -89,7 +81,7 @@ export default function PortingComponent() {
         console.log(Object.values(filteredArray[0]))
         setSelectedNetwork(filteredArray[0])
         setAssets([filteredArray[0].assets])
-    }, [selectedNetworkId])
+    }, [selectedNetworkId, supportedAssets])
 
     useEffect(() => {
         console.log(supportedAssets)
@@ -325,7 +317,7 @@ export default function PortingComponent() {
 
     useEffect(() => {
         assetDetails();
-    }, [selectedAssetId])
+    }, [selectedAssetId, assetDetails])
 
     return(
         <>

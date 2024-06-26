@@ -5,7 +5,6 @@ import { VT323 } from "next/font/google";
 import { Button, NextUIProvider, Navbar, NavbarContent, NavbarItem, NavbarBrand, Card, CardHeader, Image } from "@nextui-org/react";
 import { HashConnect, HashConnectConnectionState, SessionData } from 'hashconnect';
 import StakeTokens from './components/StakeTokens';
-import PortingComponent from "./components/PortingComponent";
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
@@ -87,7 +86,6 @@ export default function Home() {
           {isConnected && (
             <>
               <StakeTokens stakeTokens={stakeTokens} />
-              <PortingComponent />
             </>
           )}
         </div>    

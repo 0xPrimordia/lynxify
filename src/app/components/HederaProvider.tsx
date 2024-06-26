@@ -134,7 +134,7 @@ export function HederaProvider({ children }: HederaProviderProps) {
     useEffect(() => {
         console.log(newAccountId)
         setBalance()
-    }, [newAccountId])
+    }, [newAccountId, setBalance])
 
     useEffect(() => {
         console.log(newAccountBalance)
