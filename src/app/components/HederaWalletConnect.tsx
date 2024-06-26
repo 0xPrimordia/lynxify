@@ -4,7 +4,7 @@ const network = "testnet";
 async function walletConnectFcn() {
 
 	// ETHERS PROVIDER - !!updated for new version but didn't double check docs!!
-	const provider = new ethers.BrowserProvider(window.ethereum);
+	//const provider = new ethers.BrowserProvider(window.ethereum);
 
 	// SWITCH TO HEDERA TEST NETWORK
 	console.log(`- Switching network to the Hedera ${network}...🟠`);
@@ -17,7 +17,7 @@ async function walletConnectFcn() {
 		chainId = "0x127";
 	}
 
-	await window.ethereum.request({
+	/*await window.ethereum.request({
 		method: "wallet_addEthereumChain",
 		params: [
 			{
@@ -29,12 +29,12 @@ async function walletConnectFcn() {
 			},
 		],
 	});
-	console.log("- Switched ✅");
+	console.log("- Switched ✅"); */
 
 	// CONNECT TO ACCOUNT
 	console.log("- Connecting wallet...🟠");
 	let selectedAccount;
-	await provider
+	/*await provider
 		.send("eth_requestAccounts", [])
 		.then((accounts) => {
 			selectedAccount = accounts[0];
@@ -45,7 +45,7 @@ async function walletConnectFcn() {
 			return;
 		});
 
-	return [selectedAccount, provider, network];
+	return [selectedAccount, provider, network]; */
 }
 
 export default walletConnectFcn;
