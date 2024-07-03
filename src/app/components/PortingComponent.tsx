@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button } from '@nextui-org/react';
 import {Autocomplete, AutocompleteItem} from "@nextui-org/react";
-import Web3, { ContractAbi } from 'web3';
 import {Card, CardHeader, CardBody, CardFooter, Divider, Link, Image} from "@nextui-org/react";
 
 type SupportedNetwork = {
@@ -317,7 +316,7 @@ export default function PortingComponent() {
 
     useEffect(() => {
         assetDetails();
-    }, [selectedAssetId, assetDetails])
+    }, [selectedAssetId, assetDetails]) 
 
     return(
         <>

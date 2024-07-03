@@ -1,7 +1,6 @@
 "use client"
 import { Client, PrivateKey, AccountCreateTransaction, AccountBalanceQuery, Hbar, LedgerId, TransferTransaction, AccountId, PublicKey, Key } from "@hashgraph/sdk"
 import { useEffect, useState, createContext, useContext, ReactNode } from "react";
-//import walletConnectFcn from "./HederaWalletConnect";
 import {Card, CardHeader, CardBody, Button, Divider, Link, Image} from "@nextui-org/react";
 import { HashConnect, HashConnectConnectionState, SessionData } from 'hashconnect';
 
