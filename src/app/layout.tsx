@@ -3,8 +3,10 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import 'crypto-browserify';
 import 'stream-browserify';
-import { Buffer } from 'buffer';
-import process from 'process/browser';
+import { WalletProvider } from "./hooks/useWallet";
+import { NextUIProvider } from "@nextui-org/react";
+import Header from "./components/Header";
+import { SaucerSwapProvider } from "./hooks/useSaucerSwap";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,11 +21,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-      <html lang="en">
-        <body className={inter.className + " dark text-foreground bg-background"}>
-          {children}
-        </body>
-      </html>
-    
+    <html lang="en">
+      <body className={inter.className + " dark text-foreground bg-background min-h-screen"}>
+        <WalletProvider>
+          <SaucerSwapProvider>
+            <NextUIProvider>
+              <Header />
+              <main className="flex flex-col items-center p-4">
+                {children}
+              </main>
+            </NextUIProvider>
+          </SaucerSwapProvider>
+        </WalletProvider>
+      </body>
+    </html>
   );
 }

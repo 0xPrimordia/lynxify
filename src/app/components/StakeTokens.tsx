@@ -1,40 +1,15 @@
 import { FunctionComponent, useState, useEffect } from "react";
 import { Card, Button, CardHeader, Divider, CardBody, Image, CardFooter, Autocomplete, AutocompleteItem } from "@nextui-org/react";
+import { useSaucerSwapContext, Token } from "../hooks/useSaucerSwap";
 
-type Token = {
-    deimals: number;
-    dueDiligenceComplete: boolean;
-    icon: string;
-    id: string;
-    name: string;
-    price: string;
-    priceUsd: number;
-    symbol: string;
-}
 interface StakeTokensProps {
     stakeTokens: Function;
 }
  
 const StakeTokens: FunctionComponent<StakeTokensProps> = ({stakeTokens}) => {
     const [amount, setAmount] = useState('')
-    const [tokens, setTokens] = useState<Token[]>()
+    const { tokens } = useSaucerSwapContext();
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const response = await fetch("/api/saucerswap/tokens")
-                if(response) {
-                    const data = await response.json()
-                    setTokens(data)
-                    console.log(data)
-                    //return data;
-                }
-            } catch (error) {
-                console.error('Error fetching Supported Tokens:', error);
-            }
-        }
-        fetchData()
-    }, [])
 
     return (
         <>
@@ -56,13 +31,13 @@ const StakeTokens: FunctionComponent<StakeTokensProps> = ({stakeTokens}) => {
                  <Divider/>
                  <CardBody className="text-center p-10">
                      <Autocomplete
-                             defaultItems={Object.values(tokens)}
+                             defaultItems={Object.values(tokens) as Token[]}
                              label="Select Asset"
                              placeholder="Search Assets"
                              onSelectionChange={() => {}}
                              className="mb-6"
                          >
-                         {(asset) => <AutocompleteItem key={asset.id}>{asset.name}</AutocompleteItem>}
+                         {(token:Token) => <AutocompleteItem key={token.id}>{token.name}</AutocompleteItem>}
                      </Autocomplete>
                      <input
                          type="number"
