@@ -6,7 +6,7 @@ import 'stream-browserify';
 import { WalletProvider } from "./hooks/useWallet";
 import { NextUIProvider } from "@nextui-org/react";
 import Header from "./components/Header";
-import { SaucerSwapProvider } from "./hooks/useSaucerSwap";
+import { SaucerSwapProvider } from "./hooks/useTokens";
 
 const inter = Inter({ subsets: ["latin"] });
 

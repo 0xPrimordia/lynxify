@@ -1,6 +1,6 @@
 import { FunctionComponent, useState, useEffect } from "react";
 import { Card, Button, CardHeader, Divider, CardBody, Image, CardFooter, Autocomplete, AutocompleteItem } from "@nextui-org/react";
-import { useSaucerSwapContext, Token } from "../hooks/useSaucerSwap";
+import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 
 interface StakeTokensProps {
     stakeTokens: Function;

@@ -19,7 +19,7 @@ const Header = () => {
     };
 
     return ( 
-        <Navbar>
+        <Navbar maxWidth="full">
           <NavbarBrand>
             <span className="box"><h1 style={{fontSize: "2.5rem", color: "#4E94FE"}} className={vt323.className+" font-bold"}>Lynxify</h1></span>
           </NavbarBrand>
