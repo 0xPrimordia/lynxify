@@ -96,27 +96,6 @@ export const WalletProvider = ({children}:useWalletProps) => {
       console.log("Hedera Wallet Connect Initialized");
 
       setIsInitialized(true);
-        /*const hashConnectInstance = new HashConnect(LedgerId.TESTNET, process.env.NEXT_PUBLIC_WALLETCONNECT_ID as string, appMetadata, true);
-
-        hashConnectInstance.pairingEvent.on((newPairing) => {
-            console.log("New pairing event", newPairing);
-            setPairingData(newPairing);
-          })
-        
-          hashConnectInstance.disconnectionEvent.on((data) => {
-            console.log("Disconnection event", data);
-            setPairingData(null);
-          });
-      
-          hashConnectInstance.connectionStatusChangeEvent.on((connectionStatus) => {
-            console.log("Connection status change event", connectionStatus);
-            setConnectionStatus(connectionStatus);
-          })
-      
-          await hashConnectInstance.init();
-          setHashconnect(hashConnectInstance);
-          console.log("Hashconnect instance", hashConnectInstance);
-          */
     }
 
     const handleConnect = async (extensionId?: string) => {

@@ -33,16 +33,17 @@ function decimalToPaddedHex(decimal: number, length: number): string {
   return hexString;
 }
 
-export const swapExactHbarForToken = async (amountIn: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
+export const swapExactTokenForToken = async (amountIn: string, inputToken: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
   const client = new Client();
-  client.setOperator(AccountId.fromString(process.env.HEDERA_ACCOUNT_ID!), PrivateKey.fromStringECDSA(process.env.HEDERA_PRIVATE_KEY!));
+  client.setOperator(AccountId.fromString(process.env.NEXT_PUBLIC_MY_ACCOUNT_ID!), PrivateKey.fromStringECDSA(process.env.NEXT_PUBLIC_MY_PRIVATE_KEY!));
   const pathData:string[] = [];
-  pathData.push(`0x${ContractId.fromString(outputToken).toSolidityAddress()}`); 
+  pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
   pathData.push(decimalToPaddedHex(fee, 6));
-  
+  pathData.push(`${ContractId.fromString(outputToken).toSolidityAddress()}`);
+  debugger
   const params = {
     path: pathData.join(''), //'0x...'
-    recipient: recipientAddress, //'0x...' - user's recipient address
+    recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`, //'0x...' - user's recipient address
     deadline: deadline, //Unix seconds
     amountIn: amountIn, //need to convert to Tinybar
     amountOutMinimum: outputAmountMin//in token's smallest unit
@@ -53,17 +54,23 @@ export const swapExactHbarForToken = async (amountIn: string, outputToken: strin
   const multiCallParam = [swapEncoded, refundHBAREncoded];
   const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
   const encodedDataAsUint8Array = hexToUint8Array(encodedData);
-  const response = await new ContractExecuteTransaction()
+  const transaction = new ContractExecuteTransaction()
     .setPayableAmount(Hbar.from(amountIn, HbarUnit.Tinybar))
     .setContractId(SWAP_ROUTER_ADDRESS)
     .setGas(100000)
-    .setFunctionParameters(encodedDataAsUint8Array)
-    .execute(client);
+    .setFunctionParameters(encodedDataAsUint8Array);
+  debugger
+  // Freeze the transaction
+  const frozenTransaction = await transaction.freezeWith(client);
+
+  // Execute the frozen transaction
+  const response = await frozenTransaction.execute(client);
  
   const record = await response.getRecord(client);
   const result = record.contractFunctionResult!;
   const values = result.getResult(['uint256']);
   const amountOut = values[0]; //uint256 amountOut
+  
 }
 
 export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals: number, outputToken: string, amountIn: string, fee: number) => {

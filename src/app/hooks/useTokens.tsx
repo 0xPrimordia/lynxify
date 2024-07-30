@@ -29,7 +29,6 @@ export const SaucerSwapProvider = ({children}:Props) => {
                 if(response) {
                     const data = await response.json()
                     setTokens(data)
-                    console.log(data)
                     //return data;
                 }
             } catch (error) {

@@ -10,7 +10,7 @@ import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
 import InputTokenSelect from "../components/InputTokenSelect";
-import { getQuoteExactInput } from "../lib/saucerswap";
+import { swapExactTokenForToken } from "../lib/saucerswap";
 import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
 
@@ -18,7 +18,7 @@ import { usePoolContext } from "../hooks/usePools";
 // volume of trades per hour, day, week ask SS how to get volume
 
 export default function DexPage() {
-    const { hashconnect, pairingData } = useWalletContext();
+    const { account } = useWalletContext();
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -51,21 +51,10 @@ export default function DexPage() {
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
 
     useEffect(() => {
-        if (!hashconnect || !pairingData) {
-            console.error("Hashconnect instance is not available");
-            return;
-        }
-        console.log("Hashconnect instance", hashconnect);
-        console.log("Pairing data", pairingData);
-    }, [hashconnect, pairingData]);
-
-    useEffect(() => {
-        // this logic needs to be applied to filter options
         if(!pools || !currentToken || !tradeToken) return;
         const pool = pools.filter((pool:any) => pool.tokenA.id === currentToken.id && pool.tokenB.id === tradeToken.id || pool.tokenA.id === tradeToken.id && pool.tokenB.id === currentToken.id);
 
         if(pool) {
-            console.log(pool[0]);
             setCurrentPool(pool[0]);
         } else {
             console.log("No pool found");
@@ -73,18 +62,14 @@ export default function DexPage() {
     }, [pools, currentToken, tradeToken]);
 
     const handleQuote = async () => {
-        if (!hashconnect || !pairingData) {
-            console.error("Hashconnect instance is not available");
-            return;
-        }
-
         try {
             if(!tradeToken || !currentPool) return;
-            const result = await getQuoteExactInput(tradeToken?.id, tradeToken?.decimals, currentToken?.id, tradeAmount.toString(), currentPool?.fee); // Example fee
+            const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, currentPool?.fee, account, 0, 0);
+            //const result = await getQuoteExactInput(tradeToken?.id, tradeToken?.decimals, currentToken?.id, tradeAmount.toString(), currentPool?.fee); // Example fee
             console.log(result);
             //setQuote(formatUnits(result.amountOut.toString(), 18));
         } catch (error) {
-          console.error('Error fetching quote', error);
+          console.error('Error swapping tokens', error);
         }
     };
 
@@ -107,7 +92,6 @@ export default function DexPage() {
         if(!pools || !currentToken) return;
         const pairs = pools.filter((pool:any) => pool.tokenA.id === currentToken.id || pool.tokenB.id === currentToken.id);
         let tradeTokens = pairs.map((pair:any) => pair.tokenA.id === currentToken.id ? pair.tokenB : pair.tokenA);
-        console.log(tradeTokens);
         setCurrentTradeTokens(tradeTokens);
     }
 
