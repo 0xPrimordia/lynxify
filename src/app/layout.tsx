@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import 'crypto-browserify';
-import 'stream-browserify';
 import { WalletProvider } from "./hooks/useWallet";
 import { NextUIProvider } from "@nextui-org/react";
 import Header from "./components/Header";
 import { SaucerSwapProvider } from "./hooks/useTokens";
+import { PoolProvider } from "./hooks/usePools";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,12 +24,14 @@ export default function RootLayout({
       <body className={inter.className + " dark text-foreground bg-background min-h-screen"}>
         <WalletProvider>
           <SaucerSwapProvider>
-            <NextUIProvider>
+            <PoolProvider>
+              <NextUIProvider>
               <Header />
-              <main className="flex flex-col items-center p-4">
-                {children}
-              </main>
-            </NextUIProvider>
+                <main className="flex flex-col items-center p-4">
+                  {children}
+                </main>
+              </NextUIProvider>
+            </PoolProvider>
           </SaucerSwapProvider>
         </WalletProvider>
       </body>

@@ -58,6 +58,9 @@ const StakeTokens: FunctionComponent<StakeTokensProps> = ({stakeTokens}) => {
                  </CardFooter>
              </Card>
             )}
+            {!tokens && (
+                <p>Connect wallet to stake tokens.</p>
+            )}
         </>
     );
 }

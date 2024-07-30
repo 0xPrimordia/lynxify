@@ -1,19 +1,40 @@
 "use client"
 import React, { useState, useEffect } from "react";
-import { Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
+import { formatUnits } from 'ethers';
+import { Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch } from "@nextui-org/react";
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import TokenPriceChart from '../components/TokenPriceChart';
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
+import { Menubar, MenubarMenu } from '@/components/ui/menubar';
+import { Button, ButtonGroup } from '@nextui-org/react';
+import InputTokenSelect from "../components/InputTokenSelect";
+import { getQuoteExactInput } from "../lib/saucerswap";
+import { useWalletContext } from "../hooks/useWallet";
+import { usePoolContext } from "../hooks/usePools";
+
+// display liquidity
+// volume of trades per hour, day, week ask SS how to get volume
 
 export default function DexPage() {
+    const { hashconnect, pairingData } = useWalletContext();
     const currentDate = new Date();
     const pastDate = new Date();
-    pastDate.setDate(currentDate.getDate() - 1);
+    pastDate.setDate(currentDate.getDate() - 7);
     const { tokens } = useSaucerSwapContext();
+    const { pools } = usePoolContext();
     const [from, setFrom] = useState(Math.floor(pastDate.getTime() / 1000));
     const [to, setTo] = useState(Math.floor(currentDate.getTime() / 1000));
     const [interval, setInterval] = useState('HOUR');
+    const [tradeToken, setTradeToken] = useState<Token>();
+    const [tradeAmount, setTradeAmount] = useState(0);
+    const [tradePrice, setTradePrice] = useState(0);
+    const [stopLoss, setStopLoss] = useState(false);
+    const [buyOrder, setBuyOrder] = useState(false);
+    const [quote, setQuote] = useState<string | null>(null);
+    const [currentTradeTokens, setCurrentTradeTokens] = useState<Token[]>([]);
+    const [currentPool, setCurrentPool] = useState<any>(null);
     const [currentToken, setCurrentToken] = useState<Token>(
         {
             decimals: 6,
@@ -29,10 +50,80 @@ export default function DexPage() {
     )
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
 
-    const selectToken = (tokenId:string) => {
+    useEffect(() => {
+        if (!hashconnect || !pairingData) {
+            console.error("Hashconnect instance is not available");
+            return;
+        }
+        console.log("Hashconnect instance", hashconnect);
+        console.log("Pairing data", pairingData);
+    }, [hashconnect, pairingData]);
+
+    useEffect(() => {
+        // this logic needs to be applied to filter options
+        if(!pools || !currentToken || !tradeToken) return;
+        const pool = pools.filter((pool:any) => pool.tokenA.id === currentToken.id && pool.tokenB.id === tradeToken.id || pool.tokenA.id === tradeToken.id && pool.tokenB.id === currentToken.id);
+
+        if(pool) {
+            console.log(pool[0]);
+            setCurrentPool(pool[0]);
+        } else {
+            console.log("No pool found");
+        }
+    }, [pools, currentToken, tradeToken]);
+
+    const handleQuote = async () => {
+        if (!hashconnect || !pairingData) {
+            console.error("Hashconnect instance is not available");
+            return;
+        }
+
+        try {
+            if(!tradeToken || !currentPool) return;
+            const result = await getQuoteExactInput(tradeToken?.id, tradeToken?.decimals, currentToken?.id, tradeAmount.toString(), currentPool?.fee); // Example fee
+            console.log(result);
+            //setQuote(formatUnits(result.amountOut.toString(), 18));
+        } catch (error) {
+          console.error('Error fetching quote', error);
+        }
+    };
+
+    const setDateInterval = (interval: string) => {
+        if (interval === "WEEK") {
+            pastDate.setDate(currentDate.getDate() - 7);
+            setInterval('WEEK');
+        }
+        if (interval === "DAY") {
+            pastDate.setDate(currentDate.getDate() - 1);
+            setInterval('DAY');
+        }
+        if (interval === "HOUR") {
+            pastDate.setDate(currentDate.getDate() - 1);
+            setInterval('HOUR');
+        }
+    }
+
+    const getCurrentTokenPairs = () => {
+        if(!pools || !currentToken) return;
+        const pairs = pools.filter((pool:any) => pool.tokenA.id === currentToken.id || pool.tokenB.id === currentToken.id);
+        let tradeTokens = pairs.map((pair:any) => pair.tokenA.id === currentToken.id ? pair.tokenB : pair.tokenA);
+        console.log(tradeTokens);
+        setCurrentTradeTokens(tradeTokens);
+    }
+
+    const selectCurrentToken = (tokenId:string) => {
         const token = tokens.find((token:Token) => token.id === tokenId);
         if (token) {
             setCurrentToken(token);
+            getCurrentTokenPairs();
+        }
+    }
+
+    const selectTradeToken = (tokenId: string) => {
+        const token = tokens.find((token:Token) => token.id === tokenId);
+        if (token) {
+            setTradeToken(token);
+            setTradePrice(token.price);
         }
     }
 
@@ -40,33 +131,78 @@ export default function DexPage() {
         <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
             <div className="flex w-full">
                 <div className="grow pr-12">
+                    <Menubar style={{borderColor: '#333', marginBottom: '2rem'}}>
+                        <MenubarMenu>
+                            <ButtonGroup>
+                                <Button onClick={() => setDateInterval('WEEK')} className={interval === "WEEK" ? 'bg-gray-800' : ''} disabled={interval === "WEEK" ? true : false} variant="light" size="sm">Week</Button>
+                                <Button onClick={() => setDateInterval('DAY')} className={interval === "DAY" ? 'bg-gray-800' : ''} disabled={interval === "DAY" ? true : false} variant="light" size="sm">Day</Button>
+                                <Button onClick={() => setDateInterval('HOUR')} className={interval === "HOUR" ? 'bg-gray-800' : ''} disabled={interval === "HOUR" ? true : false} variant="light" size="sm">Hour</Button>
+                            </ButtonGroup>
+                        </MenubarMenu>
+                    </Menubar>
                     {data && <TokenPriceChart data={data} />}
                 </div>
-                <div className="flex relative h-14 pr-6">
-                    {currentToken && currentToken.icon && (
-                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} />
-                    )}
-                    <div className="px-3">
-                        <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
-                        <p>{currentToken.name}</p>
+                <div className="relative h-14 pr-6">
+                    <div className="w-full flex">
+                        {currentToken && currentToken.icon && (
+                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} />
+                        )}
+                        <div className="px-3">
+                            <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
+                            <p>{currentToken.name}</p>
+                        </div>
+                        <div className="pl-1">
+                            <span className="text-xl text-green-500">${currentToken.priceUsd.toFixed(12)}</span>
+                        </div>
+                        <Dropdown placement="bottom-start">
+                            <DropdownTrigger>
+                                <div className="w-5 pt-1 pl-1 cursor-pointer">
+                                    <ChevronDownIcon />
+                                </div>
+                            </DropdownTrigger>
+                            <DropdownMenu onAction={(key) => (selectCurrentToken(key as string) )} className="max-h-72 overflow-scroll w-full" aria-label="Token Selection" items={tokens} variant="flat">
+                                {(token:Token) => (
+                                    <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
+                                            <p>{token.name}</p>
+                                    </DropdownItem>
+                                )}
+                            </DropdownMenu>
+                        </Dropdown>
                     </div>
-                    <div className="pl-1">
-                        <span className="text-xl text-green-500">${currentToken.priceUsd}</span>
+                    <div className="w-full pt-8 pb-8">
+                        <Input
+                            type="number"
+                            value="0"
+                            label="Buy Amount"
+                            labelPlacement="outside"
+                            endContent={
+                                <Chip className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                            }
+                        />
+
+                        <Input
+                            type="number"
+                            value={String(tradeAmount)}
+                            onChange={(e) => setTradeAmount(Number(e.target.value))}
+                            label="Trade Amount"
+                            labelPlacement="outside"
+                            className="pt-4"
+                            endContent={
+                                <InputTokenSelect tokens={currentTradeTokens} onSelect={selectTradeToken} />
+                            }
+                        />
                     </div>
-                    <Dropdown placement="bottom-start">
-                        <DropdownTrigger>
-                            <div className="w-5 pt-1 pl-1">
-                                <ChevronDownIcon />
-                            </div>
-                        </DropdownTrigger>
-                        <DropdownMenu onAction={(key) => (selectToken(key as string) )} className="max-h-72 overflow-scroll w-full" aria-label="Token Selection" items={tokens} variant="flat">
-                            {(token:Token) => (
-                                <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
-                                        <p>{token.name}</p>
-                                </DropdownItem>
-                            )}
-                        </DropdownMenu>
-                    </Dropdown>
+                    <div className="w-full flex flex-col gap-4">
+                        <Switch size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
+                        <Switch size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
+                    </div>
+                    {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
+                        <Input type="number" value="0" label="Stop Loss" labelPlacement="outside" />
+                    </div>}
+                    {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
+                        <Input type="number" value="0" label="Buy Amount" labelPlacement="outside" />
+                    </div>}
+                    <Button onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                 </div>
             </div>
         </div>

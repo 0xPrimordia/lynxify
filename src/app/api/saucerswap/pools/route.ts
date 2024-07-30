@@ -2,7 +2,7 @@ const TESTNET = "https://test-api.saucerswap.finance";
 const MAINAPI = "https://api.saucerswap.finance"
 
 export async function GET() {
-    const response = await fetch(`${TESTNET}/tokens/known`, {
+    const response = await fetch(`${TESTNET}/v2/pools`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'

@@ -6,17 +6,7 @@ import { useWalletContext } from "../hooks/useWallet";
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
  
 const Header = () => {
-    const { hashconnect, pairingData } = useWalletContext();
-
-    const disconnect = () => {
-        if(!hashconnect) return
-        hashconnect.disconnect();
-    };
-
-    const connect = async () => {
-        if(!hashconnect) return
-        await hashconnect.openPairingModal();
-    };
+    const { handleConnect, handleDisconnectSessions, account } = useWalletContext();
 
     return ( 
         <Navbar maxWidth="full">
@@ -37,12 +27,12 @@ const Header = () => {
           </NavbarContent>
           <NavbarContent justify="end">
             <NavbarItem className="hidden lg:flex">
-              {pairingData ? (
-                <>
-                  <p className="text-sm mt-4">{pairingData?.accountIds[0]} <img style={{width:"30px", display:"inline-block", marginTop: "-3px"}} src="/images/hedera-hbar-logo.png" /></p>
-                </>
+              {account === "" ? (
+                  <p><Button className="mt-4" onClick={() => handleConnect()}>Connect Wallet</Button></p>
                 ):(
-                  <p><Button className="mt-4" onClick={connect}>Connect Wallet</Button></p>
+                  <>
+                  <p className="text-sm mt-4"><span onClick={() => handleDisconnectSessions()}>Sign Out</span> <img style={{width:"30px", display:"inline-block", marginTop: "-3px"}} src="/images/hedera-hbar-logo.png" /></p>
+                </>
                 )}
             </NavbarItem>
           </NavbarContent>
