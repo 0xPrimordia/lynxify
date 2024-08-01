@@ -69,7 +69,7 @@ export const WalletProvider = ({children}:useWalletProps) => {
         process.env.NEXT_PUBLIC_WALLETCONNECT_ID,
         Object.values(HederaJsonRpcMethod),
         [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged],
-        [HederaChainId.Mainnet]
+        [HederaChainId.Testnet]
       );
 
       console.log("Initialize Hedera Wallet Connect...");
@@ -139,6 +139,7 @@ export const WalletProvider = ({children}:useWalletProps) => {
     return ( 
         <WalletContext.Provider
         value={{
+            appMetadata,
             sessions,
             signers,
             account,

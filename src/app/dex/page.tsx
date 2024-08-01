@@ -13,17 +13,27 @@ import InputTokenSelect from "../components/InputTokenSelect";
 import { swapExactTokenForToken } from "../lib/saucerswap";
 import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
-
-// display liquidity
-// volume of trades per hour, day, week ask SS how to get volume
-
+import {
+    HederaSessionEvent,
+    HederaJsonRpcMethod,
+    DAppConnector,
+    HederaChainId,
+    ExtensionData,
+    DAppSigner,
+    SignAndExecuteTransactionParams,
+    transactionToBase64String
+  } from '@hashgraph/hedera-wallet-connect';
+  import { SessionTypes, SignClientTypes } from '@walletconnect/types';
+  
 export default function DexPage() {
-    const { account } = useWalletContext();
+    const { account, appMetadata, dAppConnector } = useWalletContext();
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
     const { tokens } = useSaucerSwapContext();
     const { pools } = usePoolContext();
+    const [session, setSession] = useState<SessionTypes.Struct>()
+    const [signers, setSigners] = useState<DAppSigner[]>([])
     const [from, setFrom] = useState(Math.floor(pastDate.getTime() / 1000));
     const [to, setTo] = useState(Math.floor(currentDate.getTime() / 1000));
     const [interval, setInterval] = useState('HOUR');
@@ -63,16 +73,43 @@ export default function DexPage() {
 
     const handleQuote = async () => {
         try {
-            if(!tradeToken || !currentPool) return;
-            const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, currentPool?.fee, account, 0, 0);
+            console.log('Initiating trade')
+            // if(!tradeToken || !currentPool) {
+            //     console.log("Not trade token or current pool")
+            //     return 
+            // };
+            if (dAppConnector != null && dAppConnector != undefined) {
+                const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, "0.0.1183558", 3000, account, 0, 0);
+                console.log(result)
+                console.log(account)
+                if(typeof result !== 'string') return;
+                const params: SignAndExecuteTransactionParams = {
+                    transactionList: result,
+                    signerAccountId: 'hedera:testnet:' + account,
+                }
+      
+                console.log(params)
+      
+                const results = await dAppConnector.signAndExecuteTransaction(params)
+                console.log(results)
+            }
             //const result = await getQuoteExactInput(tradeToken?.id, tradeToken?.decimals, currentToken?.id, tradeAmount.toString(), currentPool?.fee); // Example fee
-            console.log(result);
             //setQuote(formatUnits(result.amountOut.toString(), 18));
         } catch (error) {
           console.error('Error swapping tokens', error);
         }
     };
 
+    useEffect(() => {
+        if (session) {
+          const sessionAccount = session.namespaces?.hedera?.accounts?.[0]
+          if (sessionAccount) {
+            const accountId = sessionAccount.split(':').pop()
+            console.log(accountId)
+          }
+        }
+    }, [session])
+    
     const setDateInterval = (interval: string) => {
         if (interval === "WEEK") {
             pastDate.setDate(currentDate.getDate() - 7);

@@ -1,8 +1,11 @@
 import { ethers } from 'ethers';
-import { ContractId, ContractExecuteTransaction, Hbar, HbarUnit, TokenAssociateTransaction, Client, AccountId, PrivateKey } from '@hashgraph/sdk';
+import { ContractId, ContractExecuteTransaction, TransactionId, Hbar, HbarUnit, TokenAssociateTransaction, Client, AccountId, PrivateKey } from '@hashgraph/sdk';
 import QuoterV2Abi from './QuoterV2.json';
 import SwapRouterAbi from './SwapRouter.json';
 import axios from 'axios';
+import {
+  transactionToBase64String
+} from '@hashgraph/hedera-wallet-connect'
 
 //load ABI data 
 const abiInterfaces = new ethers.Interface(QuoterV2Abi);
@@ -34,13 +37,13 @@ function decimalToPaddedHex(decimal: number, length: number): string {
 }
 
 export const swapExactTokenForToken = async (amountIn: string, inputToken: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
-  const client = new Client();
-  client.setOperator(AccountId.fromString(process.env.NEXT_PUBLIC_MY_ACCOUNT_ID!), PrivateKey.fromStringECDSA(process.env.NEXT_PUBLIC_MY_PRIVATE_KEY!));
+  // const client = new Client();
+  // client.setOperator(AccountId.fromString(process.env.NEXT_PUBLIC_MY_ACCOUNT_ID!), PrivateKey.fromStringECDSA(process.env.NEXT_PUBLIC_MY_PRIVATE_KEY!));
+
   const pathData:string[] = [];
   pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
   pathData.push(decimalToPaddedHex(fee, 6));
   pathData.push(`${ContractId.fromString(outputToken).toSolidityAddress()}`);
-  debugger
   const params = {
     path: pathData.join(''), //'0x...'
     recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`, //'0x...' - user's recipient address
@@ -58,18 +61,20 @@ export const swapExactTokenForToken = async (amountIn: string, inputToken: strin
     .setPayableAmount(Hbar.from(amountIn, HbarUnit.Tinybar))
     .setContractId(SWAP_ROUTER_ADDRESS)
     .setGas(100000)
-    .setFunctionParameters(encodedDataAsUint8Array);
-  debugger
-  // Freeze the transaction
-  const frozenTransaction = await transaction.freezeWith(client);
+    .setFunctionParameters(encodedDataAsUint8Array)
+    .setTransactionId(TransactionId.generate(recipientAddress));
+  const trans = transactionToBase64String(transaction)
+  return trans
+  // // Freeze the transaction
+  // const frozenTransaction = await transaction.freezeWith(client);
 
-  // Execute the frozen transaction
-  const response = await frozenTransaction.execute(client);
+  // // Execute the frozen transaction
+  // const response = await frozenTransaction.execute(client);
  
-  const record = await response.getRecord(client);
-  const result = record.contractFunctionResult!;
-  const values = result.getResult(['uint256']);
-  const amountOut = values[0]; //uint256 amountOut
+  // const record = await response.getRecord(client);
+  // const result = record.contractFunctionResult!;
+  // const values = result.getResult(['uint256']);
+  // const amountOut = values[0]; //uint256 amountOut
   
 }
 
