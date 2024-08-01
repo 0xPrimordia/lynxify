@@ -17,6 +17,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [nextui()],
+  plugins: [nextui({layout: {disabledOpacity: '0.3'}})],
 };
 export default config;

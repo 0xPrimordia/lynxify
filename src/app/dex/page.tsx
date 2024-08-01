@@ -109,7 +109,7 @@ export default function DexPage() {
           }
         }
     }, [session])
-    
+
     const setDateInterval = (interval: string) => {
         if (interval === "WEEK") {
             pastDate.setDate(currentDate.getDate() - 7);
@@ -194,8 +194,10 @@ export default function DexPage() {
                         <Input
                             type="number"
                             value="0"
-                            label="Buy Amount"
+                            label="Trade Amount"
+                            onChange={(e) => setTradeAmount(Number(e.target.value))}
                             labelPlacement="outside"
+                            isDisabled={tradeToken ? false : true}
                             endContent={
                                 <Chip className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
                             }
@@ -204,10 +206,10 @@ export default function DexPage() {
                         <Input
                             type="number"
                             value={String(tradeAmount)}
-                            onChange={(e) => setTradeAmount(Number(e.target.value))}
-                            label="Trade Amount"
+                            label="Buy Amount"
                             labelPlacement="outside"
                             className="pt-4"
+                            disabled={tradeToken ? false : true}
                             endContent={
                                 <InputTokenSelect tokens={currentTradeTokens} onSelect={selectTradeToken} />
                             }
