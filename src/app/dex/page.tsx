@@ -78,8 +78,8 @@ export default function DexPage() {
             //     console.log("Not trade token or current pool")
             //     return 
             // };
-            if (dAppConnector != null && dAppConnector != undefined) {
-                const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, "0.0.1183558", 3000, account, 0, 0);
+            if (dAppConnector != null && dAppConnector != undefined && tradeToken && currentToken) {
+                const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, 3000, account, 0, 0);
                 console.log(result)
                 console.log(account)
                 if(typeof result !== 'string') return;
@@ -100,7 +100,7 @@ export default function DexPage() {
         }
     };
 
-    useEffect(() => {
+    /*useEffect(() => {
         if (session) {
           const sessionAccount = session.namespaces?.hedera?.accounts?.[0]
           if (sessionAccount) {
@@ -108,7 +108,7 @@ export default function DexPage() {
             console.log(accountId)
           }
         }
-    }, [session])
+    }, [session])*/
 
     const setDateInterval = (interval: string) => {
         if (interval === "WEEK") {
