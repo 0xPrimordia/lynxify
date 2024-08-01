@@ -65,11 +65,11 @@ export const WalletProvider = ({children}:useWalletProps) => {
       const dAppConnector = new DAppConnector(
         appMetadata,
         // @ts-ignore
-        "testnet",
+        "mainnet",
         process.env.NEXT_PUBLIC_WALLETCONNECT_ID,
         Object.values(HederaJsonRpcMethod),
         [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged],
-        [HederaChainId.Testnet]
+        [HederaChainId.Mainnet]
       );
 
       console.log("Initialize Hedera Wallet Connect...");

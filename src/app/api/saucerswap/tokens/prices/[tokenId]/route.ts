@@ -13,7 +13,7 @@ export async function GET(req:any, { params }:{params:any;}) {
         return NextResponse.json({ error: 'Token ID is required' }, { status: 400 });
     }
 
-    const apiUrl = `${TESTAPI}/tokens/prices/${tokenId}?from=${from}&to=${to}&interval=${interval}`;
+    const apiUrl = `${MAINAPI}/tokens/prices/${tokenId}?from=${from}&to=${to}&interval=${interval}`;
 
     try {
         const response = await fetch(apiUrl);

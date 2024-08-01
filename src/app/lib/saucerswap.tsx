@@ -11,7 +11,7 @@ import {
 const abiInterfaces = new ethers.Interface(QuoterV2Abi);
 const QUOTER_V2_ADDRESS = "0.0.1390002";
 const swapRouterAbi = new ethers.Interface(SwapRouterAbi);
-const SWAP_ROUTER_ADDRESS = "0.0.1197038";
+const SWAP_ROUTER_ADDRESS = "0.0.3949434";
 
 //helper functions
 function hexToUint8Array(hex: string): Uint8Array {
@@ -86,7 +86,7 @@ export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals:
   console.log(pathData.join(''));
   const encodedPathData = hexToUint8Array(pathData.join(''));
   const inputAmountInSmallestUnit = ethers.parseUnits(amountIn, inputTokenDecimals);
-  let mirrorNodeBaseUrl = 'https://testnet.mirrornode.hedera.com';
+  let mirrorNodeBaseUrl = 'https://mainnet.mirrornode.hedera.com';
   const url = `${mirrorNodeBaseUrl}/api/v1/contracts/call`;
   const params = [encodedPathData, inputAmountInSmallestUnit];
   const encodedData = abiInterfaces.encodeFunctionData(abiInterfaces.getFunction('quoteExactInput')!, params);

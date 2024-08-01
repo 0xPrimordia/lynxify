@@ -193,7 +193,7 @@ export default function DexPage() {
                     <div className="w-full pt-8 pb-8">
                         <Input
                             type="number"
-                            value="0"
+                            value={String(tradeAmount)}
                             label="Trade Amount"
                             onChange={(e) => setTradeAmount(Number(e.target.value))}
                             labelPlacement="outside"
@@ -205,7 +205,7 @@ export default function DexPage() {
 
                         <Input
                             type="number"
-                            value={String(tradeAmount)}
+                            value="0"
                             label="Buy Amount"
                             labelPlacement="outside"
                             className="pt-4"
