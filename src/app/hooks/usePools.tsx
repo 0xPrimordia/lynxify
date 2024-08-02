@@ -17,6 +17,7 @@ export const PoolProvider = ({children}:Props) => {
             try {
                 const response = await fetch("/api/saucerswap/pools")
                 const data = await response.json();
+                console.log("Pools", data);
                 setPools(data);
             } catch (error:any) {
                 setError(error.message);

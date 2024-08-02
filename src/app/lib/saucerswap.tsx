@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { ContractId, ContractExecuteTransaction, TransactionId, Hbar, HbarUnit, TokenAssociateTransaction, Client, AccountId, PrivateKey } from '@hashgraph/sdk';
 import QuoterV2Abi from './QuoterV2.json';
 import SwapRouterAbi from './SwapRouter.json';
+import UniswapV3FactoryAbi from './UniswapV3Factory.json';
 import axios from 'axios';
 import {
   transactionToBase64String
@@ -36,46 +37,60 @@ function decimalToPaddedHex(decimal: number, length: number): string {
   return hexString;
 }
 
+export const checkIfPoolExists = async (tokenA: string, tokenB: string, fee: number) => {
+  const unniswapABI = new ethers.Interface(UniswapV3FactoryAbi);
+  const V2_factory = "0.0.3946833"
+
+  const provider = new ethers.JsonRpcProvider("https://mainnet.hashio.io/api", '', {
+    batchMaxCount: 1, //workaround for V6
+  });
+  const factoryContract = new ethers.Contract(V2_factory, unniswapABI.fragments, provider);
+  const tokenAAddress = `${ContractId.fromString(tokenA).toSolidityAddress()}`;
+  const tokenBAddress = `${ContractId.fromString(tokenB).toSolidityAddress()}`;
+
+  const result = await factoryContract.getPool(tokenAAddress, tokenBAddress, fee); //(token1, token0) will give same result
+  debugger
+  const poolEvmAddress = result.startsWith('0x') ? result : `0x${result}`;
+  const poolContractId = ContractId.fromEvmAddress(0, 0, poolEvmAddress);
+  return poolContractId.toString();
+}
+
 export const swapExactTokenForToken = async (amountIn: string, inputToken: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
-  // const client = new Client();
-  // client.setOperator(AccountId.fromString(process.env.NEXT_PUBLIC_MY_ACCOUNT_ID!), PrivateKey.fromStringECDSA(process.env.NEXT_PUBLIC_MY_PRIVATE_KEY!));
+  try {
+    const pathData:string[] = [];
+    pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
+    pathData.push(decimalToPaddedHex(fee, 6));
+    pathData.push(`${ContractId.fromString(outputToken).toSolidityAddress()}`);
+    const params = {
+      path: pathData.join(''),
+      recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`,
+      deadline: deadline,
+      amountIn: amountIn,
+      amountOutMinimum: outputAmountMin
+    };
+    console.log("Swap params:", params);
 
-  const pathData:string[] = [];
-  pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
-  pathData.push(decimalToPaddedHex(fee, 6));
-  pathData.push(`${ContractId.fromString(outputToken).toSolidityAddress()}`);
-  const params = {
-    path: pathData.join(''), //'0x...'
-    recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`, //'0x...' - user's recipient address
-    deadline: deadline, //Unix seconds
-    amountIn: amountIn, //need to convert to Tinybar
-    amountOutMinimum: outputAmountMin//in token's smallest unit
-  };
+    const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
+    const refundHBAREncoded = swapRouterAbi.encodeFunctionData('refundETH');
+    const multiCallParam = [swapEncoded, refundHBAREncoded];
+    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
+    const encodedDataAsUint8Array = hexToUint8Array(encodedData);
 
-  const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-  const refundHBAREncoded = swapRouterAbi.encodeFunctionData('refundETH');
-  const multiCallParam = [swapEncoded, refundHBAREncoded];
-  const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
-  const encodedDataAsUint8Array = hexToUint8Array(encodedData);
-  const transaction = new ContractExecuteTransaction()
-    .setPayableAmount(Hbar.from(amountIn, HbarUnit.Tinybar))
-    .setContractId(SWAP_ROUTER_ADDRESS)
-    .setGas(100000)
-    .setFunctionParameters(encodedDataAsUint8Array)
-    .setTransactionId(TransactionId.generate(recipientAddress));
-  const trans = transactionToBase64String(transaction)
-  return trans
-  // // Freeze the transaction
-  // const frozenTransaction = await transaction.freezeWith(client);
+    const transaction = new ContractExecuteTransaction()
+      .setPayableAmount(Hbar.from(amountIn, HbarUnit.Tinybar))
+      .setContractId(SWAP_ROUTER_ADDRESS)
+      .setGas(300000) // Increased gas limit
+      .setFunctionParameters(encodedDataAsUint8Array)
+      .setTransactionId(TransactionId.generate(recipientAddress));
 
-  // // Execute the frozen transaction
-  // const response = await frozenTransaction.execute(client);
- 
-  // const record = await response.getRecord(client);
-  // const result = record.contractFunctionResult!;
-  // const values = result.getResult(['uint256']);
-  // const amountOut = values[0]; //uint256 amountOut
-  
+    console.log("Transaction details:", transaction);
+
+    const trans = transactionToBase64String(transaction);
+    return trans;
+  } catch (error) {
+    console.error("Error in swapExactTokenForToken:", error);
+    throw error;
+  }
 }
 
 export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals: number, outputToken: string, amountIn: string, fee: number) => {

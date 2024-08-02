@@ -1,7 +1,7 @@
 "use client"
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { formatUnits } from 'ethers';
-import { Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch } from "@nextui-org/react";
+import { Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import TokenPriceChart from '../components/TokenPriceChart';
@@ -10,7 +10,7 @@ import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
 import InputTokenSelect from "../components/InputTokenSelect";
-import { swapExactTokenForToken } from "../lib/saucerswap";
+import { swapExactTokenForToken, checkIfPoolExists } from "../lib/saucerswap";
 import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
 import {
@@ -32,17 +32,15 @@ export default function DexPage() {
     pastDate.setDate(currentDate.getDate() - 7);
     const { tokens } = useSaucerSwapContext();
     const { pools } = usePoolContext();
-    const [session, setSession] = useState<SessionTypes.Struct>()
-    const [signers, setSigners] = useState<DAppSigner[]>([])
+    const [currentPools, setCurrentPools] = useState<any[]>([]);
     const [from, setFrom] = useState(Math.floor(pastDate.getTime() / 1000));
     const [to, setTo] = useState(Math.floor(currentDate.getTime() / 1000));
     const [interval, setInterval] = useState('HOUR');
-    const [tradeToken, setTradeToken] = useState<Token>();
+    const [tradeToken, setTradeToken] = useState<Token|null>(null);
     const [tradeAmount, setTradeAmount] = useState(0);
     const [tradePrice, setTradePrice] = useState(0);
     const [stopLoss, setStopLoss] = useState(false);
     const [buyOrder, setBuyOrder] = useState(false);
-    const [quote, setQuote] = useState<string | null>(null);
     const [currentTradeTokens, setCurrentTradeTokens] = useState<Token[]>([]);
     const [currentPool, setCurrentPool] = useState<any>(null);
     const [currentToken, setCurrentToken] = useState<Token>(
@@ -59,27 +57,25 @@ export default function DexPage() {
         }
     )
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
+    const prevPoolsRef = useRef<any[]>([]);
 
     useEffect(() => {
-        if(!pools || !currentToken || !tradeToken) return;
-        const pool = pools.filter((pool:any) => pool.tokenA.id === currentToken.id && pool.tokenB.id === tradeToken.id || pool.tokenA.id === tradeToken.id && pool.tokenB.id === currentToken.id);
-
-        if(pool) {
-            setCurrentPool(pool[0]);
-        } else {
-            console.log("No pool found");
+        if(!pools || !currentToken) return;
+        const pairs = pools.filter((pool:any) => pool.tokenA.id === currentToken.id || pool.tokenB.id === currentToken.id);
+        if (JSON.stringify(pairs) !== JSON.stringify(prevPoolsRef.current)) {
+            console.log("Current pools", pairs);
+            setCurrentPools(pairs);
+            prevPoolsRef.current = pairs;
         }
-    }, [pools, currentToken, tradeToken]);
+        console.log("Current pools", pairs);
+    }, [pools, currentToken]);
 
     const handleQuote = async () => {
         try {
             console.log('Initiating trade')
-            // if(!tradeToken || !currentPool) {
-            //     console.log("Not trade token or current pool")
-            //     return 
-            // };
             if (dAppConnector != null && dAppConnector != undefined && tradeToken && currentToken) {
-                const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, 3000, account, 0, 0);
+                const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
+                const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, currentPool?.fee, account, deadline, 0);
                 console.log(result)
                 console.log(account)
                 if(typeof result !== 'string') return;
@@ -125,18 +121,12 @@ export default function DexPage() {
         }
     }
 
-    const getCurrentTokenPairs = () => {
-        if(!pools || !currentToken) return;
-        const pairs = pools.filter((pool:any) => pool.tokenA.id === currentToken.id || pool.tokenB.id === currentToken.id);
-        let tradeTokens = pairs.map((pair:any) => pair.tokenA.id === currentToken.id ? pair.tokenB : pair.tokenA);
-        setCurrentTradeTokens(tradeTokens);
-    }
-
-    const selectCurrentToken = (tokenId:string) => {
+    const selectCurrentToken = async (tokenId:string) => {
         const token = tokens.find((token:Token) => token.id === tokenId);
         if (token) {
             setCurrentToken(token);
-            getCurrentTokenPairs();
+            setCurrentPool(null);
+            console.log("Current token", token)
         }
     }
 
@@ -145,8 +135,35 @@ export default function DexPage() {
         if (token) {
             setTradeToken(token);
             setTradePrice(token.price);
+            //handleCurrentPool();
         }
     }
+
+    const handleCurrentPool = (poolId: string | Set<string>) => {
+        console.log("Pool ID", poolId);
+        
+        // Check if poolId is a Set (which is what NextUI's Select component returns)
+        if (poolId instanceof Set) {
+            poolId = Array.from(poolId)[0]; // Get the first (and only) item from the Set
+        }
+
+        // Ensure poolId is a string before parsing
+        if (typeof poolId === 'string') {
+            let poolIdNum = parseInt(poolId);
+            const pool = currentPools.find((pool:any) => pool.id === poolIdNum);
+
+            if (pool) {
+                setCurrentPool(pool);
+                setTradeToken(pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA);
+            }
+        } else {
+            console.error('Invalid pool ID type:', typeof poolId);
+        }
+    }
+
+    useEffect(() => {
+        console.log("Current pool listener:", currentPool)
+    }, [currentPool]);
 
     return (    
         <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
@@ -181,7 +198,13 @@ export default function DexPage() {
                                     <ChevronDownIcon />
                                 </div>
                             </DropdownTrigger>
-                            <DropdownMenu onAction={(key) => (selectCurrentToken(key as string) )} className="max-h-72 overflow-scroll w-full" aria-label="Token Selection" items={tokens} variant="flat">
+                            <DropdownMenu 
+                                onAction={(key) => (selectCurrentToken(key as string) )} 
+                                className="max-h-72 overflow-scroll w-full" 
+                                aria-label="Token Selection" 
+                                items={Array.isArray(tokens) ? tokens : []} 
+                                variant="flat"
+                            >
                                 {(token:Token) => (
                                     <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
                                             <p>{token.name}</p>
@@ -191,6 +214,27 @@ export default function DexPage() {
                         </Dropdown>
                     </div>
                     <div className="w-full pt-8 pb-8">
+                        {Array.isArray(currentPools) && currentPools.length > 0 && (
+                            <div className="mb-12">
+                                {!currentPool ? (
+                                    <Select 
+                                        items={currentPools}
+                                        label="Select Pool"
+                                        onSelectionChange={(key) => handleCurrentPool(key as string)}
+                                        selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
+                                        placeholder="Select Pool"
+                                    >
+                                        {(pool:any) => (
+                                            <SelectItem key={pool.id.toString()}>{pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%</SelectItem>
+                                        )}
+                                    </Select>
+                                ):(
+                                    <p>{currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}%</p>
+                                )}
+                                
+                            </div>
+                        
+                        )}
                         <Input
                             type="number"
                             value={String(tradeAmount)}
@@ -209,15 +253,12 @@ export default function DexPage() {
                             label="Buy Amount"
                             labelPlacement="outside"
                             className="pt-4"
-                            disabled={tradeToken ? false : true}
-                            endContent={
-                                <InputTokenSelect tokens={currentTradeTokens} onSelect={selectTradeToken} />
-                            }
+                            isDisabled
                         />
                     </div>
                     <div className="w-full flex flex-col gap-4">
-                        <Switch size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
-                        <Switch size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
+                        <Switch isDisabled size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
+                        <Switch isDisabled size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
                     </div>
                     {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
                         <Input type="number" value="0" label="Stop Loss" labelPlacement="outside" />
