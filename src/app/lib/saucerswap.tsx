@@ -57,6 +57,9 @@ export const checkIfPoolExists = async (tokenA: string, tokenB: string, fee: num
 
 export const swapExactTokenForToken = async (amountIn: string, inputToken: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
   try {
+    // Convert amountIn to tinybar (smallest unit of HBAR)
+    const amountInTinybar = ethers.parseUnits(amountIn, 8).toString(); // HBAR has 8 decimal places
+
     const pathData:string[] = [];
     pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
     pathData.push(decimalToPaddedHex(fee, 6));
@@ -65,7 +68,7 @@ export const swapExactTokenForToken = async (amountIn: string, inputToken: strin
       path: pathData.join(''),
       recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`,
       deadline: deadline,
-      amountIn: amountIn,
+      amountIn: amountInTinybar, // Use the converted amount
       amountOutMinimum: outputAmountMin
     };
     console.log("Swap params:", params);
@@ -77,7 +80,7 @@ export const swapExactTokenForToken = async (amountIn: string, inputToken: strin
     const encodedDataAsUint8Array = hexToUint8Array(encodedData);
 
     const transaction = new ContractExecuteTransaction()
-      .setPayableAmount(Hbar.from(amountIn, HbarUnit.Tinybar))
+      .setPayableAmount(Hbar.fromTinybars(amountInTinybar)) // Use fromTinybars instead of from
       .setContractId(SWAP_ROUTER_ADDRESS)
       .setGas(300000) // Increased gas limit
       .setFunctionParameters(encodedDataAsUint8Array)
