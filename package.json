@@ -21,6 +21,9 @@
     "@openzeppelin/contracts": "^5.0.2",
     "@radix-ui/react-menubar": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.0",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/ssr": "^0.5.1",
+    "@supabase/supabase-js": "^2.45.2",
     "@walletconnect/modal": "^2.6.2",
     "@walletconnect/sign-client": "^2.14.0",
     "@walletconnect/types": "^2.14.0",
@@ -33,6 +36,7 @@
     "crypto-js": "^4.2.0",
     "ethers": "^6.13.1",
     "hashconnect": "^3.0.13",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.407.0",
     "next": "14.2.3",
     "next-transpile-modules": "^10.0.1",
@@ -47,6 +51,7 @@
     "webpack": "^5.92.1"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.14.9",
     "@types/react": "^18",
     "@types/react-dom": "^18",

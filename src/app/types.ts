@@ -48,3 +48,14 @@ export type ApiLiquidityPoolV2 = {
     twitterHandle: string | null
     sentinelReport: string | null
   }
+
+  export type Threshold = {
+    id: number;
+    stop_loss: number;
+    buy_order: number;
+    stop_loss_cap: number;
+    buy_order_cap: number;
+    hedera_account_id: string;
+    token_id: string;
+    created_at: string;
+  }

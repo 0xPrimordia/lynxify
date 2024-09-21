@@ -31,7 +31,7 @@ const Header = () => {
                   <p><Button className="mt-4" onClick={() => handleConnect()}>Connect Wallet</Button></p>
                 ):(
                   <>
-                  <p className="text-sm mt-4"><span onClick={() => handleDisconnectSessions()}>Sign Out</span> <img style={{width:"30px", display:"inline-block", marginTop: "-3px"}} src="/images/hedera-hbar-logo.png" /></p>
+                  <p className="text-sm mt-4"><span onClick={() => handleDisconnectSessions()}>Sign Out {account}</span> <img style={{width:"30px", display:"inline-block", marginTop: "-3px"}} src="/images/hedera-hbar-logo.png" /></p>
                 </>
                 )}
             </NavbarItem>

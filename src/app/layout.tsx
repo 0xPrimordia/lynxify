@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html className="dark" lang="en">
       <body className={inter.className + " dark text-foreground bg-background min-h-screen"}>
         <WalletProvider>
           <SaucerSwapProvider>

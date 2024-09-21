@@ -1,6 +1,5 @@
 "use client"
 import React, { useState, useEffect, useRef } from "react";
-import { formatUnits } from 'ethers';
 import { Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
@@ -9,24 +8,16 @@ import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
-import InputTokenSelect from "../components/InputTokenSelect";
-import { swapExactTokenForToken, checkIfPoolExists } from "../lib/saucerswap";
+import { swapExactTokenForToken } from "../lib/saucerswap";
 import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
+import Thresholds from "../components/Thresholds";
 import {
-    HederaSessionEvent,
-    HederaJsonRpcMethod,
-    DAppConnector,
-    HederaChainId,
-    ExtensionData,
-    DAppSigner,
     SignAndExecuteTransactionParams,
-    transactionToBase64String
   } from '@hashgraph/hedera-wallet-connect';
-  import { SessionTypes, SignClientTypes } from '@walletconnect/types';
   
 export default function DexPage() {
-    const { account, appMetadata, dAppConnector } = useWalletContext();
+    const { account, userId, dAppConnector } = useWalletContext();
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -41,7 +32,10 @@ export default function DexPage() {
     const [tradePrice, setTradePrice] = useState(0);
     const [stopLoss, setStopLoss] = useState(false);
     const [buyOrder, setBuyOrder] = useState(false);
-    const [currentTradeTokens, setCurrentTradeTokens] = useState<Token[]>([]);
+    const [stopLossPrice, setStopLossPrice] = useState<number>(0);
+    const [buyOrderPrice, setBuyOrderPrice] = useState<number>(0);
+    const [stopLossCap, setStopLossCap] = useState<number>(0);
+    const [buyOrderCap, setBuyOrderCap] = useState<number>(0);
     const [currentPool, setCurrentPool] = useState<any>(null);
     const [currentToken, setCurrentToken] = useState<Token>(
         {
@@ -89,22 +83,10 @@ export default function DexPage() {
                 const results = await dAppConnector.signAndExecuteTransaction(params)
                 console.log(results)
             }
-            //const result = await getQuoteExactInput(tradeToken?.id, tradeToken?.decimals, currentToken?.id, tradeAmount.toString(), currentPool?.fee); // Example fee
-            //setQuote(formatUnits(result.amountOut.toString(), 18));
         } catch (error) {
           console.error('Error swapping tokens', error);
         }
     };
-
-    /*useEffect(() => {
-        if (session) {
-          const sessionAccount = session.namespaces?.hedera?.accounts?.[0]
-          if (sessionAccount) {
-            const accountId = sessionAccount.split(':').pop()
-            console.log(accountId)
-          }
-        }
-    }, [session])*/
 
     const setDateInterval = (interval: string) => {
         if (interval === "WEEK") {
@@ -137,6 +119,30 @@ export default function DexPage() {
             setTradePrice(token.price);
             //handleCurrentPool();
         }
+    }
+
+    const setThresholds = async () => {
+        const response = await fetch('/api/thresholds/setThresholds', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                stopLoss: stopLossPrice, 
+                buyOrder: buyOrderPrice,
+                stopLossCap: stopLossCap,
+                buyOrderCap: buyOrderCap,
+                hederaAccountId: account, 
+                tokenId: currentToken.id,
+                userId: userId
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to set thresholds');
+        }
+        const data = await response.json();
+        console.log(data.message);
     }
 
     const handleCurrentPool = (poolId: string | Set<string>) => {
@@ -245,6 +251,7 @@ export default function DexPage() {
                             endContent={
                                 <Chip className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
                             }
+                            step="0.000001"
                         />
 
                         <Input
@@ -253,19 +260,25 @@ export default function DexPage() {
                             label="Buy Amount"
                             labelPlacement="outside"
                             className="pt-4"
+                            step="0.000001"
                             isDisabled
                         />
                     </div>
                     <div className="w-full flex flex-col gap-4">
-                        <Switch isDisabled size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
-                        <Switch isDisabled size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
+                        <Switch size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
+                        <Switch size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
                     </div>
                     {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
-                        <Input type="number" value="0" label="Stop Loss" labelPlacement="outside" />
+                        <Input maxLength={12} onChange={(e) => setStopLossPrice(Number(e.target.value))} step="0.000001" type="number" value={stopLossPrice.toString()} label="Sell Price" labelPlacement="outside" />
+                        <Input maxLength={12} onChange={(e) => setStopLossCap(Number(e.target.value))} step="0.000001" type="number" value={stopLossCap.toString()} label="Sell Cap" labelPlacement="outside" />
                     </div>}
                     {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
-                        <Input type="number" value="0" label="Buy Amount" labelPlacement="outside" />
+                        <Input maxLength={12} onChange={(e) => setBuyOrderPrice(Number(e.target.value))} step="0.000001" type="number" value={buyOrderPrice.toString()} label="Buy Price" labelPlacement="outside" />
+                        <Input maxLength={12} onChange={(e) => setBuyOrderCap(Number(e.target.value))} step="0.000001" type="number" value={buyOrderCap.toString()} label="Buy Order Cap" labelPlacement="outside" />
                     </div>}
+                    {(buyOrder || stopLoss) && (
+                        <Button className="mb-6" onClick={() => setThresholds()}>Set Thresholds</Button>
+                    )}
                     <Button onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                 </div>
             </div>
