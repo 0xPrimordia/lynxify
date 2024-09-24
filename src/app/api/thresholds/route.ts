@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { createClient } from '../../../utils/supabase/server';
 
 // modify to limit to current user
-export async function GET() {
+export async function GET(req:any, { params }:{params:any;}) {
     try {
+        const { searchParams } = new URL(req.url);
+        const userId = searchParams.get('userId');
+
+        if (!userId) {
+            return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+        }
+
         console.log('Starting GET request...');
         const supabasePromise = createClient();
         console.log('Supabase client promise created:', supabasePromise);
@@ -17,7 +24,7 @@ export async function GET() {
         }
 
         console.log('Attempting to query thresholds table...');
-        const { data, error } = await supabase.from('Thresholds').select('*');
+        const { data, error } = await supabase.from('Thresholds').select('*').eq('user_id', userId);
         
         if (error) {
             console.error('Supabase query error:', error);

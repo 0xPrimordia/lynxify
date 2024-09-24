@@ -12,6 +12,7 @@ import {
   SignMessageParams
 } from '@hashgraph/hedera-wallet-connect';
 import { SessionTypes, SignClientTypes } from '@walletconnect/types';
+import { createClient } from '@supabase/supabase-js';
 
 const appMetadata = {
     name: "Lynxify",
@@ -47,13 +48,33 @@ export const WalletProvider = ({children}:useWalletProps) => {
       const sessionAccount = session.namespaces?.hedera?.accounts?.[0]
       if (sessionAccount) {
         const accountId = sessionAccount.split(':').pop()
-        console.log(accountId)
         setAccount(accountId)
       }
     }
   }, [session])
 
   const init = async () => {
+    console.log("Initializing wallet and checking for existing session...");
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      console.log("Existing Supabase session found");
+      setUserId(session.user.id);
+      // Assuming the hederaAccountId is stored in user metadata
+      const hederaAccountId = session.user.user_metadata?.hederaAccountId;
+      if (hederaAccountId) {
+        setAccount(hederaAccountId);
+      }
+    } else {
+      console.log("No existing Supabase session");
+    }
+
     console.log("Importing Hedera Wallet Connect module...");
     console.log("Configure DAppConnector...");
 
@@ -79,9 +100,6 @@ export const WalletProvider = ({children}:useWalletProps) => {
       setSessions(_sessions)
       setSession(_sessions[0])
     }
-    dAppConnector?.extensions?.forEach((extension: any) => {
-      console.log('extension: ', extension)
-    })
 
     const extensionData = dAppConnector.extensions?.filter(
       (extension: any) => extension.available,
@@ -94,6 +112,7 @@ export const WalletProvider = ({children}:useWalletProps) => {
   }
 
   const handleConnect = async (extensionId?: string) => {
+    console.log('handleConnect called');
     setIsConnecting(true);
     setError(null);
     try {
@@ -147,7 +166,6 @@ export const WalletProvider = ({children}:useWalletProps) => {
           console.log('Data being sent to server:', dataToSend);
 
           console.log('Attempting to authenticate with server...');
-
           const response = await fetch('/api/auth/wallet-connect', {
             method: 'POST',
             headers: {
@@ -158,11 +176,39 @@ export const WalletProvider = ({children}:useWalletProps) => {
 
           if (response.ok) {
             const data = await response.json();
-            console.log('User authenticated:', data, 'User ID:', data.user.id);
-            setAccount(accountId);
-            setUserId(data.user.id);
+            console.log('Authentication response:', JSON.stringify(data, null, 2));
+            if (data.session && data.session.access_token) {
+              const supabase = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+              );
+              
+              // Set the session in Supabase
+              const { error } = await supabase.auth.setSession({
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token
+              });
+
+              if (error) {
+                console.error('Error setting Supabase session:', error);
+                throw error;
+              }
+
+              // Now get the session to ensure it's set correctly
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) {
+                setUserId(session.user.id);
+                setAccount(accountId);
+              } else {
+                throw new Error('Failed to retrieve session after setting');
+              }
+            } else {
+              console.error('Session data not found in response');
+              setError('Session data not found in response');
+            }
           } else {
             const errorData = await response.json();
+            console.error('Authentication failed:', errorData);
             throw new Error(errorData.error || 'Failed to authenticate user');
           }
 
@@ -182,12 +228,17 @@ export const WalletProvider = ({children}:useWalletProps) => {
   const handleDisconnectSessions = async () => {
     try {
       await dAppConnector?.disconnectAll();
+      
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      await supabase.auth.signOut();
+
       setSessions([]);
       setSigners([]);
       setAccount("");
       setUserId(null);
-      // Clear any stored session data
-      // localStorage.removeItem('sessionData');
     } catch (error: any) {
       console.error('Error disconnecting sessions:', error);
       setError(error.message || 'Failed to disconnect sessions');

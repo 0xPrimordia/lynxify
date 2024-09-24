@@ -11,7 +11,7 @@ import { Button, ButtonGroup } from '@nextui-org/react';
 import { swapExactTokenForToken } from "../lib/saucerswap";
 import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
-import Thresholds from "../components/Thresholds";
+import { Threshold } from '@/app/types';
 import {
     SignAndExecuteTransactionParams,
   } from '@hashgraph/hedera-wallet-connect';
@@ -36,6 +36,7 @@ export default function DexPage() {
     const [buyOrderPrice, setBuyOrderPrice] = useState<number>(0);
     const [stopLossCap, setStopLossCap] = useState<number>(0);
     const [buyOrderCap, setBuyOrderCap] = useState<number>(0);
+    const [thresholds, setThresholds] = useState<Threshold[]>([]);
     const [currentPool, setCurrentPool] = useState<any>(null);
     const [currentToken, setCurrentToken] = useState<Token>(
         {
@@ -52,17 +53,42 @@ export default function DexPage() {
     )
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
     const prevPoolsRef = useRef<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if(!pools || !currentToken) return;
         const pairs = pools.filter((pool:any) => pool.tokenA.id === currentToken.id || pool.tokenB.id === currentToken.id);
         if (JSON.stringify(pairs) !== JSON.stringify(prevPoolsRef.current)) {
-            console.log("Current pools", pairs);
             setCurrentPools(pairs);
             prevPoolsRef.current = pairs;
         }
-        console.log("Current pools", pairs);
     }, [pools, currentToken]);
+
+    useEffect(() => {
+        console.log("DexPage useEffect - userId changed:", userId);
+        const fetchThresholds = async () => {
+            if (!userId) {
+                setIsLoading(false);
+                return;
+            }
+            try {
+                setIsLoading(true);
+                const response = await fetch(`/api/thresholds?userId=${userId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                setThresholds(data);
+                console.log("Thresholds", data);
+            } catch (error) {
+                console.error('Error fetching thresholds:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchThresholds();
+    }, [userId]);
 
     const handleQuote = async () => {
         try {
@@ -70,18 +96,12 @@ export default function DexPage() {
             if (dAppConnector != null && dAppConnector != undefined && tradeToken && currentToken) {
                 const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
                 const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, currentPool?.fee, account, deadline, 0);
-                console.log(result)
-                console.log(account)
                 if(typeof result !== 'string') return;
                 const params: SignAndExecuteTransactionParams = {
                     transactionList: result,
                     signerAccountId: 'hedera:testnet:' + account,
                 }
-      
-                console.log(params)
-      
                 const results = await dAppConnector.signAndExecuteTransaction(params)
-                console.log(results)
             }
         } catch (error) {
           console.error('Error swapping tokens', error);
@@ -108,7 +128,6 @@ export default function DexPage() {
         if (token) {
             setCurrentToken(token);
             setCurrentPool(null);
-            console.log("Current token", token)
         }
     }
 
@@ -121,7 +140,7 @@ export default function DexPage() {
         }
     }
 
-    const setThresholds = async () => {
+    const saveThresholds = async () => {
         const response = await fetch('/api/thresholds/setThresholds', {
             method: 'POST',
             headers: {
@@ -146,7 +165,6 @@ export default function DexPage() {
     }
 
     const handleCurrentPool = (poolId: string | Set<string>) => {
-        console.log("Pool ID", poolId);
         
         // Check if poolId is a Set (which is what NextUI's Select component returns)
         if (poolId instanceof Set) {
@@ -170,6 +188,10 @@ export default function DexPage() {
     useEffect(() => {
         console.log("Current pool listener:", currentPool)
     }, [currentPool]);
+
+    if (isLoading) {
+        return <div>Loading...</div>;
+    }
 
     return (    
         <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
@@ -268,6 +290,7 @@ export default function DexPage() {
                         <Switch size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
                         <Switch size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
                     </div>
+                    
                     {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
                         <Input maxLength={12} onChange={(e) => setStopLossPrice(Number(e.target.value))} step="0.000001" type="number" value={stopLossPrice.toString()} label="Sell Price" labelPlacement="outside" />
                         <Input maxLength={12} onChange={(e) => setStopLossCap(Number(e.target.value))} step="0.000001" type="number" value={stopLossCap.toString()} label="Sell Cap" labelPlacement="outside" />
@@ -277,7 +300,7 @@ export default function DexPage() {
                         <Input maxLength={12} onChange={(e) => setBuyOrderCap(Number(e.target.value))} step="0.000001" type="number" value={buyOrderCap.toString()} label="Buy Order Cap" labelPlacement="outside" />
                     </div>}
                     {(buyOrder || stopLoss) && (
-                        <Button className="mb-6" onClick={() => setThresholds()}>Set Thresholds</Button>
+                        <Button className="mb-6" onClick={() => saveThresholds()}>Set Thresholds</Button>
                     )}
                     <Button onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                 </div>

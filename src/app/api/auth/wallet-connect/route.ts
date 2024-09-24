@@ -3,28 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 import jwt from "jsonwebtoken";
 import { User } from "@supabase/supabase-js";
 
-function decodeBase64(base64String: string) {
-  return Buffer.from(base64String, 'base64');
-}
-
-function parseSignature(buffer: Buffer) {
-  let offset = 0;
-
-  // Skip the first two bytes (0x0a and length byte)
-  offset += 2;
-
-  // Read the public key
-  const publicKeyLength = buffer[offset + 1];
-  const publicKeyBytes = buffer.slice(offset + 2, offset + 2 + publicKeyLength);
-  offset += 2 + publicKeyLength;
-
-  // Read the signature
-  const signatureLength = buffer[offset + 1];
-  const signatureBytes = buffer.slice(offset + 2, offset + 2 + signatureLength);
-
-  return { publicKeyBytes, signatureBytes };
-}
-
 // Add this helper function at the top of the file
 function sanitizeUser(user: any) {
   return {
@@ -35,37 +13,8 @@ function sanitizeUser(user: any) {
   };
 }
 
-// Add this function to create a user in Supabase auth
-async function createSupabaseUser(supabase: any, accountId: string) {
-  const { data, error } = await supabase.auth.admin.createUser({
-    user_metadata: { hederaAccountId: accountId }
-  });
-
-  if (error) throw error;
-  return data.user;
-}
-
-async function getOrCreateAuthUser(supabase: any, accountId: string, userId: string) {
-  try {
-    // Try to get the auth user
-    const { data: authUser, error } = await supabase.auth.admin.getUserById(userId);
-    if (authUser) return authUser;
-
-    // If not found, create a new auth user
-    const { data: newAuthUser, error: createError } = await supabase.auth.admin.createUser({
-      user_metadata: { hederaAccountId: accountId },
-      email: `${accountId}@placeholder.com`,
-      email_confirm: true
-    });
-    if (createError) throw createError;
-    return newAuthUser.user;
-  } catch (error) {
-    console.error('Error in getOrCreateAuthUser:', error);
-    throw error;
-  }
-}
-
 export async function POST(req: NextRequest) {
+  console.log('Wallet-connect route called');
   const supabase = await createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -78,17 +27,14 @@ export async function POST(req: NextRequest) {
   );
 
   const { accountId, signature, message } = await req.json();
+  console.log('Received data:', { accountId, signature, message });
 
   if (!accountId || !signature || !message) {
+    console.log('Missing required fields');
     return NextResponse.json({ error: 'Account ID, signature, and message are required' }, { status: 400 });
   }
 
   try {
-    console.log('Received data:', { accountId, signature, message });
-
-    // Verify signature (keep existing verification code)
-    // ... (signature verification code)
-
     // Check if the user exists in the Users table
     let { data: user, error } = await supabase
       .from('Users')
@@ -96,20 +42,23 @@ export async function POST(req: NextRequest) {
       .eq('hederaAccountId', accountId)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
-      throw error;
-    }
+    console.log('User lookup result:', { user, error });
 
     let authUser: User;
     if (!user) {
+      console.log('Creating new user');
       // User doesn't exist, create a new one in Supabase auth
       const { data: newAuthUser, error: createError } = await supabase.auth.admin.createUser({
         user_metadata: { hederaAccountId: accountId },
         email: `${accountId}@placeholder.com`,
         email_confirm: true
       });
-      if (createError) throw createError;
+      if (createError) {
+        console.error('Error creating new auth user:', createError);
+        throw createError;
+      }
       authUser = newAuthUser.user;
+      console.log('New auth user created:', authUser);
 
       // Now create the user in the Users table
       const { data: newUser, error: insertError } = await supabase
@@ -118,16 +67,26 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error inserting new user:', insertError);
+        throw insertError;
+      }
       user = newUser;
+      console.log('New user inserted:', user);
     } else {
+      console.log('Existing user found, retrieving auth user');
       // User exists, get the auth user
       const { data: existingAuthUser, error: authError } = await supabase.auth.admin.getUserById(user.id);
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Error retrieving existing auth user:', authError);
+        throw authError;
+      }
       authUser = existingAuthUser.user;
+      console.log('Retrieved existing auth user:', authUser);
     }
 
     if (!authUser || !authUser.id) {
+      console.error('Failed to create or retrieve auth user');
       throw new Error('Failed to create or retrieve auth user');
     }
 
@@ -142,6 +101,7 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_JWT_SECRET!,
       { expiresIn: '1h' }
     );
+    console.log('JWT token generated');
 
     // Use the custom JWT to sign in the user
     const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
@@ -149,17 +109,25 @@ export async function POST(req: NextRequest) {
       refresh_token: token, // You might want to generate a separate refresh token
     });
 
-    if (sessionError) throw sessionError;
+    if (sessionError) {
+      console.error('Error setting session:', sessionError);
+      throw sessionError;
+    }
+    console.log('Session set successfully');
 
-    // Return the user and session data
-    return NextResponse.json({ 
+    // Prepare the response
+    const response = { 
       user: sanitizeUser(user),
       session: {
         access_token: sessionData.session?.access_token,
         refresh_token: sessionData.session?.refresh_token,
         user: sessionData.user
       }
-    });
+    };
+    console.log('Prepared response:', JSON.stringify(response, null, 2));
+
+    // Return the user and session data
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error in wallet-connect:', error);
