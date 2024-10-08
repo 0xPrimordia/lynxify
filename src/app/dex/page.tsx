@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect, useRef } from "react";
-import { Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import TokenPriceChart from '../components/TokenPriceChart';
@@ -11,10 +11,22 @@ import { Button, ButtonGroup } from '@nextui-org/react';
 import { swapExactTokenForToken } from "../lib/saucerswap";
 import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
-import { Threshold } from '@/app/types';
 import {
     SignAndExecuteTransactionParams,
   } from '@hashgraph/hedera-wallet-connect';
+  
+// Update the Threshold interface to match the API response
+interface Threshold {
+    id: number;
+    created_at: string;
+    hederaAccountId: string;
+    stopLoss: number;
+    stopLossCap: number;
+    buyOrder: number;
+    buyOrderCap: number;
+    tokenId: string;
+    user_id: string;
+}
   
 export default function DexPage() {
     const { account, userId, dAppConnector } = useWalletContext();
@@ -23,6 +35,7 @@ export default function DexPage() {
     pastDate.setDate(currentDate.getDate() - 7);
     const { tokens } = useSaucerSwapContext();
     const { pools } = usePoolContext();
+    const [selectedSection, setSelectedSection] = useState("chart")
     const [currentPools, setCurrentPools] = useState<any[]>([]);
     const [from, setFrom] = useState(Math.floor(pastDate.getTime() / 1000));
     const [to, setTo] = useState(Math.floor(currentDate.getTime() / 1000));
@@ -65,7 +78,6 @@ export default function DexPage() {
     }, [pools, currentToken]);
 
     useEffect(() => {
-        console.log("DexPage useEffect - userId changed:", userId);
         const fetchThresholds = async () => {
             if (!userId) {
                 setIsLoading(false);
@@ -78,7 +90,7 @@ export default function DexPage() {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                setThresholds(data);
+                setThresholds(Array.isArray(data) ? data : [data]);
                 console.log("Thresholds", data);
             } catch (error) {
                 console.error('Error fetching thresholds:', error);
@@ -185,6 +197,16 @@ export default function DexPage() {
         }
     }
 
+    const deleteThreshold = async (id: number) => {
+        // TODO: Implement delete threshold API method
+        const response = await fetch(`/api/thresholds/deleteThreshold?id=${id}`);
+        if (!response.ok) {
+            throw new Error('Failed to delete threshold');
+        }
+        const data = await response.json();
+        console.log(data.message);
+    }
+
     useEffect(() => {
         console.log("Current pool listener:", currentPool)
     }, [currentPool]);
@@ -197,16 +219,58 @@ export default function DexPage() {
         <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
             <div className="flex w-full">
                 <div className="grow pr-12">
-                    <Menubar style={{borderColor: '#333', marginBottom: '2rem'}}>
-                        <MenubarMenu>
-                            <ButtonGroup>
-                                <Button onClick={() => setDateInterval('WEEK')} className={interval === "WEEK" ? 'bg-gray-800' : ''} disabled={interval === "WEEK" ? true : false} variant="light" size="sm">Week</Button>
-                                <Button onClick={() => setDateInterval('DAY')} className={interval === "DAY" ? 'bg-gray-800' : ''} disabled={interval === "DAY" ? true : false} variant="light" size="sm">Day</Button>
-                                <Button onClick={() => setDateInterval('HOUR')} className={interval === "HOUR" ? 'bg-gray-800' : ''} disabled={interval === "HOUR" ? true : false} variant="light" size="sm">Hour</Button>
-                            </ButtonGroup>
-                        </MenubarMenu>
-                    </Menubar>
-                    {data && <TokenPriceChart data={data} />}
+                    <Tabs 
+                        aria-label="section" 
+                        selectedKey={selectedSection} 
+                        onSelectionChange={(key) => setSelectedSection(key.toString())}
+                    >
+                        <Tab key="chart" title='Price Chart'>
+                            <Menubar style={{borderColor: '#333', marginBottom: '2rem'}}>
+                                <MenubarMenu>
+                                    <ButtonGroup>
+                                        <Button onClick={() => setDateInterval('WEEK')} className={interval === "WEEK" ? 'bg-gray-800' : ''} disabled={interval === "WEEK" ? true : false} variant="light" size="sm">Week</Button>
+                                        <Button onClick={() => setDateInterval('DAY')} className={interval === "DAY" ? 'bg-gray-800' : ''} disabled={interval === "DAY" ? true : false} variant="light" size="sm">Day</Button>
+                                        <Button onClick={() => setDateInterval('HOUR')} className={interval === "HOUR" ? 'bg-gray-800' : ''} disabled={interval === "HOUR" ? true : false} variant="light" size="sm">Hour</Button>
+                                    </ButtonGroup>
+                                </MenubarMenu>
+                            </Menubar>
+                            {data && <TokenPriceChart data={data} />}
+                        </Tab>
+                        <Tab key="thresholds" title='Thresholds'>
+                            <Table>
+                                <TableHeader>
+                                    <TableColumn>Token</TableColumn>
+                                    <TableColumn>Stop Loss</TableColumn>
+                                    <TableColumn>Stop Loss Cap</TableColumn>
+                                    <TableColumn>Buy Order</TableColumn>
+                                    <TableColumn>Buy Order Cap</TableColumn>
+                                    <TableColumn>Delete</TableColumn>
+                                </TableHeader>
+                                <TableBody>
+                                    {thresholds.length > 0 ? (
+                                        thresholds.map((threshold: Threshold) => (
+                                            <TableRow key={threshold.id}>
+                                                <TableCell>
+                                                {threshold.tokenId}
+                                                </TableCell>
+                                                <TableCell>${threshold.stopLoss}</TableCell>
+                                                <TableCell>{threshold.stopLossCap}</TableCell>
+                                                <TableCell>${threshold.buyOrder}</TableCell>
+                                                <TableCell>{threshold.buyOrderCap}</TableCell>
+                                                <TableCell>
+                                                    <Button onClick={() => deleteThreshold(threshold.id)}>Delete</Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4}>No thresholds found</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </Tab>
+                    </Tabs>
                 </div>
                 <div className="relative h-14 pr-6">
                     <div className="w-full flex">
@@ -292,11 +356,11 @@ export default function DexPage() {
                     </div>
                     
                     {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
-                        <Input maxLength={12} onChange={(e) => setStopLossPrice(Number(e.target.value))} step="0.000001" type="number" value={stopLossPrice.toString()} label="Sell Price" labelPlacement="outside" />
+                        <Input maxLength={12} onChange={(e) => setStopLossPrice(Number(e.target.value))} step="0.000001" type="number" value={stopLossPrice.toString()} label="Sell Price (usd)" labelPlacement="outside" />
                         <Input maxLength={12} onChange={(e) => setStopLossCap(Number(e.target.value))} step="0.000001" type="number" value={stopLossCap.toString()} label="Sell Cap" labelPlacement="outside" />
                     </div>}
                     {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
-                        <Input maxLength={12} onChange={(e) => setBuyOrderPrice(Number(e.target.value))} step="0.000001" type="number" value={buyOrderPrice.toString()} label="Buy Price" labelPlacement="outside" />
+                        <Input maxLength={12} onChange={(e) => setBuyOrderPrice(Number(e.target.value))} step="0.000001" type="number" value={buyOrderPrice.toString()} label="Buy Price (usd)" labelPlacement="outside" />
                         <Input maxLength={12} onChange={(e) => setBuyOrderCap(Number(e.target.value))} step="0.000001" type="number" value={buyOrderCap.toString()} label="Buy Order Cap" labelPlacement="outside" />
                     </div>}
                     {(buyOrder || stopLoss) && (
