@@ -24,7 +24,9 @@ interface Threshold {
     stopLossCap: number;
     buyOrder: number;
     buyOrderCap: number;
-    tokenId: string;
+    tokenA: string;
+    tokenB: string;
+    fee: number;
     user_id: string;
 }
   
@@ -241,7 +243,9 @@ export default function DexPage() {
                         <Tab key="thresholds" title='Thresholds'>
                             <Table>
                                 <TableHeader>
-                                    <TableColumn>Token</TableColumn>
+                                    <TableColumn>Token A</TableColumn>
+                                    <TableColumn>Token B</TableColumn>
+                                    <TableColumn>Fee</TableColumn>
                                     <TableColumn>Stop Loss</TableColumn>
                                     <TableColumn>Stop Loss Cap</TableColumn>
                                     <TableColumn>Buy Order</TableColumn>
@@ -253,7 +257,13 @@ export default function DexPage() {
                                         thresholds.map((threshold: Threshold) => (
                                             <TableRow key={threshold.id}>
                                                 <TableCell>
-                                                {threshold.tokenId}
+                                                {threshold.tokenA}
+                                                </TableCell>
+                                                <TableCell>
+                                                {threshold.tokenB}
+                                                </TableCell>
+                                                <TableCell>
+                                                {threshold.fee}
                                                 </TableCell>
                                                 <TableCell>${threshold.stopLoss}</TableCell>
                                                 <TableCell>{threshold.stopLossCap}</TableCell>
@@ -314,6 +324,7 @@ export default function DexPage() {
                                     <Select 
                                         items={currentPools}
                                         label="Select Pool"
+                                        isDisabled={account ? false : true}
                                         onSelectionChange={(key) => handleCurrentPool(key as string)}
                                         selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
                                         placeholder="Select Pool"
@@ -328,6 +339,9 @@ export default function DexPage() {
                                 
                             </div>
                         
+                        )}
+                        {!Array.isArray(currentPools) || currentPools.length === 0 && (
+                            <p className="pb-8">No pools found for {currentToken.symbol}</p>
                         )}
                         <Input
                             type="number"
