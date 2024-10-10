@@ -1,12 +1,5 @@
-import { ethers } from "ethers";
-import { AccountId } from "@hashgraph/sdk";
-import abi from "../../../contracts/userThreshold.json";
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-//import { createServerSupabaseClient } from '../../../utils/supabase/server';
-
-
-//console.log('Supabase client initialized with URL:', supabaseUrl);
 
 export async function POST(req: NextRequest) {
   console.log('Starting POST request...');
@@ -29,7 +22,9 @@ export async function POST(req: NextRequest) {
     stopLossCap: number,
     buyOrderCap: number,
     hederaAccountId: string,
-    tokenId: string,
+    tokenA: string,
+    tokenB: string,
+    fee: number,
     userId: string
   }) {
     try {
@@ -45,7 +40,9 @@ export async function POST(req: NextRequest) {
             stopLossCap: data.stopLossCap,
             buyOrderCap: data.buyOrderCap,
             hederaAccountId: data.hederaAccountId,
-            tokenId: data.tokenId,
+            tokenA: data.tokenA,
+            tokenB: data.tokenB,
+            fee: data.fee,
             user_id: data.userId
           }
         ])
@@ -80,17 +77,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
 
-    const { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenId, userId } = parsedBody;
+    const { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenA, tokenB, fee, userId } = parsedBody;
     
-    console.log('Parsed request data:', { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenId });
+    console.log('Parsed request data:', { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenA, tokenB, fee, userId });
 
     // Check if any of the required fields are undefined, null, or empty string
     if (stopLoss === undefined || stopLoss === null || stopLoss === '' ||
         buyOrder === undefined || buyOrder === null || buyOrder === '' ||
         stopLossCap === undefined || stopLossCap === null || stopLossCap === '' ||
         buyOrderCap === undefined || buyOrderCap === null || buyOrderCap === '' ||
-        !hederaAccountId || !tokenId) {
-      console.error('Missing required fields:', { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenId });
+        !hederaAccountId || !tokenA || !tokenB || !fee || !userId) {
+      console.error('Missing required fields:', { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenA, tokenB, fee, userId });
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -101,7 +98,9 @@ export async function POST(req: NextRequest) {
       stopLossCap: Number(stopLossCap),
       buyOrderCap: Number(buyOrderCap),
       hederaAccountId,
-      tokenId,
+      tokenA: tokenA,
+      tokenB: tokenB,
+      fee: fee,
       userId
     };
 

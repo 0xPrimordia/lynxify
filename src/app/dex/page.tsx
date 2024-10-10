@@ -163,8 +163,10 @@ export default function DexPage() {
                 buyOrder: buyOrderPrice,
                 stopLossCap: stopLossCap,
                 buyOrderCap: buyOrderCap,
-                hederaAccountId: account, 
-                tokenId: currentToken.id,
+                hederaAccountId: account,
+                tokenA: currentPool.tokenA.id,
+                tokenB: currentPool.tokenB.id,
+                fee: currentPool.fee,
                 userId: userId
             }),
         });
@@ -351,8 +353,8 @@ export default function DexPage() {
                         />
                     </div>
                     <div className="w-full flex flex-col gap-4">
-                        <Switch size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
-                        <Switch size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
+                        <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
+                        <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
                     </div>
                     
                     {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
@@ -366,7 +368,7 @@ export default function DexPage() {
                     {(buyOrder || stopLoss) && (
                         <Button className="mb-6" onClick={() => saveThresholds()}>Set Thresholds</Button>
                     )}
-                    <Button onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
+                    <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                 </div>
             </div>
         </div>
