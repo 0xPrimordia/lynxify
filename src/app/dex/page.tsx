@@ -4,6 +4,9 @@ import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, 
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import dynamic from 'next/dynamic'
+import { useRouter } from "next/navigation";
+import { useWalletContext } from "../hooks/useWallet";
+import { useNFTGate } from "../hooks/useNFTGate";
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -21,7 +24,6 @@ import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
 import { swapExactTokenForToken } from "../lib/saucerswap";
-import { useWalletContext } from "../hooks/useWallet";
 import { usePoolContext } from "../hooks/usePools";
 import {
     SignAndExecuteTransactionParams,
@@ -46,7 +48,9 @@ interface Threshold {
 }
   
 export default function DexPage() {
+    const router = useRouter();
     const { account, userId, dAppConnector } = useWalletContext();
+    const { hasAccess, isLoading: nftGateLoading } = useNFTGate(account);
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -84,6 +88,12 @@ export default function DexPage() {
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
     const prevPoolsRef = useRef<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (!isLoading && (!account || !hasAccess)) {
+            router.push('/');
+        }
+    }, [account, hasAccess, isLoading, router]);
 
     useEffect(() => {
         if(!pools || !currentToken) return;
