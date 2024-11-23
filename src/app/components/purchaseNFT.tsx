@@ -13,15 +13,13 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            // Create contract interface with proper ABI
-            const provider = new ethers.JsonRpcProvider("https://testnet.hashio.io/api");
-            const abi = ["function purchaseNFT(string) external payable"];
-            const contract = new ethers.Contract(contractAddress, abi, provider);
-
-            // Create transaction
-            const tx = await contract.purchaseNFT.populateTransaction(account);
-            tx.to = contractAddress;  // Ensure the 'to' address is set
-            tx.value = ethers.parseEther("300");  // Set the value here
+            // Create transaction directly without contract interaction
+            const tx = {
+                to: contractAddress,
+                value: ethers.parseEther("300"),
+                data: "0x", // Empty data field for simple HBAR transfer
+                gasLimit: "400000", // Explicit gas limit
+            };
 
             // Sign and execute transaction through wallet
             const result = await signAndExecuteTransaction({
