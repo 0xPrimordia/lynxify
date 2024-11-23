@@ -14,7 +14,11 @@ import { usePoolContext } from "../hooks/usePools";
 import {
     SignAndExecuteTransactionParams,
   } from '@hashgraph/hedera-wallet-connect';
+import ApexChart from '../components/ApexChart';
   
+
+// for amount of tokens to buy/sell, input dollar amount or token qty auto calc other field
+// stretch goal: threshold setting that buy/sell within a percentage above or below selected.
 // Update the Threshold interface to match the API response
 interface Threshold {
     id: number;
@@ -238,7 +242,7 @@ export default function DexPage() {
                                     </ButtonGroup>
                                 </MenubarMenu>
                             </Menubar>
-                            {data && <TokenPriceChart data={data} />}
+                            {data && <ApexChart data={data} />}
                         </Tab>
                         <Tab key="thresholds" title='Thresholds'>
                             <Table>

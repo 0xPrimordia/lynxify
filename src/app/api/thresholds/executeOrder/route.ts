@@ -57,10 +57,11 @@ export async function POST(req: NextRequest) {
       const tx = await contract.executeTradeForUser(thresholdData.user_id, orderType, path);
       await tx.wait();
 
+      // make sure trade amount is set to the selected cap
       // Update the threshold in the database
       const { error: updateError } = await supabase
         .from('Thresholds')
-        .update({ executed: true, isActive: false })
+        .update({ isActive: false })
         .eq('id', thresholdId);
 
       if (updateError) {
