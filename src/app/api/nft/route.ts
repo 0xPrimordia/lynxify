@@ -1,3 +1,4 @@
+import { NextRequest, NextResponse } from 'next/server';
 import { Client, TransferTransaction, PrivateKey } from "@hashgraph/sdk";
 
 async function validatePayment(buyer: string, amount: number, treasuryId: string) {
@@ -17,24 +18,21 @@ async function validatePayment(buyer: string, amount: number, treasuryId: string
     return transaction !== undefined;
 }
 
-export default async function handler(req: any, res: any) {
-    if (req.method !== "POST") {
-        return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    const { tokenId, serialNumber, buyer } = req.body;
+export async function POST(req: NextRequest) {
+    const body = await req.json();
+    const { tokenId, serialNumber, buyer } = body;
     const treasuryId = process.env.OPERATOR_ID; // Treasury account ID
     const amount = 300; // HBAR
 
     if (!tokenId || !serialNumber || !buyer) {
-        return res.status(400).json({ error: "Missing required fields" });
+        return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     try {
         // Step 1: Validate Payment
         const paymentValid = await validatePayment(buyer, amount, treasuryId as string);
         if (!paymentValid) {
-            return res.status(400).json({ error: "Payment validation failed" });
+            return NextResponse.json({ error: "Payment validation failed" }, { status: 400 });
         }
 
         // Step 2: Transfer the NFT
@@ -53,9 +51,9 @@ export default async function handler(req: any, res: any) {
             throw new Error("Transfer failed");
         }
 
-        res.status(200).json({ success: true, serialNumber, buyer });
+        return NextResponse.json({ success: true, serialNumber, buyer });
     } catch (error: any) {
         console.error("Error transferring NFT:", error);
-        res.status(500).json({ error: error.message });
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
