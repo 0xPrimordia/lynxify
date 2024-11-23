@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export const useNFTGate = (accountId: string) => {
   const [hasAccess, setHasAccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_ACCESS_NFT_TOKEN_ID;
+  const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
 
   useEffect(() => {
     const checkNFTAccess = async () => {
