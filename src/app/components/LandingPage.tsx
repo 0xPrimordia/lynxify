@@ -38,7 +38,7 @@ const LandingPage = () => {
                 Enjoy lifetime access to closed betas, early access, and premium features. As well as influence on future development.
             </p>
             <div className="mb-8">
-                <p className="text-2xl font-semibold">Remaining NFTs</p>
+                <p className="text-xl font-semibold mb-4">Remaining NFTs</p>
                 <p className="text-4xl font-bold text-blue-500">{remainingSupply}</p>
             </div>
             <Button 
