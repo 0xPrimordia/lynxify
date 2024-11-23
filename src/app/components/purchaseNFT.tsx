@@ -3,6 +3,21 @@ import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
+import { ethers } from 'ethers';
+
+function hexToUint8Array(hex: string): Uint8Array {
+    if (hex.startsWith('0x')) {
+        hex = hex.slice(2);
+    }
+    if (hex.length % 2 !== 0) {
+        throw new Error('Hex string must have an even length');
+    }
+    const array = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        array[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    }
+    return array;
+}
 
 function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
     const { account, signAndExecuteTransaction } = useWalletContext();
@@ -16,27 +31,23 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            console.log("Contract Address:", contractAddress);
-            console.log("Account:", account);
+            const iface = new ethers.Interface(["function purchaseNFT()"]);
+            const encodedFunction = iface.encodeFunctionData("purchaseNFT", []);
+            const functionCallBytes = hexToUint8Array(encodedFunction.slice(2));
 
             const transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
-                .setFunction("purchaseNFT")
+                .setFunctionParameters(functionCallBytes)
                 .setTransactionId(TransactionId.generate(account));
 
-            console.log("Transaction created:", transaction);
-
             const base64Tx = transactionToBase64String(transaction);
-            console.log("Base64 transaction:", base64Tx);
 
             const result = await signAndExecuteTransaction({
                 transaction: base64Tx,
                 accountId: account
             });
-
-            console.log("Transaction result:", result);
 
             if (result.success) {
                 setStatus("NFT purchased successfully!");
