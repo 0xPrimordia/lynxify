@@ -3,6 +3,7 @@ import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
+import { ethers } from 'ethers';
 
 function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
     const { account, signAndExecuteTransaction } = useWalletContext();
@@ -16,13 +17,20 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
+            // Create ABI interface for the purchaseNFT function
+            const functionAbi = ["function purchaseNFT()"];
+            const iface = new ethers.Interface(functionAbi);
+            
+            // Encode the function call
+            const encodedFunction = iface.encodeFunctionData("purchaseNFT", []);
+            const functionCallBytes = Buffer.from(encodedFunction.slice(2), 'hex');
+
             // Create a Hedera transaction
             const transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
-                // Call the contract's purchaseNFT function with no parameters
-                .setFunction("purchaseNFT")
+                .setFunctionParameters(functionCallBytes)
                 .setTransactionId(TransactionId.generate(account));
 
             // Convert to base64 string for wallet connect
@@ -35,23 +43,6 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
             });
 
             if (result.success) {
-                // Call your backend to initiate the NFT transfer
-                const response = await fetch('/api/nft', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        tokenId: tokenId,
-                        serialNumber: '1', // You'll need to track this
-                        buyer: account
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('NFT transfer failed');
-                }
-
                 setStatus("NFT purchased successfully!");
             } else {
                 setStatus("Purchase failed. Please try again.");
