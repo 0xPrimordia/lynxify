@@ -1,4 +1,4 @@
-import { ContractExecuteTransaction, Hbar, ContractId } from "@hashgraph/sdk";
+import { ContractExecuteTransaction, Hbar, ContractId, TransactionId } from "@hashgraph/sdk";
 import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
@@ -21,7 +21,8 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
-                .setFunction("purchaseNFT");
+                .setFunction("purchaseNFT")
+                .setTransactionId(TransactionId.generate(account));
 
             // Convert to base64 string for wallet connect
             const base64Tx = transactionToBase64String(transaction);
