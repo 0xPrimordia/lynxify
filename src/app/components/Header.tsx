@@ -56,7 +56,7 @@ const Header = () => {
                                 )}
                                 <p className="text-sm mt-4">
                                     <span>
-                                        <span className="underline text-blue-500 mr-2" onClick={() => handleDisconnectSessions()}>Sign Out</span> {account}
+                                        <span className="underline text-blue-500 mr-2 cursor-pointer" onClick={() => handleDisconnectSessions()}>Sign Out</span> {account}
                                     </span>
                                     <img 
                                         style={{width:"30px", display:"inline-block", marginTop: "-3px"}} 
