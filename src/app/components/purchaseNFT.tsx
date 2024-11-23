@@ -4,7 +4,9 @@ import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 import { ethers } from 'ethers';
+import NFTSaleAbi from '../contracts/NFTSale.json';
 
+// Helper function from SaucerSwap
 function hexToUint8Array(hex: string): Uint8Array {
     if (hex.startsWith('0x')) {
         hex = hex.slice(2);
@@ -23,6 +25,9 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
     const { account, signAndExecuteTransaction } = useWalletContext();
     const [status, setStatus] = useState("");
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
+    
+    // Create interface from full ABI
+    const nftSaleInterface = new ethers.Interface(NFTSaleAbi);
 
     const handlePurchase = async () => {
         setStatus("Initiating purchase...");
@@ -31,18 +36,22 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            const iface = new ethers.Interface(["function purchaseNFT()"]);
-            const encodedFunction = iface.encodeFunctionData("purchaseNFT", []);
+            console.log("Encoding function call...");
+            const encodedFunction = nftSaleInterface.encodeFunctionData("purchaseNFT", []);
+            console.log("Encoded function:", encodedFunction);
+            
             const functionCallBytes = hexToUint8Array(encodedFunction.slice(2));
+            console.log("Function call bytes:", functionCallBytes);
 
             const transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
-                .setFunctionParameters(functionCallBytes)
-                .setTransactionId(TransactionId.generate(account));
+                .setFunctionParameters(functionCallBytes);
 
+            console.log("Transaction created");
             const base64Tx = transactionToBase64String(transaction);
+            console.log("Base64 transaction created");
 
             const result = await signAndExecuteTransaction({
                 transaction: base64Tx,
