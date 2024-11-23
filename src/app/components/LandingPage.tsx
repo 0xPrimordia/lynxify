@@ -29,7 +29,7 @@ const LandingPage = () => {
             <h1 className="text-4xl font-bold mb-6">Lynxify Members Only</h1>
             <p className="text-xl mb-8 max-w-2xl">
                 Access our advanced DEX with the Lynxify Lifetime Membership NFT. 
-                Enjoy low fees, automated trading, and advanced charting tools.
+                Enjoy lifetime access to closed betas, early access, and premium features.
             </p>
             <div className="mb-8">
                 <p className="text-2xl font-semibold">Remaining NFTs</p>
