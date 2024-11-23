@@ -1,8 +1,7 @@
-import { ethers } from 'ethers';
+import { ContractExecuteTransaction, Hbar, ContractId } from "@hashgraph/sdk";
 import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
-import { ContractExecuteTransaction, Hbar } from "@hashgraph/sdk";
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 
 function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
@@ -17,9 +16,9 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            // Create a Hedera transaction
+            // Create a Hedera transaction with proper ContractId format
             const transaction = new ContractExecuteTransaction()
-                .setContractId(contractAddress)
+                .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
                 .setFunction("purchaseNFT");
@@ -30,8 +29,7 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
             // Sign and execute the transaction
             const result = await signAndExecuteTransaction({
                 transaction: base64Tx,
-                accountId: account,
-                signingFunction: true
+                accountId: account
             });
 
             if (result.success) {
