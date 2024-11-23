@@ -1,4 +1,4 @@
-import { ContractExecuteTransaction, Hbar, ContractId, TransactionId } from "@hashgraph/sdk";
+import { ContractExecuteTransaction, Hbar, ContractId, TransactionId, Client } from "@hashgraph/sdk";
 import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
@@ -36,22 +36,20 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            console.log("Encoding function call...");
-            const encodedFunction = nftSaleInterface.encodeFunctionData("purchaseNFT", []);
-            console.log("Encoded function:", encodedFunction);
-            
-            const functionCallBytes = hexToUint8Array(encodedFunction.slice(2));
-            console.log("Function call bytes:", functionCallBytes);
+            // Create client for freezing
+            const client = Client.forTestnet();
 
-            const transaction = new ContractExecuteTransaction()
+            const encodedFunction = nftSaleInterface.encodeFunctionData("purchaseNFT", []);
+            const functionCallBytes = hexToUint8Array(encodedFunction.slice(2));
+
+            const transaction = await new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
-                .setFunctionParameters(functionCallBytes);
+                .setFunctionParameters(functionCallBytes)
+                .freezeWith(client);
 
-            console.log("Transaction created");
             const base64Tx = transactionToBase64String(transaction);
-            console.log("Base64 transaction created");
 
             const result = await signAndExecuteTransaction({
                 transaction: base64Tx,
