@@ -1,5 +1,6 @@
 "use client";
 import { ReactNode, createContext, useContext, useState, useEffect } from "react";
+import { Client } from "@hashgraph/sdk";
 import {
   HederaSessionEvent,
   HederaJsonRpcMethod,
@@ -21,7 +22,37 @@ const appMetadata = {
     url: "http://localhost:3000"
 }
 
-const WalletContext = createContext<any>({});
+interface WalletContextType {
+    account: string;
+    handleConnect: () => Promise<void>;
+    handleDisconnectSessions: () => Promise<void>;
+    signAndExecuteTransaction: (params: { transaction: string, accountId: string }) => Promise<any>;
+    client: Client;
+    appMetadata: any;
+    sessions?: SessionTypes.Struct[];
+    signers: DAppSigner[];
+    extensions: ExtensionData[];
+    dAppConnector: DAppConnector | null;
+    userId: string | null;
+    isConnecting: boolean;
+    error: string | null;
+}
+
+export const WalletContext = createContext<WalletContextType>({
+    account: "",
+    handleConnect: async () => {},
+    handleDisconnectSessions: async () => {},
+    signAndExecuteTransaction: async () => {},
+    client: Client.forTestnet(),
+    appMetadata: {},
+    sessions: [],
+    signers: [],
+    extensions: [],
+    dAppConnector: null,
+    userId: null,
+    isConnecting: false,
+    error: null
+});
 
 interface useWalletProps {
     children: ReactNode
@@ -235,15 +266,17 @@ export const WalletProvider = ({children}:useWalletProps) => {
   return ( 
     <WalletContext.Provider
       value={{
+        account,
+        handleConnect,
+        handleDisconnectSessions,
+        signAndExecuteTransaction: async () => {},
+        client: Client.forTestnet(),
         appMetadata,
         sessions,
         signers,
-        account,
         extensions,
         dAppConnector,
         userId,
-        handleConnect,
-        handleDisconnectSessions,
         isConnecting,
         error
       }}

@@ -2,7 +2,10 @@ import { ContractExecuteTransaction, Hbar, ContractId, TransactionId, Client } f
 import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
-import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
+import { 
+    transactionToBase64String,
+    SignAndExecuteTransactionParams
+} from '@hashgraph/hedera-wallet-connect';
 import { ethers } from 'ethers';
 import NFTSaleAbi from '../contracts/NFTSale.json';
 
@@ -21,12 +24,11 @@ function hexToUint8Array(hex: string): Uint8Array {
     return array;
 }
 
-function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
+function PurchaseNFT({ apiUrl, tokenId, client }: { apiUrl: string, tokenId: string, client: Client }) {
     const { account, signAndExecuteTransaction } = useWalletContext();
     const [status, setStatus] = useState("");
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
     
-    // Create interface from full ABI
     const nftSaleInterface = new ethers.Interface(NFTSaleAbi);
 
     const handlePurchase = async () => {
@@ -35,9 +37,6 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
             if (!account || !contractAddress) {
                 throw new Error("Wallet not connected or contract not configured");
             }
-
-            // Create client for freezing
-            const client = Client.forTestnet();
 
             const encodedFunction = nftSaleInterface.encodeFunctionData("purchaseNFT", []);
             const functionCallBytes = hexToUint8Array(encodedFunction.slice(2));

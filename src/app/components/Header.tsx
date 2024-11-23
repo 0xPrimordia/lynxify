@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, handleDisconnectSessions, account } = useWalletContext();
+    const { handleConnect, handleDisconnectSessions, account, client } = useWalletContext();
     const { hasAccess, isLoading } = useNFTGate(account);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
@@ -82,6 +82,7 @@ const Header = () => {
                         <PurchaseNFT 
                             apiUrl="/api/nft"
                             tokenId={process.env.NEXT_PUBLIC_ACCESS_NFT_TOKEN_ID || ""}
+                            client={client}
                         />
                     </ModalBody>
                 </ModalContent>
