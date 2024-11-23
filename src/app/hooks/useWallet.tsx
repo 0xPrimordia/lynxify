@@ -145,76 +145,63 @@ export const WalletProvider = ({children}:useWalletProps) => {
         
         console.log('Account ID:', accountId);
 
-        // Always re-authenticate, even for existing sessions
-        const message = "Authenticate with Lynxify";
-        const signParams = {
-          signerAccountId: accountId,
-          message: message,
-        };
+        // First check if user exists in database
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
 
-        console.log('Sign params:', signParams);
+        const { data: existingUser } = await supabase
+          .from('Users')
+          .select('*')
+          .eq('hederaAccountId', accountId)
+          .single();
 
-        try {
-          const signedMessage = await dAppConnector.signMessage(signParams);
-          console.log('Signed message from dAppConnector:', signedMessage);
-
-          const dataToSend = { 
-            accountId, 
-            signature: signedMessage,
-            message 
+        if (!existingUser) {
+          // Only request signature if user doesn't exist
+          const message = "Authenticate with Lynxify";
+          const signParams = {
+            signerAccountId: accountId,
+            message: message,
           };
-          console.log('Data being sent to server:', dataToSend);
 
-          console.log('Attempting to authenticate with server...');
-          const response = await fetch('/api/auth/wallet-connect', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend),
-          });
+          console.log('Sign params:', signParams);
+          try {
+            const signedMessage = await dAppConnector.signMessage(signParams);
+            console.log('Signed message from dAppConnector:', signedMessage);
 
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Authentication response:', JSON.stringify(data, null, 2));
-            if (data.session && data.session.access_token) {
-              const supabase = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-              );
-              
-              // Set the session in Supabase
-              const { error } = await supabase.auth.setSession({
-                access_token: data.session.access_token,
-                refresh_token: data.session.refresh_token
-              });
+            const dataToSend = { 
+              accountId, 
+              signature: signedMessage,
+              message 
+            };
 
-              if (error) {
-                console.error('Error setting Supabase session:', error);
-                throw error;
-              }
+            const response = await fetch('/api/auth/wallet-connect', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(dataToSend),
+            });
 
-              // Now get the session to ensure it's set correctly
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session) {
-                setUserId(session.user.id);
-                setAccount(accountId);
-              } else {
-                throw new Error('Failed to retrieve session after setting');
-              }
-            } else {
-              console.error('Session data not found in response');
-              setError('Session data not found in response');
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Failed to authenticate user');
             }
-          } else {
-            const errorData = await response.json();
-            console.error('Authentication failed:', errorData);
-            throw new Error(errorData.error || 'Failed to authenticate user');
+          } catch (signError: any) {
+            console.error('Error signing or authenticating:', signError);
+            setError(signError.message || 'Failed to sign message or authenticate');
+            return;
           }
+        }
 
-        } catch (signError: any) {
-          console.error('Error signing or authenticating:', signError);
-          setError(signError.message || 'Failed to sign message or authenticate');
+        // Set the account regardless of whether signature was needed
+        setAccount(accountId);
+        
+        // Get the session data
+        const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+        if (supabaseSession) {
+          setUserId(supabaseSession.user.id);
         }
       }
     } catch (error: any) {

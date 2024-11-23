@@ -55,8 +55,8 @@ const Header = () => {
                                     </Button>
                                 )}
                                 <p className="text-sm mt-4">
-                                    <span onClick={() => handleDisconnectSessions()}>
-                                        Sign Out {account}
+                                    <span>
+                                        <span className="underline text-blue-500 mr-2" onClick={() => handleDisconnectSessions()}>Sign Out</span> {account}
                                     </span>
                                     <img 
                                         style={{width:"30px", display:"inline-block", marginTop: "-3px"}} 
