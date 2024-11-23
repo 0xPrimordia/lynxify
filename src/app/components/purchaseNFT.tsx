@@ -1,55 +1,40 @@
-import React, { useState } from "react";
+import { ethers } from 'ethers';
 import { useWalletContext } from "../hooks/useWallet";
-
+import { useState } from "react";
 function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
-    const { signAndExecuteTransaction } = useWalletContext();
+    const { account, signAndExecuteTransaction } = useWalletContext();
     const [status, setStatus] = useState("");
+    const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
 
     const handlePurchase = async () => {
-        setStatus("Connecting wallet...");
+        setStatus("Initiating purchase...");
         try {
-            // Example: Wallet connection logic
-            const buyer = "0.0.BuyerAccountId"; // Replace with actual buyer wallet address
-            const treasuryId = "0.0.TreasuryAccountId"; // Replace with your treasury wallet ID
+            if (!account || !contractAddress) {
+                throw new Error("Wallet not connected or contract not configured");
+            }
 
-            // Step 1: Prepare the payment transaction
-            const paymentParams = {
-                transaction: {
-                    nodeAccountId: ["0.0.3"], // Replace with the correct node
-                    transactionFee: 1000000, // Transaction fee in tinybars
-                    transfers: [
-                        { accountId: buyer, amount: -300 * 1e8 }, // Debit buyer 300 HBAR
-                        { accountId: treasuryId, amount: 300 * 1e8 }, // Credit treasury 300 HBAR
-                    ],
-                },
-                accountId: buyer,
-            };
+            // Create contract interface
+            const provider = new ethers.JsonRpcProvider("https://testnet.hashio.io/api");
+            const contract = new ethers.Contract(
+                contractAddress,
+                ["function purchaseNFT(string memory buyer) external payable"],
+                provider
+            );
 
-            // Step 2: Sign and execute the transaction
-            const result = await signAndExecuteTransaction(paymentParams);
+            // Create transaction
+            const tx = await contract.purchaseNFT.populateTransaction(account);
+            
+            // Sign and execute transaction through wallet
+            const result = await signAndExecuteTransaction({
+                transaction: tx,
+                accountId: account,
+                value: ethers.parseEther("300") // 300 HBAR
+            });
 
             if (result.success) {
-                setStatus("Payment successful. Transferring NFT...");
-
-                // Step 3: Call the backend to transfer the NFT
-                const response = await fetch(`${apiUrl}/transferNFT`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        tokenId,
-                        serialNumber: 1, // Replace with your serial number logic
-                        buyer,
-                    }),
-                });
-
-                const transferResult = await response.json();
-                if (transferResult.success) {
-                    setStatus(`NFT Transferred! Serial Number: ${transferResult.serialNumber}`);
-                } else {
-                    setStatus(`NFT Transfer failed: ${transferResult.error}`);
-                }
+                setStatus("NFT purchased successfully!");
             } else {
-                setStatus("Payment failed. Please try again.");
+                setStatus("Purchase failed. Please try again.");
             }
         } catch (error: any) {
             setStatus(`Error: ${error.message}`);

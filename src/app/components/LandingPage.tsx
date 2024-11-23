@@ -38,7 +38,7 @@ const LandingPage = () => {
     return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center px-4">
             <h1 className={`${inriaSerif.className} text-4xl font-bold mb-6`}>Lynxify Members Only</h1>
-            <p className="text-xl mb-8 max-w-2xl">
+            <p className="text-base mb-8 max-w-2xl">
                 Access our advanced DEX with the Lynxify Lifetime Membership NFT. 
                 Enjoy lifetime access to closed betas, early access, and premium features.
             </p>
@@ -46,6 +46,7 @@ const LandingPage = () => {
                 <p className="text-xl font-semibold mb-4">Remaining NFTs</p>
                 <p className="text-4xl font-bold text-blue-500">{remainingSupply}</p>
             </div>
+            {account && (
             <Button 
                 size="lg" 
                 color="primary"
@@ -57,9 +58,10 @@ const LandingPage = () => {
                         alert("Please purchase an NFT first");
                     }
                 }}
-            >
-                {hasAccess ? "Enter DEX" : "Purchase Access NFT"}
-            </Button>
+                >
+                    {hasAccess ? "Enter DEX" : "Purchase Access NFT"}
+                </Button>
+            )}
         </div>
     );
 };
