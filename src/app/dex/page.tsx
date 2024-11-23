@@ -3,7 +3,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
-import TokenPriceChart from '../components/TokenPriceChart';
+import dynamic from 'next/dynamic'
+
+// Dynamically import components that use window
+const TokenPriceChart = dynamic(
+    () => import('../components/TokenPriceChart'),
+    { ssr: false }
+);
+
+const ApexChart = dynamic(
+    () => import('../components/ApexChart'),
+    { ssr: false }
+);
+
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
@@ -14,7 +26,6 @@ import { usePoolContext } from "../hooks/usePools";
 import {
     SignAndExecuteTransactionParams,
   } from '@hashgraph/hedera-wallet-connect';
-import ApexChart from '../components/ApexChart';
   
 
 // for amount of tokens to buy/sell, input dollar amount or token qty auto calc other field
