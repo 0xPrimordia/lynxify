@@ -28,18 +28,7 @@ const Header = () => {
                         </h1>
                     </span>
                 </NavbarBrand>
-                <NavbarContent className="hidden sm:flex gap-4 pt-3" justify="center">
-                    {hasAccess && (
-                        <>
-                            <NavbarItem>
-                                <Link color="foreground" href="/">Stake</Link>
-                            </NavbarItem>
-                            <NavbarItem>
-                                <Link color="foreground" href="/dex">Swap</Link>
-                            </NavbarItem>
-                        </>
-                    )}
-                </NavbarContent>
+                
                 <NavbarContent justify="end">
                     <NavbarItem>
                         <PlaidLinkComponent />
