@@ -1,6 +1,6 @@
 "use client";
 import { VT323 } from "next/font/google";
-import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/react";
+import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
 import PlaidLinkComponent from "./PlaidLinkComponent";
@@ -54,16 +54,23 @@ const Header = () => {
                                         Get Access
                                     </Button>
                                 )}
-                                <p className="text-sm mt-4">
-                                    <span>
-                                        <span className="underline text-blue-500 mr-2 cursor-pointer" onClick={() => handleDisconnectSessions()}>Sign Out</span> {account}
-                                    </span>
-                                    <img 
-                                        style={{width:"30px", display:"inline-block", marginTop: "-3px"}} 
-                                        src="/images/hedera-hbar-logo.png" 
-                                        alt="Hedera Logo"
-                                    />
-                                </p>
+                                <Dropdown>
+                                    <DropdownTrigger>
+                                        <Button variant="light" className="text-sm">
+                                            {account}
+                                            <img 
+                                                style={{width:"30px", display:"inline-block", marginLeft: "8px"}} 
+                                                src="/images/hedera-hbar-logo.png" 
+                                                alt="Hedera Logo"
+                                            />
+                                        </Button>
+                                    </DropdownTrigger>
+                                    <DropdownMenu aria-label="Account Actions">
+                                        <DropdownItem key="logout" className="text-danger" color="danger" onClick={() => handleDisconnectSessions()}>
+                                            Sign Out
+                                        </DropdownItem>
+                                    </DropdownMenu>
+                                </Dropdown>
                             </>
                         )}
                     </NavbarItem>
