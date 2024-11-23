@@ -5,7 +5,7 @@ import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
 import PlaidLinkComponent from "./PlaidLinkComponent";
 import PurchaseNFT from "./purchaseNFT";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
@@ -13,6 +13,15 @@ const Header = () => {
     const { handleConnect, handleDisconnectSessions, account } = useWalletContext();
     const { hasAccess, isLoading } = useNFTGate(account);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
+
+    useEffect(() => {
+        if (account !== "") {
+            setIsConnected(true);
+        } else {
+            setIsConnected(false);
+        }
+    }, [account]);
 
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);
@@ -34,7 +43,7 @@ const Header = () => {
                         <PlaidLinkComponent />
                     </NavbarItem>
                     <NavbarItem className="hidden lg:flex">
-                        {account === "" ? (
+                        {!isConnected ? (
                             <p><Button className="mt-4" onClick={() => handleConnect()}>Connect Wallet</Button></p>
                         ) : (
                             <>

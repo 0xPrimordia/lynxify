@@ -13,22 +13,20 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            // Create contract interface
+            // Create contract interface with proper ABI
             const provider = new ethers.JsonRpcProvider("https://testnet.hashio.io/api");
-            const contract = new ethers.Contract(
-                contractAddress,
-                ["function purchaseNFT(string memory buyer) external payable"],
-                provider
-            );
+            const abi = ["function purchaseNFT(string) external payable"];
+            const contract = new ethers.Contract(contractAddress, abi, provider);
 
             // Create transaction
             const tx = await contract.purchaseNFT.populateTransaction(account);
-            
+            tx.to = contractAddress;  // Ensure the 'to' address is set
+            tx.value = ethers.parseEther("300");  // Set the value here
+
             // Sign and execute transaction through wallet
             const result = await signAndExecuteTransaction({
                 transaction: tx,
-                accountId: account,
-                value: ethers.parseEther("300") // 300 HBAR
+                accountId: account
             });
 
             if (result.success) {
@@ -37,6 +35,7 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 setStatus("Purchase failed. Please try again.");
             }
         } catch (error: any) {
+            console.error("Purchase error:", error);
             setStatus(`Error: ${error.message}`);
         }
     };
