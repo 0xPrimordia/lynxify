@@ -1,6 +1,12 @@
 import { Button } from "@nextui-org/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Inria_Serif } from "next/font/google";
+
+const inriaSerif = Inria_Serif({ 
+    weight: ["300", "400", "700"],
+    subsets: ["latin"] 
+});
 
 const LandingPage = () => {
     const [remainingSupply, setRemainingSupply] = useState<number>(0);
@@ -26,7 +32,7 @@ const LandingPage = () => {
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center px-4">
-            <h1 className="text-4xl font-bold mb-6">Lynxify Members Only</h1>
+            <h1 className={`${inriaSerif.className} text-4xl font-bold mb-6`}>Lynxify Members Only</h1>
             <p className="text-xl mb-8 max-w-2xl">
                 Access our advanced DEX with the Lynxify Lifetime Membership NFT. 
                 Enjoy lifetime access to closed betas, early access, and premium features. As well as influence on future development.
