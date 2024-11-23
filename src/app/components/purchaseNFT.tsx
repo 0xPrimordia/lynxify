@@ -16,15 +16,13 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
                 throw new Error("Wallet not connected or contract not configured");
             }
 
-            // Create empty parameters for the function call
-            const functionCallData = new Uint8Array();
-
-            // Create a Hedera transaction with proper ContractId format
+            // Create a Hedera transaction
             const transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
-                .setFunctionParameters(functionCallData)
+                // Call the contract's purchaseNFT function with no parameters
+                .setFunction("purchaseNFT")
                 .setTransactionId(TransactionId.generate(account));
 
             // Convert to base64 string for wallet connect
@@ -37,6 +35,23 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
             });
 
             if (result.success) {
+                // Call your backend to initiate the NFT transfer
+                const response = await fetch('/api/nft', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tokenId: tokenId,
+                        serialNumber: '1', // You'll need to track this
+                        buyer: account
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('NFT transfer failed');
+                }
+
                 setStatus("NFT purchased successfully!");
             } else {
                 setStatus("Purchase failed. Please try again.");
