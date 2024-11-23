@@ -90,10 +90,11 @@ export default function DexPage() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (!isLoading && (!account || !hasAccess)) {
+        if (isLoading || nftGateLoading) return; // Don't redirect while loading
+        if (!account || !hasAccess) {
             router.push('/');
         }
-    }, [account, hasAccess, isLoading, router]);
+    }, [account, hasAccess, isLoading, nftGateLoading, router]);
 
     useEffect(() => {
         if(!pools || !currentToken) return;
@@ -240,7 +241,7 @@ export default function DexPage() {
         console.log("Current pool listener:", currentPool)
     }, [currentPool]);
 
-    if (isLoading) {
+    if (isLoading || nftGateLoading) {
         return <div>Loading...</div>;
     }
 

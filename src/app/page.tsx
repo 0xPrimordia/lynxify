@@ -11,10 +11,11 @@ export default function Home() {
   const { hasAccess, isLoading } = useNFTGate(account);
 
   useEffect(() => {
+    if (!account) return; // Don't redirect if not connected
     if (!isLoading && hasAccess) {
       router.push('/dex');
     }
-  }, [hasAccess, isLoading, router]);
+  }, [hasAccess, isLoading, router, account]);
 
   if (isLoading) {
     return <div>Loading...</div>;
