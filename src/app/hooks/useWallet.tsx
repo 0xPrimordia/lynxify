@@ -26,7 +26,7 @@ interface WalletContextType {
     account: string;
     handleConnect: () => Promise<void>;
     handleDisconnectSessions: () => Promise<void>;
-    signAndExecuteTransaction: (params: { transaction: string, accountId: string }) => Promise<any>;
+    signAndExecuteTransaction: (params: { transactionList: string, signerAccountId: string }) => Promise<any>;
     client: Client;
     appMetadata: any;
     sessions?: SessionTypes.Struct[];
@@ -263,13 +263,26 @@ export const WalletProvider = ({children}:useWalletProps) => {
     }
   }
 
+  const signAndExecuteTransaction = async (params: { transactionList: string, signerAccountId: string }) => {
+    if (!dAppConnector) {
+        throw new Error("DAppConnector not initialized");
+    }
+    
+    const result = await dAppConnector.signAndExecuteTransaction({
+        signerAccountId: params.signerAccountId,
+        transactionList: params.transactionList
+    });
+    
+    return result;
+  };
+
   return ( 
     <WalletContext.Provider
       value={{
         account,
         handleConnect,
         handleDisconnectSessions,
-        signAndExecuteTransaction: async () => {},
+        signAndExecuteTransaction,
         client: Client.forTestnet(),
         appMetadata,
         sessions,

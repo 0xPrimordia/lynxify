@@ -4,7 +4,8 @@ import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
 import { 
     transactionToBase64String,
-    SignAndExecuteTransactionParams
+    SignAndExecuteTransactionParams,
+    SignAndExecuteTransactionResult
 } from '@hashgraph/hedera-wallet-connect';
 import { ethers } from 'ethers';
 import NFTSaleAbi from '../contracts/NFTSale.json';
@@ -25,7 +26,7 @@ function hexToUint8Array(hex: string): Uint8Array {
 }
 
 function PurchaseNFT({ apiUrl, tokenId, client }: { apiUrl: string, tokenId: string, client: Client }) {
-    const { account, signAndExecuteTransaction } = useWalletContext();
+    const { account, signAndExecuteTransaction, dAppConnector } = useWalletContext();
     const [status, setStatus] = useState("");
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
     
@@ -34,28 +35,30 @@ function PurchaseNFT({ apiUrl, tokenId, client }: { apiUrl: string, tokenId: str
     const handlePurchase = async () => {
         setStatus("Initiating purchase...");
         try {
-            if (!account || !contractAddress) {
-                throw new Error("Wallet not connected or contract not configured");
+            if (!account || !contractAddress || !dAppConnector) {
+                throw new Error("Wallet not connected, contract not configured, or DAppConnector not initialized");
             }
 
             const encodedFunction = nftSaleInterface.encodeFunctionData("purchaseNFT", []);
             const functionCallBytes = hexToUint8Array(encodedFunction.slice(2));
 
-            const transaction = await new ContractExecuteTransaction()
+            const transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(contractAddress))
                 .setGas(400000)
                 .setPayableAmount(new Hbar(300))
                 .setFunctionParameters(functionCallBytes)
-                .freezeWith(client);
+                .setTransactionId(TransactionId.generate(account));
 
             const base64Tx = transactionToBase64String(transaction);
 
-            const result = await signAndExecuteTransaction({
-                transaction: base64Tx,
-                accountId: account
-            });
+            const params: SignAndExecuteTransactionParams = {
+                transactionList: base64Tx,
+                signerAccountId: 'hedera:testnet:' + account
+            };
 
-            if (result.success) {
+            const result: SignAndExecuteTransactionResult = await dAppConnector.signAndExecuteTransaction(params);
+
+            if (result) {
                 setStatus("NFT purchased successfully!");
             } else {
                 setStatus("Purchase failed. Please try again.");
