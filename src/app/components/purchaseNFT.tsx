@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState } from "react";
 function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
@@ -42,7 +43,7 @@ function PurchaseNFT({ apiUrl, tokenId }: { apiUrl: string, tokenId: string }) {
         <div>
             <h1>Purchase Lifetime Premium Access NFT</h1>
             <p>Price: 300 HBAR</p>
-            <button onClick={handlePurchase}>Buy NFT</button>
+            <Button color="primary" onClick={handlePurchase}>Buy NFT</Button>
             <p>{status}</p>
         </div>
     );
