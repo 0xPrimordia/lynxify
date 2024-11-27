@@ -1,0 +1,13 @@
+{
+    "folders": [
+        {
+            "path": ".",
+            "name": "Lynxify"
+        },
+        {
+            "path": "../lynxify-server",
+            "name": "Lynxify Threshold Service"
+        }
+    ],
+    "settings": {}
+}
