@@ -122,41 +122,26 @@ export default function DexPage() {
             const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
             const result = await swapExactTokenForToken(
                 tradeAmount.toString(), 
-                currentToken.id, 
-                tradeToken.id, 
-                currentPool?.fee || 3000, 
-                account, 
-                deadline, 
+                currentToken.id,
+                tradeToken.id,
+                3000,
+                account!,
+                deadline,
                 0
             );
 
-            const params: SignAndExecuteTransactionParams = {
+            if (!result) {
+                console.error('No transaction result');
+                return;
+            }
+
+            const swapParams: SignAndExecuteTransactionParams = {
                 transactionList: result,
                 signerAccountId: `hedera:testnet:${account}`,
             }
 
-            const results = await dAppConnector.signAndExecuteTransaction(params);
-            console.log('Transaction results:', results);
-
-            // If this was a token association, try the swap again
-            if (results) {
-                console.log('Token association successful, attempting swap');
-                const swapResult = await swapExactTokenForToken(
-                    tradeAmount.toString(), 
-                    currentToken.id, 
-                    tradeToken.id, 
-                    currentPool?.fee || 3000, 
-                    account, 
-                    deadline, 
-                    0
-                );
-                const swapParams: SignAndExecuteTransactionParams = {
-                    transactionList: swapResult,
-                    signerAccountId: `hedera:testnet:${account}`,
-                }
-                const swapResults = await dAppConnector.signAndExecuteTransaction(swapParams);
-                console.log('Swap results:', swapResults);
-            }
+            const swapResults = await dAppConnector.signAndExecuteTransaction(swapParams);
+            console.log('Transaction results:', swapResults);
         } catch (error) {
             console.error('Error swapping tokens', error);
         }

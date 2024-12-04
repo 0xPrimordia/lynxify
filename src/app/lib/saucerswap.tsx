@@ -44,6 +44,11 @@ export const checkTokenAssociation = async (accountId: string, tokenId: string) 
       `https://testnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/tokens?token.id=${tokenId}`
     );
     const data = await response.json();
+    console.log('Token association check response:', {
+      accountId,
+      tokenId,
+      response: data
+    });
     return data.tokens && data.tokens.length > 0;
   } catch (error) {
     console.error('Error checking token association:', error);
@@ -68,44 +73,58 @@ export const associateToken = async (accountId: string, tokenId: string) => {
 
 export const swapExactTokenForToken = async (amountIn: string, inputToken: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
   try {
-    console.log("Swap Input Parameters:", {
-      amountIn, inputToken, outputToken, fee, recipientAddress, deadline, outputAmountMin,
-      network: process.env.NEXT_PUBLIC_HEDERA_NETWORK
+    // Check both token associations
+    const [isWhbarAssociated, isOutputAssociated] = await Promise.all([
+      checkTokenAssociation(recipientAddress, inputToken),
+      checkTokenAssociation(recipientAddress, outputToken)
+    ]);
+
+    console.log('Token association status:', {
+      input: isWhbarAssociated,
+      output: isOutputAssociated
     });
 
-    // First check if token association
-    const isAssociated = await checkTokenAssociation(recipientAddress, outputToken);
-    if (!isAssociated) {
-      console.log('Token not associated, creating association transaction');
+    // Handle token associations if needed
+    if (!isWhbarAssociated) {
+      console.log('Input token not associated, creating association');
+      return await associateToken(recipientAddress, inputToken);
+    }
+
+    if (!isOutputAssociated) {
+      console.log('Output token not associated, creating association');
       return await associateToken(recipientAddress, outputToken);
     }
 
     const amountInTinybar = ethers.parseUnits(amountIn, 8).toString();
     
-    // Construct the path data with proper formatting
+    // Construct the path using provided tokens and fee
     const pathData: string[] = [];
-    // Output token (20 bytes)
-    pathData.push(ContractId.fromString(outputToken).toSolidityAddress().padStart(40, '0'));
-    // Fee (3 bytes)
-    pathData.push(decimalToPaddedHex(fee, 6));
-    // Input token (20 bytes)
     pathData.push(ContractId.fromString(inputToken).toSolidityAddress().padStart(40, '0'));
+    pathData.push(decimalToPaddedHex(fee, 6));
+    pathData.push(ContractId.fromString(outputToken).toSolidityAddress().padStart(40, '0'));
 
-    // ExactInputParams
+    // ExactInputParams for the swap
     const params = {
-      path: `0x${pathData.join('')}`,  // This should now be 43 bytes in reverse order
+      path: `0x${pathData.join('')}`,
       recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`,
       deadline: Math.floor(Date.now() / 1000) + 60,
       amountIn: amountInTinybar,
       amountOutMinimum: 0
     };
 
-    console.log("Swap Parameters:", params);
+    console.log("Path components:", {
+      inputToken,
+      fee,
+      outputToken,
+      constructedPath: pathData.join('')
+    });
 
-    // Encode the swap and refund functions
+    // Create both the swap and unwrap calls
     const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-    const refundHBAREncoded = swapRouterAbi.encodeFunctionData('refundETH', []);
-    const multiCallParam = [swapEncoded, refundHBAREncoded];
+    const unwrapEncoded = swapRouterAbi.encodeFunctionData('unwrapWHBAR', [0, `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`]);
+    
+    // Combine them in a multicall
+    const multiCallParam = [swapEncoded, unwrapEncoded];
     const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
 
     console.log("Encoded transaction data:", {
