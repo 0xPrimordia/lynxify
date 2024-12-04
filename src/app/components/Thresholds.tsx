@@ -23,12 +23,13 @@ const Thresholds = () => {
             <h1>Thresholds</h1>
             {thresholds.map((threshold) => (
                 <div key={threshold.id}>
-                    <p>{threshold.stop_loss}</p>
-                    <p>{threshold.buy_order}</p>
-                    <p>{threshold.stop_loss_cap}</p>
-                    <p>{threshold.buy_order_cap}</p>
-                    <p>{threshold.hedera_account_id}</p>
-                    <p>{threshold.token_id}</p>
+                    <p>{threshold.stopLoss}</p>
+                    <p>{threshold.buyOrder}</p>
+                    <p>{threshold.stopLossCap}</p>
+                    <p>{threshold.buyOrderCap}</p>
+                    <p>{threshold.hederaAccountId}</p>
+                    <p>{threshold.tokenA}</p>
+                    <p>{threshold.tokenB}</p>
                 </div>
             ))}
         </div>
