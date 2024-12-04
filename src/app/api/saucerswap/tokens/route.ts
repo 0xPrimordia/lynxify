@@ -1,8 +1,5 @@
-const TESTNET = "https://test-api.saucerswap.finance";
-const MAINAPI = "https://api.saucerswap.finance"
-
 export async function GET() {
-    const response = await fetch(`${MAINAPI}/tokens/known`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SAUCERSWAP_API}/tokens/known`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'

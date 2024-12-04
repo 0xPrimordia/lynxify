@@ -36,6 +36,7 @@
     "crypto": "npm:crypto-browserify",
     "crypto-browserify": "^3.12.0",
     "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.6",
     "ethers": "^6.13.1",
     "hashconnect": "^3.0.13",
     "jsonwebtoken": "^9.0.2",

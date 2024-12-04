@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-const TESTAPI = "https://test-api.saucerswap.finance";
-const MAINAPI = "https://api.saucerswap.finance"
 
 export async function GET(req:any, { params }:{params:any;}) {
     const { tokenId } = params;
@@ -13,7 +11,7 @@ export async function GET(req:any, { params }:{params:any;}) {
         return NextResponse.json({ error: 'Token ID is required' }, { status: 400 });
     }
 
-    const apiUrl = `${MAINAPI}/tokens/prices/${tokenId}?from=${from}&to=${to}&interval=${interval}`;
+    const apiUrl = `${process.env.NEXT_PUBLIC_SAUCERSWAP_API}/tokens/prices/${tokenId}?from=${from}&to=${to}&interval=${interval}`;
 
     try {
         const response = await fetch(apiUrl);

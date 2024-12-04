@@ -103,8 +103,8 @@ contract LiquidityStaking {
     }
 
     function addLiquidity(LiquidityPair memory pair) internal {
-        IERC20(pair.token1).safeApprove(saucerSwapRouter, pair.amount1);
-        IERC20(pair.token2).safeApprove(saucerSwapRouter, pair.amount2);
+        IERC20(pair.token1).approve(saucerSwapRouter, pair.amount1);
+        IERC20(pair.token2).approve(saucerSwapRouter, pair.amount2);
 
         // Interact with SaucerSwap's router to add liquidity
     }

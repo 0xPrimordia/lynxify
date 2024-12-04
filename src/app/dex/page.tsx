@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import { useRouter } from "next/navigation";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
+import { SignAndExecuteTransactionParams, SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -25,10 +26,6 @@ import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
 import { swapExactTokenForToken } from "../lib/saucerswap";
 import { usePoolContext } from "../hooks/usePools";
-import {
-    SignAndExecuteTransactionParams,
-  } from '@hashgraph/hedera-wallet-connect';
-  
 
 // for amount of tokens to buy/sell, input dollar amount or token qty auto calc other field
 // stretch goal: threshold setting that buy/sell within a percentage above or below selected.
@@ -133,18 +130,51 @@ export default function DexPage() {
     const handleQuote = async () => {
         try {
             console.log('Initiating trade')
-            if (dAppConnector != null && dAppConnector != undefined && tradeToken && currentToken) {
-                const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
-                const result = await swapExactTokenForToken(tradeAmount.toString(), currentToken?.id, tradeToken?.id, currentPool?.fee, account, deadline, 0);
-                if(typeof result !== 'string') return;
-                const params: SignAndExecuteTransactionParams = {
-                    transactionList: result,
-                    signerAccountId: 'hedera:testnet:' + account,
+            if (!dAppConnector || !tradeToken || !currentToken) {
+                console.error('Missing required dependencies');
+                return;
+            }
+
+            const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
+            const result = await swapExactTokenForToken(
+                tradeAmount.toString(), 
+                currentToken.id, 
+                tradeToken.id, 
+                currentPool?.fee || 3000, 
+                account, 
+                deadline, 
+                0
+            );
+
+            const params: SignAndExecuteTransactionParams = {
+                transactionList: result,
+                signerAccountId: `hedera:testnet:${account}`,
+            }
+
+            const results = await dAppConnector.signAndExecuteTransaction(params);
+            console.log('Transaction results:', results);
+
+            // If this was a token association, try the swap again
+            if (results) {
+                console.log('Token association successful, attempting swap');
+                const swapResult = await swapExactTokenForToken(
+                    tradeAmount.toString(), 
+                    currentToken.id, 
+                    tradeToken.id, 
+                    currentPool?.fee || 3000, 
+                    account, 
+                    deadline, 
+                    0
+                );
+                const swapParams: SignAndExecuteTransactionParams = {
+                    transactionList: swapResult,
+                    signerAccountId: `hedera:testnet:${account}`,
                 }
-                const results = await dAppConnector.signAndExecuteTransaction(params)
+                const swapResults = await dAppConnector.signAndExecuteTransaction(swapParams);
+                console.log('Swap results:', swapResults);
             }
         } catch (error) {
-          console.error('Error swapping tokens', error);
+            console.error('Error swapping tokens', error);
         }
     };
 

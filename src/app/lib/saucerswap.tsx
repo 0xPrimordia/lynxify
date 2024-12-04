@@ -10,9 +10,9 @@ import {
 
 //load ABI data 
 const abiInterfaces = new ethers.Interface(QuoterV2Abi);
-const QUOTER_V2_ADDRESS = "0.0.1390002";
+const QUOTER_V2_ADDRESS = process.env.NEXT_PUBLIC_QUOTER_V2_ADDRESS as string;
 const swapRouterAbi = new ethers.Interface(SwapRouterAbi);
-const SWAP_ROUTER_ADDRESS = "0.0.3949434";
+const SWAP_ROUTER_ADDRESS = process.env.NEXT_PUBLIC_SWAP_ROUTER_ADDRESS as string;
 
 //helper functions
 function hexToUint8Array(hex: string): Uint8Array {
@@ -37,64 +37,104 @@ function decimalToPaddedHex(decimal: number, length: number): string {
   return hexString;
 }
 
-export const checkIfPoolExists = async (tokenA: string, tokenB: string, fee: number) => {
-  const unniswapABI = new ethers.Interface(UniswapV3FactoryAbi);
-  const V2_factory = "0.0.3946833"
+// Add new function to check token association
+export const checkTokenAssociation = async (accountId: string, tokenId: string) => {
+  try {
+    const response = await fetch(
+      `https://testnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/tokens?token.id=${tokenId}`
+    );
+    const data = await response.json();
+    return data.tokens && data.tokens.length > 0;
+  } catch (error) {
+    console.error('Error checking token association:', error);
+    return false;
+  }
+};
 
-  const provider = new ethers.JsonRpcProvider("https://mainnet.hashio.io/api", '', {
-    batchMaxCount: 1, //workaround for V6
-  });
-  const factoryContract = new ethers.Contract(V2_factory, unniswapABI.fragments, provider);
-  const tokenAAddress = `${ContractId.fromString(tokenA).toSolidityAddress()}`;
-  const tokenBAddress = `${ContractId.fromString(tokenB).toSolidityAddress()}`;
+// Add function to handle token association
+export const associateToken = async (accountId: string, tokenId: string) => {
+  try {
+    const transaction = await new TokenAssociateTransaction()
+      .setAccountId(accountId)
+      .setTokenIds([tokenId])
+      .setTransactionId(TransactionId.generate(accountId));
 
-  const result = await factoryContract.getPool(tokenAAddress, tokenBAddress, fee); //(token1, token0) will give same result
-  debugger
-  const poolEvmAddress = result.startsWith('0x') ? result : `0x${result}`;
-  const poolContractId = ContractId.fromEvmAddress(0, 0, poolEvmAddress);
-  return poolContractId.toString();
-}
+    return transactionToBase64String(transaction);
+  } catch (error) {
+    console.error('Error creating token association transaction:', error);
+    throw error;
+  }
+};
 
 export const swapExactTokenForToken = async (amountIn: string, inputToken: string, outputToken: string, fee: number, recipientAddress: string, deadline: number, outputAmountMin: number) => {
   try {
-    // Convert amountIn to tinybar (smallest unit of HBAR)
-    const amountInTinybar = ethers.parseUnits(amountIn, 8).toString(); // HBAR has 8 decimal places
+    console.log("Swap Input Parameters:", {
+      amountIn, inputToken, outputToken, fee, recipientAddress, deadline, outputAmountMin,
+      network: process.env.NEXT_PUBLIC_HEDERA_NETWORK
+    });
 
-    const pathData:string[] = [];
-    pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
+    // First check if token association
+    const isAssociated = await checkTokenAssociation(recipientAddress, outputToken);
+    if (!isAssociated) {
+      console.log('Token not associated, creating association transaction');
+      return await associateToken(recipientAddress, outputToken);
+    }
+
+    const amountInTinybar = ethers.parseUnits(amountIn, 8).toString();
+    
+    // Construct the path data with proper formatting
+    const pathData: string[] = [];
+    // Output token (20 bytes)
+    pathData.push(ContractId.fromString(outputToken).toSolidityAddress().padStart(40, '0'));
+    // Fee (3 bytes)
     pathData.push(decimalToPaddedHex(fee, 6));
-    pathData.push(`${ContractId.fromString(outputToken).toSolidityAddress()}`);
-    const params = {
-      path: pathData.join(''),
-      recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`,
-      deadline: deadline,
-      amountIn: amountInTinybar, // Use the converted amount
-      amountOutMinimum: outputAmountMin
-    };
-    console.log("Swap params:", params);
+    // Input token (20 bytes)
+    pathData.push(ContractId.fromString(inputToken).toSolidityAddress().padStart(40, '0'));
 
+    // ExactInputParams
+    const params = {
+      path: `0x${pathData.join('')}`,  // This should now be 43 bytes in reverse order
+      recipient: `0x${AccountId.fromString(recipientAddress).toSolidityAddress()}`,
+      deadline: Math.floor(Date.now() / 1000) + 60,
+      amountIn: amountInTinybar,
+      amountOutMinimum: 0
+    };
+
+    console.log("Swap Parameters:", params);
+
+    // Encode the swap and refund functions
     const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-    const refundHBAREncoded = swapRouterAbi.encodeFunctionData('refundETH');
+    const refundHBAREncoded = swapRouterAbi.encodeFunctionData('refundETH', []);
     const multiCallParam = [swapEncoded, refundHBAREncoded];
     const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
-    const encodedDataAsUint8Array = hexToUint8Array(encodedData);
 
-    const transaction = new ContractExecuteTransaction()
-      .setPayableAmount(Hbar.fromTinybars(amountInTinybar)) // Use fromTinybars instead of from
-      .setContractId(SWAP_ROUTER_ADDRESS)
-      .setGas(300000) // Increased gas limit
-      .setFunctionParameters(encodedDataAsUint8Array)
+    console.log("Encoded transaction data:", {
+      params,
+      encodedData
+    });
+
+    const transaction = await new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
+      .setPayableAmount(Hbar.fromTinybars(amountInTinybar))
+      .setGas(1000000)
+      .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
       .setTransactionId(TransactionId.generate(recipientAddress));
 
-    console.log("Transaction details:", transaction);
+    console.log("Transaction details:", {
+      network: process.env.NEXT_PUBLIC_HEDERA_NETWORK,
+      gasLimit: 1000000,
+      recipientAddress,
+      router: SWAP_ROUTER_ADDRESS,
+      transactionId: transaction.transactionId?.toString()
+    });
 
-    const trans = transactionToBase64String(transaction);
-    return trans;
+    const transactionList = transactionToBase64String(transaction);
+    return transactionList;
   } catch (error) {
     console.error("Error in swapExactTokenForToken:", error);
     throw error;
   }
-}
+};
 
 export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals: number, outputToken: string, amountIn: string, fee: number) => {
   const pathData:string[] = [];
@@ -104,7 +144,7 @@ export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals:
   console.log(pathData.join(''));
   const encodedPathData = hexToUint8Array(pathData.join(''));
   const inputAmountInSmallestUnit = ethers.parseUnits(amountIn, inputTokenDecimals);
-  let mirrorNodeBaseUrl = 'https://mainnet.mirrornode.hedera.com';
+  let mirrorNodeBaseUrl = `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com`;
   const url = `${mirrorNodeBaseUrl}/api/v1/contracts/call`;
   const params = [encodedPathData, inputAmountInSmallestUnit];
   const encodedData = abiInterfaces.encodeFunctionData(abiInterfaces.getFunction('quoteExactInput')!, params);
