@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
 import { SignAndExecuteTransactionParams, SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
+import { Threshold } from "../types";
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -26,23 +27,6 @@ import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
 import { swapExactTokenForToken } from "../lib/saucerswap";
 import { usePoolContext } from "../hooks/usePools";
-
-// for amount of tokens to buy/sell, input dollar amount or token qty auto calc other field
-// stretch goal: threshold setting that buy/sell within a percentage above or below selected.
-// Update the Threshold interface to match the API response
-interface Threshold {
-    id: number;
-    created_at: string;
-    hederaAccountId: string;
-    stopLoss: number;
-    stopLossCap: number;
-    buyOrder: number;
-    buyOrderCap: number;
-    tokenA: string;
-    tokenB: string;
-    fee: number;
-    user_id: string;
-}
   
 export default function DexPage() {
     const router = useRouter();

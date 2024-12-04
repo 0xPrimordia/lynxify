@@ -24,7 +24,7 @@ export async function GET(req:any, { params }:{params:any;}) {
         }
 
         console.log('Attempting to query thresholds table...');
-        const { data, error } = await supabase.from('Thresholds').select('*').eq('user_id', userId);
+        const { data, error } = await supabase.from('Thresholds').select('*').eq('userId', userId);
         
         if (error) {
             console.error('Supabase query error:', error);

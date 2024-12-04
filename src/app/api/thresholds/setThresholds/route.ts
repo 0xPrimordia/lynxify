@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
             tokenA: data.tokenA,
             tokenB: data.tokenB,
             fee: data.fee,
-            user_id: data.userId
+            userId: data.userId
           }
         ])
         .select();

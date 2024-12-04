@@ -15,14 +15,14 @@ const client = new PlaidApi(config);
 
 export async function POST(req: NextRequest) {
   try {
-    const { public_token, user_id } = await req.json();
-    console.log('Exchanging token for user:', user_id);
+    const { public_token, userId } = await req.json();
+    console.log('Exchanging token for user:', userId);
     
     const response = await client.itemPublicTokenExchange({ public_token });
     const { access_token } = response.data;
     
     // Here you might want to store the access_token in your database
-    // associated with the user_id
+    // associated with the userid
     
     return NextResponse.json({ access_token });
   } catch (error) {

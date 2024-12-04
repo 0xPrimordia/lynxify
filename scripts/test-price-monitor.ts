@@ -16,14 +16,14 @@ async function testPriceMonitor() {
       .from('Thresholds')
       .insert([
         {
-          user_id: process.env.TEST_USER_ID,
-          tokenA: process.env.TEST_TOKEN_A, // USDC contract address
-          tokenB: process.env.TEST_TOKEN_B, // WHBAR contract address
-          fee: 3000, // 0.3%
-          stopLoss: 0.07, // Trigger when price falls below $0.07
-          buyOrder: 0.09, // Trigger when price rises above $0.09
-          stopLossCap: 100, // Maximum amount to sell in USD
-          buyOrderCap: 100, // Maximum amount to buy in USD
+          userId: process.env.TEST_USER_ID,
+          tokenA: process.env.TEST_TOKEN_A,
+          tokenB: process.env.TEST_TOKEN_B,
+          fee: 3000,
+          stopLoss: 0.07,
+          buyOrder: 0.09,
+          stopLossCap: 100,
+          buyOrderCap: 100,
           hederaAccountId: process.env.TEST_HEDERA_ACCOUNT_ID,
           isActive: true,
           status: 'pending'

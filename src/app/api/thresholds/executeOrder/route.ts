@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       const { hasBalance, hasAllowance, requiredAmount } = await checkBalanceAndAllowance(
         provider,
         condition === 'sell' ? thresholdData.tokenA : thresholdData.tokenB,
-        thresholdData.user_id,
+        thresholdData.userId,
         condition === 'sell' ? thresholdData.stopLossCap : thresholdData.buyOrderCap,
         process.env.CONTRACT_ADDRESS as string
       );
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
       );
 
       // Execute the trade
-      const tx = await contract.executeTradeForUser(thresholdData.user_id, orderType, path);
+      const tx = await contract.executeTradeForUser(thresholdData.userId, orderType, path);
       await tx.wait();
 
       // Update the threshold in the database
