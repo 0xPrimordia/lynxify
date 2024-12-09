@@ -41,7 +41,7 @@ function decimalToPaddedHex(decimal: number, length: number): string {
 export const checkTokenAssociation = async (accountId: string, tokenId: string) => {
   try {
     const response = await fetch(
-      `https://testnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/tokens?token.id=${tokenId}`
+      `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${accountId}/tokens?token.id=${tokenId}`
     );
     const data = await response.json();
     console.log('Token association check response:', {

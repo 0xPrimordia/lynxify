@@ -2,13 +2,7 @@ import { ethers } from "ethers";
 import abi from "../../../contracts/userThreshold.json";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from '@/utils/supabase/server';
-
-// Add ERC20 ABI for token interactions
-const ERC20_ABI = [
-  "function balanceOf(address owner) view returns (uint256)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function decimals() view returns (uint8)"
-];
+import { ContractId, AccountId, PrivateKey, Client, ContractExecuteTransaction, ContractFunctionParameters } from "@hashgraph/sdk";
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,81 +47,66 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Stop loss condition no longer met' }, { status: 400 });
     }
 
-    // Initialize provider
-    const provider = new ethers.JsonRpcProvider(process.env.HEDERA_RPC_URL);
-
-    // Check balances and allowances before proceeding
-    try {
-      const { hasBalance, hasAllowance, requiredAmount } = await checkBalanceAndAllowance(
-        provider,
-        condition === 'sell' ? thresholdData.tokenA : thresholdData.tokenB,
-        thresholdData.userId,
-        condition === 'sell' ? thresholdData.stopLossCap : thresholdData.buyOrderCap,
-        process.env.CONTRACT_ADDRESS as string
-      );
-
-      if (!hasBalance) {
-        return NextResponse.json({ 
-          error: 'Insufficient balance for trade execution',
-          details: `Required: ${requiredAmount}`
-        }, { status: 400 });
-      }
-
-      if (!hasAllowance) {
-        return NextResponse.json({ 
-          error: 'Insufficient allowance for trade execution',
-          details: `Required: ${requiredAmount}`
-        }, { status: 400 });
-      }
-    } catch (error: any) {
-      return NextResponse.json({ 
-        error: 'Error checking balance/allowance',
-        details: error.message 
-      }, { status: 500 });
-    }
-
-    // Use the authorized executor's private key to sign the transaction
-    const executorPrivateKey = process.env.AUTHORIZED_EXECUTOR_PRIVATE_KEY;
-    if (!executorPrivateKey) {
-      throw new Error('Authorized executor private key not found');
-    }
-    const executorWallet = new ethers.Wallet(executorPrivateKey, provider);
-
-    // Initialize contract with the executor's wallet
-    const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS as string, abi, executorWallet);
+    // Initialize Hedera client
+    const client = Client.forTestnet();
+    client.setOperator(
+      AccountId.fromString(process.env.OPERATOR_ID!),
+      PrivateKey.fromString(process.env.OPERATOR_KEY!)
+    );
 
     try {
       const orderType = condition === 'sell' ? 'stopLoss' : 'buyOrder';
       
-      // Construct the path
-      const path = ethers.solidityPacked(
-        ['address', 'uint24', 'address'],
-        [thresholdData.tokenA, thresholdData.fee, thresholdData.tokenB]
-      );
+      // Convert token addresses to bytes
+      const tokenAAddress = ContractId.fromString(thresholdData.tokenA).toSolidityAddress();
+      const tokenBAddress = ContractId.fromString(thresholdData.tokenB).toSolidityAddress();
+      
+      // Create path bytes manually
+      const path = Buffer.concat([
+        Buffer.from(tokenAAddress.replace('0x', ''), 'hex'),
+        Buffer.from(thresholdData.fee.toString(16).padStart(6, '0'), 'hex'),
+        Buffer.from(tokenBAddress.replace('0x', ''), 'hex')
+      ]);
 
-      // Execute the trade
-      const tx = await contract.executeTradeForUser(thresholdData.userId, orderType, path);
-      await tx.wait();
+      console.log('Executing trade with params:', {
+        hederaAccountId: thresholdData.hederaAccountId,
+        orderType,
+        path: path.toString('hex')
+      });
 
-      // Update the threshold in the database
-      const { error: updateError } = await supabase
+      const contractExecuteTx = new ContractExecuteTransaction()
+          .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
+          .setGas(1000000)
+          .setFunction("executeTradeForUser", new ContractFunctionParameters()
+              .addString(thresholdData.hederaAccountId)  // Pass raw Hedera ID
+              .addString(orderType)
+              .addBytes(path)
+          );
+
+      const txResponse = await contractExecuteTx.execute(client);
+      const receipt = await txResponse.getReceipt(client);
+
+      if (receipt.status.toString() !== "SUCCESS") {
+        throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
+      }
+
+      // Update database status
+      await supabase
         .from('Thresholds')
         .update({ 
           isActive: false,
           status: 'executed',
-          lastChecked: new Date().toISOString()
+          lastChecked: new Date().toISOString(),
+          lastExecutedAt: new Date().toISOString(),
+          txHash: txResponse.transactionId.toString()
         })
         .eq('id', thresholdId);
 
-      if (updateError) {
-        console.error('Error updating threshold:', updateError);
-        // Continue execution as the trade was successful
-      }
-
       return NextResponse.json({ 
         message: `${orderType.toUpperCase()} order executed successfully!`,
-        txHash: tx.hash 
+        txHash: txResponse.transactionId.toString() 
       });
+
     } catch (error: any) {
       console.error('Contract interaction error:', error);
       
@@ -149,49 +128,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function checkBalanceAndAllowance(
-  provider: ethers.JsonRpcProvider,
-  tokenAddress: string,
-  userAddress: string,
-  amount: number,
-  contractAddress: string
-): Promise<{ 
-  hasBalance: boolean; 
-  hasAllowance: boolean;
-  requiredAmount: string;
-}> {
-  try {
-    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-    
-    // Get token decimals
-    const decimals = await tokenContract.decimals();
-    
-    // Convert amount to token units
-    const requiredAmount = ethers.parseUnits(amount.toString(), decimals);
-    
-    // Check balance
-    const balance = await tokenContract.balanceOf(userAddress);
-    const hasBalance = balance >= requiredAmount;
-    
-    // Check allowance
-    const allowance = await tokenContract.allowance(userAddress, contractAddress);
-    const hasAllowance = allowance >= requiredAmount;
-
-    return {
-      hasBalance,
-      hasAllowance,
-      requiredAmount: ethers.formatUnits(requiredAmount, decimals)
-    };
-  } catch (error: any) {
-    throw new Error(`Failed to check balance/allowance: ${error.message}`);
-  }
-}
-
 async function validateTradeExecution(
   thresholdId: string, 
   condition: string,
   supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
 ) {
+  console.log('Validating trade execution:', { thresholdId, condition });
+  
   const { data, error } = await supabase
     .from('Thresholds')
     .select('lastExecutedAt, status, isActive')
@@ -199,8 +142,11 @@ async function validateTradeExecution(
     .single();
     
   if (error) {
-    throw new Error('Failed to validate trade');
+    console.error('Validation query error:', error);
+    throw new Error(`Failed to validate trade: ${error.message}`);
   }
+
+  console.log('Validation data:', data);
 
   if (!data.isActive) {
     throw new Error('Threshold is not active');

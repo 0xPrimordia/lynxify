@@ -65,4 +65,7 @@ export type ApiLiquidityPoolV2 = {
     lastChecked: string;
     createdAt: string;
     status: string;
+    poolId: string;
+    lastExecutedAt: string;
+    txHash: string;
   }

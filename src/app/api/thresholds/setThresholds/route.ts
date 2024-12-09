@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId } from '@hashgraph/sdk';
+import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
-  console.log('Starting POST request...');
-  const supabase = await createClient(
+  // Get the Authorization header
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Missing or invalid authorization token' }, { status: 401 });
+  }
+
+  // Extract the token
+  const token = authHeader.split(' ')[1];
+
+  // Initialize Supabase client
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
@@ -13,118 +24,137 @@ export async function POST(req: NextRequest) {
       }
     }
   );
-  console.log('Supabase client created:', supabase);
-
-  // Function to add threshold to Supabase
-  async function addThresholdToSupabase(data: {
-    stopLoss: number,
-    buyOrder: number,
-    stopLossCap: number,
-    buyOrderCap: number,
-    hederaAccountId: string,
-    tokenA: string,
-    tokenB: string,
-    fee: number,
-    userId: string
-  }) {
-    try {
-      console.log('Attempting to insert data into Supabase:', data);
-      console.log('Supabase client:', supabase);
-
-      const { data: insertedData, error } = await supabase
-        .from('Thresholds')
-        .insert([
-          {
-            stopLoss: data.stopLoss,
-            buyOrder: data.buyOrder,
-            stopLossCap: data.stopLossCap,
-            buyOrderCap: data.buyOrderCap,
-            hederaAccountId: data.hederaAccountId,
-            tokenA: data.tokenA,
-            tokenB: data.tokenB,
-            fee: data.fee,
-            userId: data.userId
-          }
-        ])
-        .select();
-
-      if (error) {
-        console.error('Supabase error details:', error);
-        throw new Error(`Error inserting threshold into Supabase: ${error.message}`);
-      }
-
-      console.log('Data successfully inserted into Supabase:', insertedData);
-      return insertedData;
-    } catch (error) {
-      console.error('Detailed error in addThresholdToSupabase:', error);
-      throw error;
-    }
-  }
 
   try {
-    // Log the content type
-    console.log('Content-Type:', req.headers.get('content-type'));
-
-    // Attempt to read the raw body
-    const rawBody = await req.text();
-    console.log('Raw request body:', rawBody);
-
-    let parsedBody;
-    try {
-      parsedBody = JSON.parse(rawBody);
-    } catch (parseError) {
-      console.error('Error parsing JSON:', parseError);
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
-    }
-
-    const { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenA, tokenB, fee, userId } = parsedBody;
+    // Verify the JWT and get user data
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
-    console.log('Parsed request data:', { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenA, tokenB, fee, userId });
-
-    // Check if any of the required fields are undefined, null, or empty string
-    if (stopLoss === undefined || stopLoss === null || stopLoss === '' ||
-        buyOrder === undefined || buyOrder === null || buyOrder === '' ||
-        stopLossCap === undefined || stopLossCap === null || stopLossCap === '' ||
-        buyOrderCap === undefined || buyOrderCap === null || buyOrderCap === '' ||
-        !hederaAccountId || !tokenA || !tokenB || !fee || !userId) {
-      console.error('Missing required fields:', { stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenA, tokenB, fee, userId });
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return NextResponse.json({ error: 'Invalid authorization token' }, { status: 401 });
     }
 
-    // Convert numeric strings to numbers if necessary
-    const data = {
-      stopLoss: Number(stopLoss),
-      buyOrder: Number(buyOrder),
-      stopLossCap: Number(stopLossCap),
-      buyOrderCap: Number(buyOrderCap),
-      hederaAccountId,
-      tokenA: tokenA,
-      tokenB: tokenB,
-      fee: fee,
+    const body = await req.json();
+    console.log('Received request body:', body);
+
+    // Verify that the userId in the request matches the authenticated user
+    if (body.userId !== user.id) {
+      return NextResponse.json({ error: 'Unauthorized: User ID mismatch' }, { status: 403 });
+    }
+
+    const { 
+      stopLoss, 
+      buyOrder, 
+      stopLossCap, 
+      buyOrderCap, 
+      hederaAccountId, 
+      tokenA,
+      tokenB,
+      fee,
+      poolId,
+      userId 
+    } = body;
+
+    console.log('Parsed request values:', {
+      stopLoss, 
+      buyOrder, 
+      stopLossCap, 
+      buyOrderCap,
+      hederaAccountId, 
+      tokenA,
+      tokenB,
+      fee,
+      poolId,
       userId
-    };
+    });
 
-    console.log('Data to be inserted:', data);
+    // Initialize Hedera client
+    const client = Client.forTestnet();
+    client.setOperator(
+      AccountId.fromString(process.env.OPERATOR_ID!),
+      PrivateKey.fromString(process.env.OPERATOR_KEY!)
+    );
 
-    const insertedData = await addThresholdToSupabase(data);
+    try {
+      // Convert price thresholds to basis points
+      const stopLossBasisPoints = Math.floor(stopLoss * 10000);
+      const buyOrderBasisPoints = Math.floor(buyOrder * 10000);
+      
+      // Convert amounts to wei (using 6 decimals for SAUCE token)
+      const stopLossAmount = ethers.parseUnits(stopLossCap.toString(), 6);
+      const buyOrderAmount = ethers.parseUnits(buyOrderCap.toString(), 6);
 
-    if (!insertedData || insertedData.length === 0) {
-      return NextResponse.json({ error: 'Failed to insert data' }, { status: 500 });
+      // Convert token ID to EVM address
+      const tokenAddress = `0x${ContractId.fromString(tokenA).toSolidityAddress()}`;
+
+      console.log('Setting thresholds in contract with params:', {
+        stopLossBasisPoints,
+        buyOrderBasisPoints,
+        hederaAccountId,
+        tokenAddress,
+        stopLossAmount: stopLossAmount.toString(),
+        buyOrderAmount: buyOrderAmount.toString()
+      });
+
+      // FIRST: Set thresholds in the contract
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
+        .setGas(1000000)
+        .setFunction("setThresholds", new ContractFunctionParameters()
+          .addUint256(stopLossBasisPoints)
+          .addUint256(buyOrderBasisPoints)
+          .addString(hederaAccountId)
+          .addAddress(tokenAddress)
+          .addUint256(stopLossAmount.toString())
+          .addUint256(buyOrderAmount.toString())
+        );
+
+      console.log('Executing contract transaction...');
+      const txResponse = await contractExecuteTx.execute(client);
+      const receipt = await txResponse.getReceipt(client);
+
+      if (receipt.status.toString() !== "SUCCESS") {
+        throw new Error(`Contract transaction failed with status: ${receipt.status.toString()}`);
+      }
+
+      console.log('Contract thresholds set successfully, storing in Supabase...');
+
+      // SECOND: After successful contract execution, store in Supabase
+      const { data: threshold, error: insertError } = await supabase
+        .from('Thresholds')
+        .insert([{
+          userId: user.id,
+          hederaAccountId,
+          tokenA,
+          tokenB,
+          fee,
+          stopLoss,
+          buyOrder,
+          stopLossCap,
+          buyOrderCap,
+          isActive: true,
+          txHash: txResponse.transactionId.toString()
+        }])
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(`Failed to store threshold in database: ${insertError.message}`);
+      }
+
+      return NextResponse.json({ 
+        message: 'Thresholds set successfully!',
+        txHash: txResponse.transactionId.toString(),
+        id: threshold.id
+      });
+
+    } catch (error: any) {
+      console.error('Error setting thresholds:', error);
+      return NextResponse.json({ error: `Failed to set thresholds: ${error.message}` }, { status: 500 });
     }
-
-    // move contract call to a different route
-    /*const accountId = AccountId.fromString(userAddress);
-    const evmAddress = accountId.toSolidityAddress();
-    const provider = new ethers.JsonRpcProvider("https://testnet.hashio.io/api");
-    const signer = await provider.getSigner(evmAddress);
-  
-    const contract = new ethers.Contract("0xa112f1106add7504a54aa1217541449ed4e35413", abi, signer);
-    await contract.setThresholds(stopLoss, buyOrder, stopLossCap, buyOrderCap, hederaAccountId, tokenId);*/
-    return new Response('Thresholds set successfully!', { status: 200 });
   } catch (error: any) {
-    console.error('Full error object:', error);
-    console.error('Error stack:', error.stack);
-    return NextResponse.json({ error: `Error setting thresholds: ${error.message}` }, { status: 500 });
+    console.error('Unexpected error:', error);
+    return NextResponse.json({ error: 'An unexpected error occurred', details: error.message }, { status: 500 });
   }
 }
 
@@ -139,3 +169,6 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
+
+console.log('Operator Account:', process.env.OPERATOR_ID);
+console.log('Contract ID:', ContractId.fromString('0.0.4965421').toString());
