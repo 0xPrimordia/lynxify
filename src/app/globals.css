@@ -50,3 +50,11 @@ body {
     opacity: 0;
   }
 }
+
+.feedback-button {
+  background-color: rgba(275, 275, 275, 0.25) !important;
+  aspect-ratio: 1 !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  width: 40px !important;
+}
