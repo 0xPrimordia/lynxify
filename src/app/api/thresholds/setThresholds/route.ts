@@ -4,42 +4,58 @@ import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
-  // Get the Authorization header
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing or invalid authorization token' }, { status: 401 });
-  }
-
-  // Extract the token
-  const token = authHeader.split(' ')[1];
-
-  // Initialize Supabase client
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  );
-
   try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Missing or invalid authorization token' }),
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Extract the token
+    const token = authHeader.split(' ')[1];
+
+    // Initialize Supabase client
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
     // Verify the JWT and get user data
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
       console.error('Auth error:', authError);
-      return NextResponse.json({ error: 'Invalid authorization token' }, { status: 401 });
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid authorization token' }),
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const body = await req.json();
-    console.log('Received request body:', body);
 
     // Verify that the userId in the request matches the authenticated user
     if (body.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized: User ID mismatch' }, { status: 403 });
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized: User ID mismatch' }),
+        { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const { 
@@ -54,19 +70,6 @@ export async function POST(req: NextRequest) {
       poolId,
       userId 
     } = body;
-
-    console.log('Parsed request values:', {
-      stopLoss, 
-      buyOrder, 
-      stopLossCap, 
-      buyOrderCap,
-      hederaAccountId, 
-      tokenA,
-      tokenB,
-      fee,
-      poolId,
-      userId
-    });
 
     // Initialize Hedera client
     const client = Client.forTestnet();
@@ -87,15 +90,6 @@ export async function POST(req: NextRequest) {
       // Convert token ID to EVM address
       const tokenAddress = `0x${ContractId.fromString(tokenA).toSolidityAddress()}`;
 
-      console.log('Setting thresholds in contract with params:', {
-        stopLossBasisPoints,
-        buyOrderBasisPoints,
-        hederaAccountId,
-        tokenAddress,
-        stopLossAmount: stopLossAmount.toString(),
-        buyOrderAmount: buyOrderAmount.toString()
-      });
-
       // FIRST: Set thresholds in the contract
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
@@ -114,7 +108,13 @@ export async function POST(req: NextRequest) {
       const receipt = await txResponse.getReceipt(client);
 
       if (receipt.status.toString() !== "SUCCESS") {
-        throw new Error(`Contract transaction failed with status: ${receipt.status.toString()}`);
+        return new NextResponse(
+          JSON.stringify({ error: `Contract transaction failed with status: ${receipt.status.toString()}` }),
+          { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
       }
 
       console.log('Contract thresholds set successfully, storing in Supabase...');
@@ -139,22 +139,46 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (insertError) {
-        throw new Error(`Failed to store threshold in database: ${insertError.message}`);
+        return new NextResponse(
+          JSON.stringify({ error: `Failed to store threshold in database: ${insertError.message}` }),
+          { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
       }
 
-      return NextResponse.json({ 
-        message: 'Thresholds set successfully!',
-        txHash: txResponse.transactionId.toString(),
-        id: threshold.id
-      });
+      return new NextResponse(
+        JSON.stringify({
+          message: 'Thresholds set successfully!',
+          txHash: txResponse.transactionId.toString(),
+          id: threshold.id
+        }),
+        { 
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
 
     } catch (error: any) {
       console.error('Error setting thresholds:', error);
-      return NextResponse.json({ error: `Failed to set thresholds: ${error.message}` }, { status: 500 });
+      return new NextResponse(
+        JSON.stringify({ error: `Failed to set thresholds: ${error.message}` }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
   } catch (error: any) {
     console.error('Unexpected error:', error);
-    return NextResponse.json({ error: 'An unexpected error occurred', details: error.message }, { status: 500 });
+    return new NextResponse(
+      JSON.stringify({ error: 'An unexpected error occurred' }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 }
 
@@ -169,6 +193,3 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
-
-console.log('Operator Account:', process.env.OPERATOR_ID);
-console.log('Contract ID:', ContractId.fromString('0.0.4965421').toString());

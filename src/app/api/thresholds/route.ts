@@ -7,30 +7,49 @@ export async function GET(req:any, { params }:{params:any;}) {
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId');
 
-        console.log('Fetching thresholds for userId:', userId);
-
         if (!userId) {
-            return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+            return new NextResponse(
+                JSON.stringify({ error: 'User ID is required' }),
+                { 
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
         }
 
         const supabase = await createClient();
-        
-        console.log('Querying thresholds table with userId:', userId);
         const { data, error } = await supabase
             .from('Thresholds')
             .select('*')
             .eq('userId', userId);
-        
-        console.log('Query result:', { data, error });
 
         if (error) {
-            console.error('Supabase query error:', error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            return new NextResponse(
+                JSON.stringify({ error: error.message }),
+                { 
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
         }
 
-        return NextResponse.json(data || []);
+        // Ensure data is serializable
+        const safeData = data ? JSON.parse(JSON.stringify(data)) : [];
+        
+        return new NextResponse(
+            JSON.stringify(safeData),
+            { 
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
     } catch (error) {
-        console.error('Unexpected error:', error);
-        return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+        return new NextResponse(
+            JSON.stringify({ error: 'An unexpected error occurred' }),
+            { 
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+            }
+        );
     }
 }

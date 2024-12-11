@@ -1,116 +1,89 @@
-import { ethers } from "ethers";
-import abi from "../../../contracts/userThreshold.json";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { Client, ContractExecuteTransaction, PrivateKey, AccountId } from "@hashgraph/sdk";
 import { createClient } from '@/utils/supabase/server';
-import { ContractId, AccountId, PrivateKey, Client, ContractExecuteTransaction, ContractFunctionParameters } from "@hashgraph/sdk";
 
 export async function POST(req: NextRequest) {
+  let thresholdId: string | null = null;
+  
   try {
-    // Check for API key in the request headers
-    const apiKey = req.headers.get('x-api-key');
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { thresholdId: requestThresholdId, orderType } = await req.json();
+    thresholdId = requestThresholdId;
+
+    if (!thresholdId || !orderType) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Threshold ID and order type are required' }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
-    const { thresholdId, condition, currentPrice } = await req.json();
-
-    if (!thresholdId) {
-      return NextResponse.json({ error: 'Missing threshold ID' }, { status: 400 });
-    }
-
-    // Initialize Supabase client
     const supabase = await createClient();
-
-    // Add validation check before proceeding
-    try {
-      await validateTradeExecution(thresholdId, condition, supabase);
-    } catch (validationError: any) {
-      return NextResponse.json({ error: validationError.message }, { status: 400 });
-    }
-
-    // Fetch the threshold from the database
-    const { data: thresholdData, error: thresholdError } = await supabase
-      .from('Thresholds')
-      .select('*')
-      .eq('id', thresholdId)
-      .single();
-
-    if (thresholdError || !thresholdData) {
-      return NextResponse.json({ error: 'Threshold not found' }, { status: 404 });
-    }
-
-    // Double check the condition is still valid
-    if (condition === 'buy' && currentPrice < thresholdData.buyOrder) {
-      return NextResponse.json({ error: 'Buy condition no longer met' }, { status: 400 });
-    }
-    if (condition === 'sell' && currentPrice > thresholdData.stopLoss) {
-      return NextResponse.json({ error: 'Stop loss condition no longer met' }, { status: 400 });
-    }
-
-    // Initialize Hedera client
     const client = Client.forTestnet();
     client.setOperator(
       AccountId.fromString(process.env.OPERATOR_ID!),
       PrivateKey.fromString(process.env.OPERATOR_KEY!)
     );
 
-    try {
-      const orderType = condition === 'sell' ? 'stopLoss' : 'buyOrder';
-      
-      // Convert token addresses to bytes
-      const tokenAAddress = ContractId.fromString(thresholdData.tokenA).toSolidityAddress();
-      const tokenBAddress = ContractId.fromString(thresholdData.tokenB).toSolidityAddress();
-      
-      // Create path bytes manually
-      const path = Buffer.concat([
-        Buffer.from(tokenAAddress.replace('0x', ''), 'hex'),
-        Buffer.from(thresholdData.fee.toString(16).padStart(6, '0'), 'hex'),
-        Buffer.from(tokenBAddress.replace('0x', ''), 'hex')
-      ]);
+    // Create contract execute transaction
+    const contractExecuteTx = new ContractExecuteTransaction()
+      .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
+      .setGas(1000000);
 
-      console.log('Executing trade with params:', {
-        hederaAccountId: thresholdData.hederaAccountId,
-        orderType,
-        path: path.toString('hex')
-      });
+    // Execute contract transaction
+    const txResponse = await contractExecuteTx.execute(client);
+    const receipt = await txResponse.getReceipt(client);
 
-      const contractExecuteTx = new ContractExecuteTransaction()
-          .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
-          .setGas(1000000)
-          .setFunction("executeTradeForUser", new ContractFunctionParameters()
-              .addString(thresholdData.hederaAccountId)  // Pass raw Hedera ID
-              .addString(orderType)
-              .addBytes(path)
-          );
-
-      const txResponse = await contractExecuteTx.execute(client);
-      const receipt = await txResponse.getReceipt(client);
-
-      if (receipt.status.toString() !== "SUCCESS") {
-        throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
-      }
-
-      // Update database status
+    if (receipt.status.toString() !== "SUCCESS") {
+      // Update threshold status to failed
       await supabase
         .from('Thresholds')
         .update({ 
-          isActive: false,
-          status: 'executed',
-          lastChecked: new Date().toISOString(),
-          lastExecutedAt: new Date().toISOString(),
-          txHash: txResponse.transactionId.toString()
+          status: 'failed',
+          lastError: `Transaction failed with status: ${receipt.status.toString()}`,
+          lastChecked: new Date().toISOString()
         })
         .eq('id', thresholdId);
 
-      return NextResponse.json({ 
-        message: `${orderType.toUpperCase()} order executed successfully!`,
-        txHash: txResponse.transactionId.toString() 
-      });
+      return new NextResponse(
+        JSON.stringify({ error: `Transaction failed with status: ${receipt.status.toString()}` }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
-    } catch (error: any) {
-      console.error('Contract interaction error:', error);
-      
-      // Update threshold status to failed
+    // Update database status
+    await supabase
+      .from('Thresholds')
+      .update({ 
+        isActive: false,
+        status: 'executed',
+        lastChecked: new Date().toISOString(),
+        lastExecutedAt: new Date().toISOString(),
+        txHash: txResponse.transactionId.toString()
+      })
+      .eq('id', thresholdId);
+
+    return new NextResponse(
+      JSON.stringify({
+        message: `${orderType.toUpperCase()} order executed successfully!`,
+        txHash: txResponse.transactionId.toString()
+      }),
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+
+  } catch (error: any) {
+    console.error('Error:', error);
+    
+    // Update threshold status to failed if we have a thresholdId
+    if (thresholdId) {
+      const supabase = await createClient();
       await supabase
         .from('Thresholds')
         .update({ 
@@ -119,64 +92,14 @@ export async function POST(req: NextRequest) {
           lastChecked: new Date().toISOString()
         })
         .eq('id', thresholdId);
-
-      return NextResponse.json({ error: `Error executing order: ${error.message}` }, { status: 500 });
     }
-  } catch (error: any) {
-    console.error('Unexpected error:', error);
-    return NextResponse.json({ error: 'An unexpected error occurred', details: error.message }, { status: 500 });
-  }
-}
 
-async function validateTradeExecution(
-  thresholdId: string, 
-  condition: string,
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
-) {
-  console.log('Validating trade execution:', { thresholdId, condition });
-  
-  const { data, error } = await supabase
-    .from('Thresholds')
-    .select('lastExecutedAt, status, isActive')
-    .eq('id', thresholdId)
-    .single();
-    
-  if (error) {
-    console.error('Validation query error:', error);
-    throw new Error(`Failed to validate trade: ${error.message}`);
+    return new NextResponse(
+      JSON.stringify({ error: 'An unexpected error occurred during order execution' }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
-
-  console.log('Validation data:', data);
-
-  if (!data.isActive) {
-    throw new Error('Threshold is not active');
-  }
-  
-  // Prevent duplicate executions within 5 minutes
-  if (data.lastExecutedAt) {
-    const lastExecution = new Date(data.lastExecutedAt).getTime();
-    const timeSinceLastExecution = Date.now() - lastExecution;
-    if (timeSinceLastExecution < 5 * 60 * 1000) { // 5 minutes in milliseconds
-      throw new Error('Trade recently executed');
-    }
-  }
-  
-  if (data.status === 'executing') {
-    throw new Error('Trade already in progress');
-  }
-
-  // Update status to executing
-  const { error: updateError } = await supabase
-    .from('Thresholds')
-    .update({ 
-      status: 'executing',
-      lastChecked: new Date().toISOString()
-    })
-    .eq('id', thresholdId);
-
-  if (updateError) {
-    throw new Error('Failed to update threshold status');
-  }
-  
-  return true;
 }

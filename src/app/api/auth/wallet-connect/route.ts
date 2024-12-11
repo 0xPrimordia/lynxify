@@ -14,35 +14,35 @@ function sanitizeUser(user: any) {
 }
 
 export async function POST(req: NextRequest) {
-  console.log('Wallet-connect route called');
-  const supabase = await createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  );
-
-  const { accountId, signature, message } = await req.json();
-  console.log('Received data:', { accountId, signature, message });
-
-  if (!accountId || !signature || !message) {
-    console.log('Missing required fields');
-    return NextResponse.json({ error: 'Account ID, signature, and message are required' }, { status: 400 });
-  }
-
   try {
-    // Check if the user exists in the Users table
+    const { accountId, signature, message } = await req.json();
+
+    if (!accountId || !signature || !message) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Account ID, signature, and message are required' }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    const supabase = await createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
     let { data: user, error } = await supabase
       .from('Users')
       .select('*')
       .eq('hederaAccountId', accountId)
       .single();
-
-    console.log('User lookup result:', { user, error });
 
     let authUser: User;
     if (!user) {
@@ -106,31 +106,50 @@ export async function POST(req: NextRequest) {
     // Use the custom JWT to sign in the user
     const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
       access_token: token,
-      refresh_token: token, // You might want to generate a separate refresh token
+      refresh_token: token,
     });
 
     if (sessionError) {
-      console.error('Error setting session:', sessionError);
-      throw sessionError;
+      return new NextResponse(
+        JSON.stringify({ error: 'Failed to set session' }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
-    console.log('Session set successfully');
 
-    // Prepare the response
-    const response = { 
+    // Sanitize the response data
+    const safeResponse = {
       user: sanitizeUser(user),
       session: {
         access_token: sessionData.session?.access_token,
         refresh_token: sessionData.session?.refresh_token,
-        user: sessionData.user
+        // Only include necessary user fields
+        user: sessionData.user ? {
+          id: sessionData.user.id,
+          email: sessionData.user.email,
+          user_metadata: sessionData.user.user_metadata
+        } : null
       }
     };
-    console.log('Prepared response:', JSON.stringify(response, null, 2));
 
-    // Return the user and session data
-    return NextResponse.json(response);
+    return new NextResponse(
+      JSON.stringify(safeResponse),
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
 
-  } catch (error) {
-    console.error('Error in wallet-connect:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error:', error);
+    return new NextResponse(
+      JSON.stringify({ error: 'An unexpected error occurred' }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 }

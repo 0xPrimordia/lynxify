@@ -57,7 +57,13 @@ export async function GET(req: NextRequest) {
     // Check for API key
     const apiKey = req.headers.get('x-api-key');
     if (!apiKey || apiKey !== process.env.API_KEY) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const supabase = await createClient();
@@ -92,40 +98,43 @@ export async function GET(req: NextRequest) {
       query = query.gte('lastChecked', cutoffTime);
     }
 
-    // Execute query
+    // Execute query with proper error handling
     const { data: thresholds, error } = await query.limit(limit);
     
     if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+      return new NextResponse(
+        JSON.stringify({ error: 'Database query failed' }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Calculate statistics
     const stats = calculateStats(thresholds || []);
 
-    // Group thresholds by status
-    const thresholdsByStatus = (thresholds || []).reduce((acc: any, threshold) => {
-      acc[threshold.status] = acc[threshold.status] || [];
-      acc[threshold.status].push(threshold);
-      return acc;
-    }, {});
-
-    return NextResponse.json({
-      stats,
-      thresholds: thresholdsByStatus,
-      metadata: {
+    return new NextResponse(
+      JSON.stringify({
+        thresholds: thresholds || [],
+        stats,
         timeframe,
-        limit,
-        totalCount: thresholds?.length || 0,
-        timestamp: new Date().toISOString()
+        limit
+      }),
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
       }
-    });
+    );
 
   } catch (error: any) {
-    console.error('Monitor endpoint error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error', 
-      details: error.message 
-    }, { status: 500 });
+    console.error('Monitor error:', error);
+    return new NextResponse(
+      JSON.stringify({ error: 'Internal server error' }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 }
