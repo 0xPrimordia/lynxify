@@ -10,6 +10,8 @@ import { useNFTGate } from "../hooks/useNFTGate";
 import { SignAndExecuteTransactionParams, SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
 import { Threshold } from "../types";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
+import { getQuoteExactInput } from "../lib/saucerswap";
+import { ethers } from 'ethers';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -70,6 +72,7 @@ export default function DexPage() {
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
     const prevPoolsRef = useRef<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [receiveAmount, setReceiveAmount] = useState("0.0");
 
     useEffect(() => {
         if (isLoading || nftGateLoading) return; // Don't redirect while loading
@@ -304,6 +307,53 @@ export default function DexPage() {
         console.log("Current pool listener:", currentPool)
     }, [currentPool]);
 
+    const calculateTradeAmount = async (amount: string) => {
+        if (!currentPool || !tradeToken || !currentToken || !amount || Number(amount) <= 0) {
+            setReceiveAmount("0.0");
+            return;
+        }
+
+        try {
+            // Ensure we're working with a clean number
+            const cleanAmount = amount.replace(/[^0-9.]/g, '');
+            
+            console.log('Trade amount calculation:', {
+                input: {
+                    amount: cleanAmount,
+                    token: currentToken.symbol,
+                    decimals: currentToken.decimals,
+                    expectedRawAmount: (Number(cleanAmount) * Math.pow(10, currentToken.decimals)).toString()
+                },
+                output: {
+                    token: tradeToken.symbol,
+                    decimals: tradeToken.decimals
+                }
+            });
+
+            const quoteAmount = await getQuoteExactInput(
+                currentToken.id,
+                currentToken.decimals,
+                tradeToken.id,
+                cleanAmount,
+                currentPool.fee,
+                tradeToken.decimals
+            );
+            
+            const formattedAmount = ethers.formatUnits(quoteAmount, tradeToken.decimals);
+            
+            console.log('Quote result:', {
+                rawQuote: quoteAmount.toString(),
+                outputDecimals: tradeToken.decimals,
+                formattedAmount: formattedAmount
+            });
+            
+            setReceiveAmount(formattedAmount);
+        } catch (error) {
+            console.error('Error calculating trade amount:', error);
+            setReceiveAmount("0.0");
+        }
+    };
+
     if (isLoading || nftGateLoading) {
         return <div>Loading...</div>;
     }
@@ -318,15 +368,15 @@ export default function DexPage() {
                         onSelectionChange={(key) => setSelectedSection(key.toString())}
                     >
                         <Tab key="chart" title='Price Chart'>
-                            {loading ? (
-                                <div>Loading chart data...</div>
-                            ) : error ? (
-                                <div>Error loading chart data</div>
-                            ) : data && data.length > 0 ? (
-                                <ApexChart data={data} />
-                            ) : (
-                                <div>No price data available</div>
-                            )}
+                            <div className="w-full h-[350px]">
+                                {error ? (
+                                    <div className="flex justify-center items-center h-full">
+                                        <p>Error loading chart data</p>
+                                    </div>
+                                ) : (
+                                    <ApexChart data={data || []} />
+                                )}
+                            </div>
                         </Tab>
                         <Tab key="thresholds" title='Thresholds'>
                             {thresholds.length > 0 ? (
@@ -428,12 +478,15 @@ export default function DexPage() {
                             type="number"
                             value={String(tradeAmount)}
                             description="  "
-                            onChange={(e) => setTradeAmount(e.target.value)}
+                            onChange={(e) => {
+                                setTradeAmount(e.target.value);
+                                calculateTradeAmount(e.target.value);
+                            }}
                             onFocus={handleInputFocus}
                             isDisabled={tradeToken ? false : true}
                             className="text-lg"
                             classNames={{
-                                input: "text-xl pl-4", // Increased font size and added left padding
+                                input: "text-xl pl-4",
                                 inputWrapper: "items-center h-16",
                                 mainWrapper: "h-16",
                             }}
@@ -450,14 +503,14 @@ export default function DexPage() {
                             step="0.000001"
                         />
 
-                        <p className="mt-4">Recieve Amount</p>
+                        <p className="mt-4">Receive Amount</p>
                         <Input
                             type="number"
-                            value="0.0"
+                            value={receiveAmount}
                             className="text-lg pt-4"
-                            onFocus={handleInputFocus}
+                            isReadOnly={true}
                             classNames={{
-                                input: "text-xl pl-4", // Increased font size and added left padding
+                                input: "text-xl pl-4",
                                 inputWrapper: "items-center h-16",
                                 mainWrapper: "h-16",
                             }}
