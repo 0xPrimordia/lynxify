@@ -155,32 +155,32 @@ export const swapExactTokenForToken = async (amountIn: string, inputToken: strin
   }
 };
 
-export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals: number, outputToken: string, amountIn: string, fee: number) => {
-  const pathData:string[] = [];
-  pathData.push(`0x${ContractId.fromString(inputToken).toSolidityAddress()}`); 
-  pathData.push(decimalToPaddedHex(fee, 6));
-  pathData.push(`${ContractId.fromString(outputToken).toSolidityAddress()}`);
-  console.log(pathData.join(''));
-  const encodedPathData = hexToUint8Array(pathData.join(''));
-  const inputAmountInSmallestUnit = ethers.parseUnits(amountIn, inputTokenDecimals);
-  let mirrorNodeBaseUrl = `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com`;
-  const url = `${mirrorNodeBaseUrl}/api/v1/contracts/call`;
-  const params = [encodedPathData, inputAmountInSmallestUnit];
-  const encodedData = abiInterfaces.encodeFunctionData(abiInterfaces.getFunction('quoteExactInput')!, params);
+export const getQuoteExactInput = async (inputToken: string, inputTokenDecimals: number, outputToken: string, amountIn: string, fee: number, outputTokenDecimals: number) => {
+    try {
+        const path = Buffer.concat([
+            Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().slice(2).padStart(40, '0'), 'hex'),
+            Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
+            Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().slice(2).padStart(40, '0'), 'hex')
+        ]);
 
-  const data = {
-    'block': 'latest',
-    'data': encodedData,
-    'to': `0x${ContractId.fromString(QUOTER_V2_ADDRESS).toSolidityAddress()}`,
-  };
+        const inputAmountInSmallestUnit = inputToken === '0.0.15058' 
+            ? (Number(amountIn) * 1e8).toString()
+            : (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
 
-  try {
-    const response = await axios.post(url, data, { headers: {'content-type': 'application/json'} });
-    const result = abiInterfaces.decodeFunctionResult('quoteExactInput', response.data.result); 
-    const finalAmountOut = result.amountOut; //in token's smallest unit
-    return finalAmountOut;
-  } catch (error) {
-    console.error("Error sending transaction:", error);
-    throw error;
-  }
+        let mirrorNodeBaseUrl = `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com`;
+        const url = `${mirrorNodeBaseUrl}/api/v1/contracts/call`;
+        
+        const data = {
+            'block': 'latest',
+            'data': abiInterfaces.encodeFunctionData('quoteExactInput', [path, inputAmountInSmallestUnit]),
+            'to': `0x${ContractId.fromString(QUOTER_V2_ADDRESS).toSolidityAddress()}`,
+        };
+
+        const response = await axios.post(url, data, { headers: {'content-type': 'application/json'} });
+        const result = abiInterfaces.decodeFunctionResult('quoteExactInput', response.data.result); 
+        return result.amountOut;
+    } catch (error) {
+        console.error("Error in getQuoteExactInput:", error);
+        throw error;
+    }
 }

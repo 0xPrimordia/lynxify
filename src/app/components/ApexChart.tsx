@@ -1,13 +1,14 @@
 import ApexCharts from 'apexcharts';
 import { PriceHistory } from '../types';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
+import { Spinner } from "@nextui-org/react";
 
-const ApexChart = ({ data }:{data:PriceHistory[]}) => {
+const ApexChart = memo(({ data }: { data: PriceHistory[] }) => {
     const chartRef = useRef<ApexCharts | null>(null);
     const chartElementRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!chartElementRef.current) return;
+        if (!chartElementRef.current || !data || data.length === 0) return;
 
         const formattedData = data.map(item => ({
             x: new Date(item.startTimestampSeconds * 1000),
@@ -60,16 +61,16 @@ const ApexChart = ({ data }:{data:PriceHistory[]}) => {
             }
         };
 
-        // If chart already exists, update it
+        // If chart exists, update instead of recreating
         if (chartRef.current) {
-            chartRef.current.updateOptions(options);
+            chartRef.current.updateSeries([{
+                data: formattedData
+            }]);
         } else {
-            // Create new chart
             chartRef.current = new ApexCharts(chartElementRef.current, options);
             chartRef.current.render();
         }
 
-        // Cleanup on unmount
         return () => {
             if (chartRef.current) {
                 chartRef.current.destroy();
@@ -78,9 +79,16 @@ const ApexChart = ({ data }:{data:PriceHistory[]}) => {
         };
     }, [data]);
 
-    return (
-        <div id="chart" ref={chartElementRef} />
-    );
-};
+    if (!data || data.length === 0) {
+        return (
+            <div className="flex justify-center items-center h-[350px]">
+                <Spinner size="lg" />
+            </div>
+        );
+    }
 
+    return <div id="chart" ref={chartElementRef} />;
+});
+
+ApexChart.displayName = 'ApexChart';
 export default ApexChart;
