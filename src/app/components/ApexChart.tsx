@@ -20,10 +20,34 @@ const ApexChart = ({ data }:{data:PriceHistory[]}) => {
             }],
             chart: {
                 type: 'candlestick',
-                height: 350
+                height: 350,
+                background: 'transparent',
+                foreColor: '#999'
+            },
+            tooltip: {
+                theme: 'dark',
+                style: {
+                    fontSize: '12px',
+                    fontFamily: undefined,
+                }
+            },
+            grid: {
+                borderColor: '#1a1a1a',
+                xaxis: {
+                    lines: {
+                        show: true,
+                        color: '#1a1a1a'
+                    }
+                },
+                yaxis: {
+                    lines: {
+                        show: true,
+                        color: '#1a1a1a'
+                    }
+                }
             },
             title: {
-                text: 'CandleStick Chart',
+                text: "",
                 align: 'left'
             },
             xaxis: {

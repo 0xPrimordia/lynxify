@@ -318,15 +318,6 @@ export default function DexPage() {
                         onSelectionChange={(key) => setSelectedSection(key.toString())}
                     >
                         <Tab key="chart" title='Price Chart'>
-                            <Menubar style={{borderColor: '#333', marginBottom: '2rem'}}>
-                                <MenubarMenu>
-                                    <ButtonGroup>
-                                        <Button onClick={() => setDateInterval('WEEK')} className={interval === "WEEK" ? 'bg-gray-800' : ''} disabled={interval === "WEEK" ? true : false} variant="light" size="sm">Week</Button>
-                                        <Button onClick={() => setDateInterval('DAY')} className={interval === "DAY" ? 'bg-gray-800' : ''} disabled={interval === "DAY" ? true : false} variant="light" size="sm">Day</Button>
-                                        <Button onClick={() => setDateInterval('HOUR')} className={interval === "HOUR" ? 'bg-gray-800' : ''} disabled={interval === "HOUR" ? true : false} variant="light" size="sm">Hour</Button>
-                                    </ButtonGroup>
-                                </MenubarMenu>
-                            </Menubar>
                             {loading ? (
                                 <div>Loading chart data...</div>
                             ) : error ? (
