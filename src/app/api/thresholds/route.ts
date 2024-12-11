@@ -1,8 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '../../../utils/supabase/server';
 
-// modify to limit to current user
-export async function GET(req:any, { params }:{params:any;}) {
+export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId');

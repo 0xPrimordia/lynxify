@@ -128,7 +128,6 @@ export async function GET(req: NextRequest) {
     );
 
   } catch (error: any) {
-    console.error('Monitor error:', error);
     return new NextResponse(
       JSON.stringify({ error: 'Internal server error' }),
       { 

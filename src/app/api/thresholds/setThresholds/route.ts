@@ -35,7 +35,6 @@ export async function POST(req: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
-      console.error('Auth error:', authError);
       return new NextResponse(
         JSON.stringify({ error: 'Invalid authorization token' }),
         { 
@@ -103,7 +102,7 @@ export async function POST(req: NextRequest) {
           .addUint256(buyOrderAmount.toString())
         );
 
-      console.log('Executing contract transaction...');
+      // Execute contract transaction
       const txResponse = await contractExecuteTx.execute(client);
       const receipt = await txResponse.getReceipt(client);
 
@@ -116,8 +115,6 @@ export async function POST(req: NextRequest) {
           }
         );
       }
-
-      console.log('Contract thresholds set successfully, storing in Supabase...');
 
       // SECOND: After successful contract execution, store in Supabase
       const { data: threshold, error: insertError } = await supabase
@@ -150,7 +147,7 @@ export async function POST(req: NextRequest) {
 
       return new NextResponse(
         JSON.stringify({
-          message: 'Thresholds set successfully!',
+          message: 'Thresholds set successfully',
           txHash: txResponse.transactionId.toString(),
           id: threshold.id
         }),
@@ -161,7 +158,6 @@ export async function POST(req: NextRequest) {
       );
 
     } catch (error: any) {
-      console.error('Error setting thresholds:', error);
       return new NextResponse(
         JSON.stringify({ error: `Failed to set thresholds: ${error.message}` }),
         { 
@@ -171,7 +167,6 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (error: any) {
-    console.error('Unexpected error:', error);
     return new NextResponse(
       JSON.stringify({ error: 'An unexpected error occurred' }),
       { 

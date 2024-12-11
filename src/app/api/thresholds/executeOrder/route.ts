@@ -79,8 +79,6 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error: any) {
-    console.error('Error:', error);
-    
     // Update threshold status to failed if we have a thresholdId
     if (thresholdId) {
       const supabase = await createClient();

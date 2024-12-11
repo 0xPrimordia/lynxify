@@ -44,53 +44,35 @@ export async function POST(req: NextRequest) {
       .eq('hederaAccountId', accountId)
       .single();
 
+    // Create or get user without console.logs
     let authUser: User;
     if (!user) {
-      console.log('Creating new user');
-      // User doesn't exist, create a new one in Supabase auth
       const { data: newAuthUser, error: createError } = await supabase.auth.admin.createUser({
         user_metadata: { hederaAccountId: accountId },
         email: `${accountId}@placeholder.com`,
         email_confirm: true
       });
-      if (createError) {
-        console.error('Error creating new auth user:', createError);
-        throw createError;
-      }
+      if (createError) throw createError;
       authUser = newAuthUser.user;
-      console.log('New auth user created:', authUser);
 
-      // Now create the user in the Users table
       const { data: newUser, error: insertError } = await supabase
         .from('Users')
         .insert([{ hederaAccountId: accountId, id: authUser.id }])
         .select()
         .single();
 
-      if (insertError) {
-        console.error('Error inserting new user:', insertError);
-        throw insertError;
-      }
+      if (insertError) throw insertError;
       user = newUser;
-      console.log('New user inserted:', user);
     } else {
-      console.log('Existing user found, retrieving auth user');
-      // User exists, get the auth user
       const { data: existingAuthUser, error: authError } = await supabase.auth.admin.getUserById(user.id);
-      if (authError) {
-        console.error('Error retrieving existing auth user:', authError);
-        throw authError;
-      }
+      if (authError) throw authError;
       authUser = existingAuthUser.user;
-      console.log('Retrieved existing auth user:', authUser);
     }
 
     if (!authUser || !authUser.id) {
-      console.error('Failed to create or retrieve auth user');
       throw new Error('Failed to create or retrieve auth user');
     }
 
-    // Generate a custom JWT token
     const token = jwt.sign(
       {
         sub: authUser.id,
@@ -101,9 +83,7 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_JWT_SECRET!,
       { expiresIn: '1h' }
     );
-    console.log('JWT token generated');
 
-    // Use the custom JWT to sign in the user
     const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
       access_token: token,
       refresh_token: token,
@@ -119,23 +99,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Sanitize the response data
-    const safeResponse = {
-      user: sanitizeUser(user),
-      session: {
-        access_token: sessionData.session?.access_token,
-        refresh_token: sessionData.session?.refresh_token,
-        // Only include necessary user fields
-        user: sessionData.user ? {
-          id: sessionData.user.id,
-          email: sessionData.user.email,
-          user_metadata: sessionData.user.user_metadata
-        } : null
-      }
-    };
-
     return new NextResponse(
-      JSON.stringify(safeResponse),
+      JSON.stringify({
+        user: sanitizeUser(user),
+        session: {
+          access_token: sessionData.session?.access_token,
+          refresh_token: sessionData.session?.refresh_token,
+          user: sessionData.user ? {
+            id: sessionData.user.id,
+            email: sessionData.user.email,
+            user_metadata: sessionData.user.user_metadata
+          } : null
+        }
+      }),
       { 
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -143,7 +119,6 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error: any) {
-    console.error('Error:', error);
     return new NextResponse(
       JSON.stringify({ error: 'An unexpected error occurred' }),
       { 
