@@ -31,6 +31,20 @@ const nextConfig = {
     }
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'header',
+            key: 'x-netlify-form',
+          },
+        ],
+        destination: '/.netlify/functions/next_netlify_forms/:path*',
+      },
+    ];
+  }
 };
 
 export default nextConfig;
