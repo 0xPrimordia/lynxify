@@ -7,7 +7,7 @@ export default function NetlifyForm() {
       method="POST"
       data-netlify="true"
       data-netlify-honeypot="bot-field"
-      action="/success"
+      action="/api/form"
       hidden
     >
       <input type="hidden" name="form-name" value="feedback" />

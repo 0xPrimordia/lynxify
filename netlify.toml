@@ -14,6 +14,10 @@
   included_files = [".next/server/**/*", ".next/standalone/**/*"]
   node_bundler = "esbuild"
 
+[[edge_functions]]
+  function = "form"
+  path = "/api/form"
+
 [[redirects]]
   from = "/*"
   to = "/.netlify/functions/next_netlify_forms/:splat"
