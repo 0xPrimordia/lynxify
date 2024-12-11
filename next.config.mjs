@@ -2,7 +2,9 @@ import webpack from 'webpack';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -28,7 +30,6 @@ const nextConfig = {
         })
       );
     }
-
     return config;
   },
 };
