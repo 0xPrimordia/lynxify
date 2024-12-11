@@ -28,28 +28,32 @@ const FeedbackForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
+      const formData = {
+        'form-name': 'feedback',
+        feedback,
+        debugInfo: JSON.stringify(debugInfo)
+      };
+
       const response = await fetch('/__forms.html', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          'form-name': 'feedback',
-          feedback,
-          debugInfo: JSON.stringify(debugInfo)
-        }).toString()
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded' 
+        },
+        body: new URLSearchParams(formData).toString()
       });
 
-      if (response.ok) {
-        setFeedback('');
-        setIsOpen(false);
-        alert('Thank you for your feedback!');
-      } else {
-        throw new Error(`Submission failed: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error('Form submission failed');
       }
+
+      setIsOpen(false);
+      setFeedback('');
+      
+      console.log('Form submitted successfully');
+
     } catch (error) {
-      console.error('Error submitting feedback:', error);
-      alert('Failed to submit feedback. Please try again.');
+      console.error('Error submitting form:', error);
     }
   };
 
