@@ -22,12 +22,19 @@ export default function RootLayout({
 }>) {
   return (
     <html className="dark" lang="en">
+      <head>
+        {/* Hidden Netlify Form */}
+        <form name="feedback" data-netlify="true" data-netlify-honeypot="bot-field" hidden>
+          <textarea name="feedback"></textarea>
+          <input type="hidden" name="debugInfo" />
+        </form>
+      </head>
       <body className={inter.className + " dark text-foreground bg-background min-h-screen"}>
         <WalletProvider>
           <SaucerSwapProvider>
             <PoolProvider>
               <NextUIProvider>
-              <Header />
+                <Header />
                 <main className="flex flex-col items-center p-4">
                   {children}
                 </main>
