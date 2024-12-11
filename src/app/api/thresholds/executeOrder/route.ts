@@ -1,4 +1,3 @@
-export const dynamic = 'force-dynamic';
 import { ethers } from "ethers";
 import abi from "../../../contracts/userThreshold.json";
 import { NextRequest, NextResponse } from "next/server";

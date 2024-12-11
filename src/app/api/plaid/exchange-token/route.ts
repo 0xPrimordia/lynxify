@@ -1,4 +1,3 @@
-export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server'; 
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 
