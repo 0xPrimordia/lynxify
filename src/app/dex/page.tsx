@@ -9,6 +9,7 @@ import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
 import { SignAndExecuteTransactionParams, SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
 import { Threshold } from "../types";
+import { ArrowRightIcon } from "@heroicons/react/16/solid";
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -43,7 +44,7 @@ export default function DexPage() {
     const [to, setTo] = useState(Math.floor(currentDate.getTime() / 1000));
     const [interval, setInterval] = useState('HOUR');
     const [tradeToken, setTradeToken] = useState<Token|null>(null);
-    const [tradeAmount, setTradeAmount] = useState(0);
+    const [tradeAmount, setTradeAmount] = useState("0.0");
     const [tradePrice, setTradePrice] = useState(0);
     const [stopLoss, setStopLoss] = useState(false);
     const [buyOrder, setBuyOrder] = useState(false);
@@ -55,15 +56,15 @@ export default function DexPage() {
     const [currentPool, setCurrentPool] = useState<any>(null);
     const [currentToken, setCurrentToken] = useState<Token>(
         {
-            decimals: 6,
+            decimals: 8,
             dueDiligenceComplete: true,
-            icon: "/images/tokens/SD.png",
-            id: "0.0.1463375",
+            icon: "/images/tokens/WHBAR.png",
+            id: "0.0.15058",
             isFeeOnTransferToken: false,
-            name: "Stader",
-            price: "656407783",
-            priceUsd: 0.43708297,
-            symbol: "SD[hts]"
+            name: "WHBAR (new)",
+            price: "0",
+            priceUsd: 0,
+            symbol: "HBAR"
         }
     )
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
@@ -110,6 +111,16 @@ export default function DexPage() {
 
         fetchThresholds();
     }, [userId]);
+
+    useEffect(() => {
+        if (!tokens || !tokens.length) return;
+        
+        // Find WHBAR token from the loaded tokens using correct ID
+        const whbarToken = tokens.find((token: Token) => token.id === "0.0.15058");
+        if (whbarToken) {
+            setCurrentToken(whbarToken);
+        }
+    }, [tokens]); // Only run when tokens are loaded/updated
 
     const handleQuote = async () => {
         try {
@@ -167,6 +178,7 @@ export default function DexPage() {
         if (token) {
             setCurrentToken(token);
             setCurrentPool(null);
+            console.log("Current token", token);
         }
     }
 
@@ -236,6 +248,43 @@ export default function DexPage() {
         console.log(data.message);
     }
 
+    const getTokenBalance = async (tokenId: string) => {
+        if (!account) return 0;
+        
+        try {
+            // Special case for WHBAR - check native HBAR balance instead
+            if (tokenId === "0.0.15058") {
+                const response = await fetch(`https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${account}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch HBAR balance');
+                }
+                const data = await response.json();
+                // Convert from tinybars (10^8) to HBAR
+                return data.balance.balance;
+            }
+
+            // Regular token balance check
+            const response = await fetch(`/api/tokens/balance?accountId=${account}&tokenId=${tokenId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch token balance');
+            }
+            const data = await response.json();
+            return data.balance;
+        } catch (error) {
+            console.error('Error fetching token balance:', error);
+            return 0;
+        }
+    };
+
+    const handleMaxClick = async () => {
+        if (!currentToken) return;
+        
+        const balance = await getTokenBalance(currentToken.id);
+        // Convert from smallest unit to decimal representation based on token decimals
+        const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
+        setTradeAmount(formattedBalance);
+    };
+
     useEffect(() => {
         console.log("Current pool listener:", currentPool)
     }, [currentPool]);
@@ -247,7 +296,7 @@ export default function DexPage() {
     return (    
         <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
             <div className="flex w-full">
-                <div className="grow pr-12">
+                <div className="grow pr-8">
                     <Tabs 
                         aria-label="section" 
                         selectedKey={selectedSection} 
@@ -263,7 +312,15 @@ export default function DexPage() {
                                     </ButtonGroup>
                                 </MenubarMenu>
                             </Menubar>
-                            {data && <ApexChart data={data} />}
+                            {loading ? (
+                                <div>Loading chart data...</div>
+                            ) : error ? (
+                                <div>Error loading chart data</div>
+                            ) : data && data.length > 0 ? (
+                                <ApexChart data={data} />
+                            ) : (
+                                <div>No price data available</div>
+                            )}
                         </Tab>
                         <Tab key="thresholds" title='Thresholds'>
                             <Table>
@@ -344,7 +401,7 @@ export default function DexPage() {
                     </div>
                     <div className="w-full pt-8 pb-8">
                         {Array.isArray(currentPools) && currentPools.length > 0 && (
-                            <div className="mb-12">
+                            <div className="mb-8">
                                 {!currentPool ? (
                                     <Select 
                                         items={currentPools}
@@ -359,7 +416,7 @@ export default function DexPage() {
                                         )}
                                     </Select>
                                 ):(
-                                    <p>{currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}%</p>
+                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onClick={() => setCurrentPool(null)}>Clear</Button></p>
                                 )}
                                 
                             </div>
@@ -368,27 +425,49 @@ export default function DexPage() {
                         {!Array.isArray(currentPools) || currentPools.length === 0 && (
                             <p className="pb-8">No pools found for {currentToken.symbol}</p>
                         )}
+                        <p className="mb-4">Trade Amount</p>
                         <Input
                             type="number"
                             value={String(tradeAmount)}
-                            label="Trade Amount"
-                            onChange={(e) => setTradeAmount(Number(e.target.value))}
-                            labelPlacement="outside"
+                            description="  "
+                            onChange={(e) => setTradeAmount(e.target.value)}
                             isDisabled={tradeToken ? false : true}
+                            className="text-lg"
+                            classNames={{
+                                input: "text-xl pl-4", // Increased font size and added left padding
+                                inputWrapper: "items-center h-16",
+                                mainWrapper: "h-16",
+                            }}
+                            startContent={
+                                <div className="flex items-center mr-2">
+                                    <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                </div>
+                            }
                             endContent={
-                                <Chip className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                <Chip onClick={handleMaxClick} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
                             }
                             step="0.000001"
                         />
 
+                        <p className="mt-4">Recieve Amount</p>
                         <Input
                             type="number"
-                            value="0"
-                            label="Buy Amount"
-                            labelPlacement="outside"
-                            className="pt-4"
+                            value="0.0"
+                            className="text-lg pt-4"
+                            classNames={{
+                                input: "text-xl pl-4", // Increased font size and added left padding
+                                inputWrapper: "items-center h-16",
+                                mainWrapper: "h-16",
+                            }}
                             step="0.000001"
-                            isDisabled
+                            isDisabled={tradeToken ? false : true}
+                            startContent={
+                                <div className="flex items-center mr-2">
+                                    {tradeToken && <Image className="mt-1" width={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                </div>
+                            }
                         />
                     </div>
                     <div className="w-full flex flex-col gap-4">
