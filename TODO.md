@@ -9,7 +9,7 @@
   - [✓] Test threshold triggers
 
 ## Frontend Tasks
-- [ ] add logic to calc trade amount / recieve amount when either is changed
+- [✓] add logic to calc trade amount / recieve amount when either is changed
 - [✓] Clean up price chart styling
 - [✓] Set up user feedback UI
 - [✓] Add token balance display
