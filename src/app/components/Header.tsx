@@ -3,7 +3,6 @@ import { VT323 } from "next/font/google";
 import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
-import PlaidLinkComponent from "./PlaidLinkComponent";
 import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
 import { AccountBalanceQuery } from "@hashgraph/sdk";
