@@ -7,41 +7,30 @@ export async function GET(req:any, { params }:{params:any;}) {
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId');
 
+        console.log('Fetching thresholds for userId:', userId);
+
         if (!userId) {
             return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
         }
 
-        console.log('Starting GET request...');
-        const supabasePromise = createClient();
-        console.log('Supabase client promise created:', supabasePromise);
+        const supabase = await createClient();
         
-        const supabase = await supabasePromise;
-        console.log('Supabase client resolved:', supabase);
-
-        if (!supabase || typeof supabase.from !== 'function') {
-            console.error('Supabase client initialization failed. Client:', supabase);
-            throw new Error('Supabase client is not properly initialized');
-        }
-
-        console.log('Attempting to query thresholds table...');
-        const { data, error } = await supabase.from('Thresholds').select('*').eq('userId', userId);
+        console.log('Querying thresholds table with userId:', userId);
+        const { data, error } = await supabase
+            .from('Thresholds')
+            .select('*')
+            .eq('userId', userId);
         
+        console.log('Query result:', { data, error });
+
         if (error) {
             console.error('Supabase query error:', error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
-        
-        console.log('Query successful. Data:', data);
-        
-        // Check if data is empty
-        if (!data || data.length === 0) {
-            console.log('No data found in thresholds table');
-            return NextResponse.json([], { status: 200 });
-        }
-        
-        return NextResponse.json(data);
+
+        return NextResponse.json(data || []);
     } catch (error) {
         console.error('Unexpected error:', error);
-        return NextResponse.json({ error: 'An unexpected error occurred', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
+        return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
     }
 }

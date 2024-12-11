@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, FocusEvent } from "react";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
@@ -88,6 +88,11 @@ export default function DexPage() {
     }, [pools, currentToken]);
 
     useEffect(() => {
+        console.log('Wallet Context:', {
+            account,
+            userId,
+            hasWallet: !!dAppConnector
+        });
         const fetchThresholds = async () => {
             if (!userId) {
                 setIsLoading(false);
@@ -96,12 +101,16 @@ export default function DexPage() {
             try {
                 setIsLoading(true);
                 const response = await fetch(`/api/thresholds?userId=${userId}`);
+                console.log('Response status:', response.status);
+                
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                
                 const data = await response.json();
-                setThresholds(Array.isArray(data) ? data : [data]);
-                console.log("Thresholds", data);
+                console.log('Fetched thresholds data:', data);
+                
+                setThresholds(Array.isArray(data) ? data : []);
             } catch (error) {
                 console.error('Error fetching thresholds:', error);
             } finally {
@@ -285,6 +294,12 @@ export default function DexPage() {
         setTradeAmount(formattedBalance);
     };
 
+    const handleInputFocus = (event: FocusEvent<Element>) => {
+        if (event.target instanceof HTMLInputElement) {
+            event.target.select();
+        }
+    };
+
     useEffect(() => {
         console.log("Current pool listener:", currentPool)
     }, [currentPool]);
@@ -323,30 +338,24 @@ export default function DexPage() {
                             )}
                         </Tab>
                         <Tab key="thresholds" title='Thresholds'>
-                            <Table>
-                                <TableHeader>
-                                    <TableColumn>Token A</TableColumn>
-                                    <TableColumn>Token B</TableColumn>
-                                    <TableColumn>Fee</TableColumn>
-                                    <TableColumn>Stop Loss</TableColumn>
-                                    <TableColumn>Stop Loss Cap</TableColumn>
-                                    <TableColumn>Buy Order</TableColumn>
-                                    <TableColumn>Buy Order Cap</TableColumn>
-                                    <TableColumn>Delete</TableColumn>
-                                </TableHeader>
-                                <TableBody>
-                                    {thresholds.length > 0 ? (
-                                        thresholds.map((threshold: Threshold) => (
+                            {thresholds.length > 0 ? (
+                                <Table>
+                                    <TableHeader>
+                                        <TableColumn>Token A</TableColumn>
+                                        <TableColumn>Token B</TableColumn>
+                                        <TableColumn>Fee</TableColumn>
+                                        <TableColumn>Stop Loss</TableColumn>
+                                        <TableColumn>Stop Loss Cap</TableColumn>
+                                        <TableColumn>Buy Order</TableColumn>
+                                        <TableColumn>Buy Order Cap</TableColumn>
+                                        <TableColumn>Delete</TableColumn>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {thresholds.map((threshold: Threshold) => (
                                             <TableRow key={threshold.id}>
-                                                <TableCell>
-                                                {threshold.tokenA}
-                                                </TableCell>
-                                                <TableCell>
-                                                {threshold.tokenB}
-                                                </TableCell>
-                                                <TableCell>
-                                                {threshold.fee}
-                                                </TableCell>
+                                                <TableCell>{threshold.tokenA}</TableCell>
+                                                <TableCell>{threshold.tokenB}</TableCell>
+                                                <TableCell>{threshold.fee}</TableCell>
                                                 <TableCell>${threshold.stopLoss}</TableCell>
                                                 <TableCell>{threshold.stopLossCap}</TableCell>
                                                 <TableCell>${threshold.buyOrder}</TableCell>
@@ -355,14 +364,12 @@ export default function DexPage() {
                                                     <Button onClick={() => deleteThreshold(threshold.id)}>Delete</Button>
                                                 </TableCell>
                                             </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={4}>No thresholds found</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            ) : (
+                                <div>No thresholds found</div>
+                            )}
                         </Tab>
                     </Tabs>
                 </div>
@@ -431,6 +438,7 @@ export default function DexPage() {
                             value={String(tradeAmount)}
                             description="  "
                             onChange={(e) => setTradeAmount(e.target.value)}
+                            onFocus={handleInputFocus}
                             isDisabled={tradeToken ? false : true}
                             className="text-lg"
                             classNames={{
@@ -456,6 +464,7 @@ export default function DexPage() {
                             type="number"
                             value="0.0"
                             className="text-lg pt-4"
+                            onFocus={handleInputFocus}
                             classNames={{
                                 input: "text-xl pl-4", // Increased font size and added left padding
                                 inputWrapper: "items-center h-16",

@@ -57,9 +57,6 @@ const Header = () => {
                 </NavbarBrand>
                 
                 <NavbarContent justify="end">
-                    <NavbarItem>
-                        <PlaidLinkComponent />
-                    </NavbarItem>
                     <NavbarItem className="hidden lg:flex">
                         {!isConnected ? (
                             <p><Button className="mt-4" onClick={() => handleConnect()}>Connect Wallet</Button></p>

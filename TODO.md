@@ -1,23 +1,24 @@
 # TODO List
 
 ## Trading/Backend
+- [ ] Implement Token to Token trading (manual and thresholds)
+- [ ] Implement Token to HBAR trading (manual and thresholds)
 - [✓] Implement and test auto-trading with thresholds
   - [✓] Configure wallet holding NFTs for gas fees
   - [✓] Set up trading parameters
   - [✓] Test threshold triggers
-- [ ] Implement Token to Token trading (manual and thresholds)
-- [ ] Implement Token to HBAR trading (manual and thresholds)
 
 ## Frontend Tasks
+- [ ] add logic to calc trade amount / recieve amount when either is changed
+- [ ] Clean up price chart styling
 - [✓] Set up user feedback UI
 - [✓] Add token balance display
-- [ ] Clean up price chart styling
 - [✓] Setting default coin on dex to HBAR
 - [✓] require pool selection to set fee for new thresholds
 - [✓] use token icons to make clear input/output for trades and thresholds
 - [✓] add "max" button to input fields from wallet balance
-- [ ] add logic to calc trade amount / recieve amount when either is changed
 - [✓] Fix IPFS integration for Hashpack image loading
+- [✓] fix bug on threshold tab: Error: Cell count must match column count. Found 1 cells and 8 columns.
 
 ## Documentation
 - [ ] Document wallet setup process
@@ -59,9 +60,7 @@
 - [ ] updated NFT contract logic to support the tiered system
 
 
-
-
-
+## =========> Etc.
 
 ## Future Roadmap
 - [ ] Token rollout for tokenized index and governance

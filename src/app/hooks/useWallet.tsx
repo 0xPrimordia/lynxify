@@ -8,11 +8,8 @@ import {
   HederaChainId,
   ExtensionData,
   DAppSigner,
-  SignAndExecuteTransactionParams,
-  transactionToBase64String,
-  SignMessageParams
 } from '@hashgraph/hedera-wallet-connect';
-import { SessionTypes, SignClientTypes } from '@walletconnect/types';
+import { SessionTypes } from '@walletconnect/types';
 import { createClient } from '@supabase/supabase-js';
 
 const appMetadata = {
@@ -71,18 +68,36 @@ export const WalletProvider = ({children}:useWalletProps) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    init()
-  }, [])
+    init();
 
-  useEffect(() => {
-    if (session) {
-      const sessionAccount = session.namespaces?.hedera?.accounts?.[0]
-      if (sessionAccount) {
-        const accountId = sessionAccount.split(':').pop()
-        setAccount(accountId)
+    // Add auth state listener
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', { event, userId: session?.user?.id });
+      if (session?.user?.id) {
+        console.log('Setting userId from auth change:', session.user.id);
+        setUserId(session.user.id);
+        const hederaAccountId = session.user.user_metadata?.hederaAccountId;
+        if (hederaAccountId) {
+          setAccount(hederaAccountId);
+        }
+      } else {
+        console.log('Clearing userId due to auth change');
+        setUserId(null);
+        setAccount("");
       }
-    }
-  }, [session])
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const init = async () => {
     console.log("Initializing wallet and checking for existing session...");
@@ -92,18 +107,18 @@ export const WalletProvider = ({children}:useWalletProps) => {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('Initial session check:', { session, error: sessionError });
 
-    if (session) {
-      console.log("Existing Supabase session found");
+    if (session?.user?.id) {
+      console.log("Existing Supabase session found:", session.user.id);
       setUserId(session.user.id);
-      // Assuming the hederaAccountId is stored in user metadata
       const hederaAccountId = session.user.user_metadata?.hederaAccountId;
       if (hederaAccountId) {
         setAccount(hederaAccountId);
       }
     } else {
-      console.log("No existing Supabase session");
+      console.log("No existing Supabase session or missing user ID");
     }
 
     console.log("Importing Hedera Wallet Connect module...");
@@ -219,6 +234,28 @@ export const WalletProvider = ({children}:useWalletProps) => {
               const errorData = await response.json();
               throw new Error(errorData.error || 'Failed to authenticate user');
             }
+
+            const authData = await response.json();
+            console.log('Auth response data:', authData);
+
+            if (authData.session?.user?.id) {
+              console.log('Setting userId from auth response:', authData.session.user.id);
+              setUserId(authData.session.user.id);
+              
+              // Verify the session was properly set
+              const { data: { session: verifySession } } = await supabase.auth.getSession();
+              console.log('Verified session after auth:', verifySession);
+              
+              if (!verifySession?.user?.id) {
+                console.warn('Session not properly set, attempting to set manually');
+                await supabase.auth.setSession({
+                  access_token: authData.session.access_token,
+                  refresh_token: authData.session.refresh_token
+                });
+              }
+            } else {
+              console.error('No user ID in auth response:', authData);
+            }
           } catch (signError: any) {
             console.error('Error signing or authenticating:', signError);
             setError(signError.message || 'Failed to sign message or authenticate');
@@ -229,10 +266,18 @@ export const WalletProvider = ({children}:useWalletProps) => {
         // Set the account regardless of whether signature was needed
         setAccount(accountId);
         
-        // Get the session data
         const { data: { session: supabaseSession } } = await supabase.auth.getSession();
-        if (supabaseSession) {
+        if (supabaseSession?.user) {
+          console.log('Setting userId from session:', supabaseSession.user.id);
           setUserId(supabaseSession.user.id);
+        } else {
+          console.log('No valid session found after connection');
+          // Optionally refresh the session
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+          if (refreshedSession?.user) {
+            console.log('Setting userId from refreshed session:', refreshedSession.user.id);
+            setUserId(refreshedSession.user.id);
+          }
         }
       }
     } catch (error: any) {
@@ -265,12 +310,12 @@ export const WalletProvider = ({children}:useWalletProps) => {
 
   const signAndExecuteTransaction = async (params: { transactionList: string, signerAccountId: string }) => {
     if (!dAppConnector) {
-        throw new Error("DAppConnector not initialized");
+      throw new Error("DAppConnector not initialized");
     }
     
     const result = await dAppConnector.signAndExecuteTransaction({
-        signerAccountId: params.signerAccountId,
-        transactionList: params.transactionList
+      signerAccountId: params.signerAccountId,
+      transactionList: params.transactionList
     });
     
     return result;
