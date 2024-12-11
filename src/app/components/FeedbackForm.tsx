@@ -1,61 +1,11 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button, Textarea, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/react";
-import { useWalletContext } from '../hooks/useWallet';
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
 const FeedbackForm = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [debugInfo, setDebugInfo] = useState<any>({});
-  const { account, userId } = useWalletContext();
-
-  useEffect(() => {
-    const gatherDebugInfo = () => {
-      const info = {
-        timestamp: new Date().toISOString(),
-        url: window.location.href,
-        userAgent: navigator.userAgent,
-        screenResolution: `${window.screen.width}x${window.screen.height}`,
-        accountId: account || 'not connected',
-        userId: userId || 'not available',
-      };
-      setDebugInfo(info);
-    };
-
-    gatherDebugInfo();
-  }, [account, userId]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const formData = {
-        'form-name': 'feedback',
-        feedback,
-        debugInfo: JSON.stringify(debugInfo)
-      };
-
-      const response = await fetch('/__forms.html', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/x-www-form-urlencoded' 
-        },
-        body: new URLSearchParams(formData).toString()
-      });
-
-      if (!response.ok) {
-        throw new Error('Form submission failed');
-      }
-
-      setIsOpen(false);
-      setFeedback('');
-      
-      console.log('Form submitted successfully');
-
-    } catch (error) {
-      console.error('Error submitting form:', error);
-    }
-  };
 
   return (
     <>
@@ -70,9 +20,7 @@ const FeedbackForm = () => {
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
         <ModalContent>
-          <form onSubmit={handleSubmit}>
-            <input type="hidden" name="form-name" value="feedback" />
-            
+          <form>
             <ModalHeader>Submit Feedback</ModalHeader>
             <ModalBody>
               <Textarea
@@ -88,7 +36,7 @@ const FeedbackForm = () => {
               <Button color="danger" variant="light" onPress={() => setIsOpen(false)}>
                 Cancel
               </Button>
-              <Button color="primary" type="submit">
+              <Button color="primary" type="button" onPress={() => setIsOpen(false)}>
                 Submit
               </Button>
             </ModalFooter>
