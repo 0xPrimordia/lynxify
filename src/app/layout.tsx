@@ -8,6 +8,7 @@ import { SaucerSwapProvider } from "./hooks/useTokens";
 import { PoolProvider } from "./hooks/usePools";
 import FeedbackForm from "./components/FeedbackForm";
 import NetlifyForm from "./components/NetlifyForm";
+import NetlifyFormHandler from './components/NetlifyFormHandler';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,6 +26,7 @@ export default function RootLayout({
     <html className="dark" lang="en">
       <body className={inter.className + " dark text-foreground bg-background min-h-screen"}>
         <NetlifyForm />
+        <NetlifyFormHandler />
         <WalletProvider>
           <SaucerSwapProvider>
             <PoolProvider>
