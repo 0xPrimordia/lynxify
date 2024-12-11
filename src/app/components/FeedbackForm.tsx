@@ -11,7 +11,6 @@ const FeedbackForm = () => {
   const { account, userId } = useWalletContext();
 
   useEffect(() => {
-    // Gather debug information
     const gatherDebugInfo = () => {
       const info = {
         timestamp: new Date().toISOString(),
@@ -20,43 +19,24 @@ const FeedbackForm = () => {
         screenResolution: `${window.screen.width}x${window.screen.height}`,
         accountId: account || 'not connected',
         userId: userId || 'not available',
-        consoleErrors: [], // Will be populated with recent console errors
       };
       setDebugInfo(info);
     };
 
-    // Override console.error to capture errors
-    const originalError = console.error;
-    const errors: string[] = [];
-    console.error = (...args) => {
-      errors.push(args.join(' '));
-      if (errors.length > 10) errors.shift(); // Keep last 10 errors
-      debugInfo.consoleErrors = errors;
-      originalError.apply(console, args);
-    };
-
     gatherDebugInfo();
-
-    return () => {
-      console.error = originalError;
-    };
   }, [account, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const formData = {
-      feedback,
-      debugInfo: JSON.stringify(debugInfo, null, 2)
-    };
-
     try {
       const response = await fetch('/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           'form-name': 'feedback',
-          ...formData
+          feedback,
+          debugInfo: JSON.stringify(debugInfo)
         }).toString()
       });
 
@@ -64,6 +44,8 @@ const FeedbackForm = () => {
         setFeedback('');
         setIsOpen(false);
         alert('Thank you for your feedback!');
+      } else {
+        throw new Error(`Submission failed: ${response.statusText}`);
       }
     } catch (error) {
       console.error('Error submitting feedback:', error);
@@ -84,12 +66,7 @@ const FeedbackForm = () => {
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
         <ModalContent>
-          <form
-            name="feedback"
-            method="POST"
-            data-netlify="true"
-            onSubmit={handleSubmit}
-          >
+          <form onSubmit={handleSubmit}>
             <input type="hidden" name="form-name" value="feedback" />
             
             <ModalHeader>Submit Feedback</ModalHeader>
@@ -101,11 +78,6 @@ const FeedbackForm = () => {
                 onChange={(e) => setFeedback(e.target.value)}
                 minRows={3}
                 required
-              />
-              <input
-                type="hidden"
-                name="debugInfo"
-                value={JSON.stringify(debugInfo)}
               />
             </ModalBody>
             <ModalFooter>
@@ -121,6 +93,6 @@ const FeedbackForm = () => {
       </Modal>
     </>
   );
-};
+}
 
 export default FeedbackForm; 
