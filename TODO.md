@@ -10,7 +10,7 @@
 
 ## Frontend Tasks
 - [ ] add logic to calc trade amount / recieve amount when either is changed
-- [ ] Clean up price chart styling
+- [✓] Clean up price chart styling
 - [✓] Set up user feedback UI
 - [✓] Add token balance display
 - [✓] Setting default coin on dex to HBAR
