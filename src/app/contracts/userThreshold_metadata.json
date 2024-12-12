@@ -95,6 +95,50 @@
 				"inputs": [
 					{
 						"indexed": false,
+						"internalType": "uint256",
+						"name": "tradeAmount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "feeAmount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "finalTradeAmount",
+						"type": "uint256"
+					}
+				],
+				"name": "FeeCalculated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "collector",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "FeeCollected",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
 						"internalType": "string",
 						"name": "message",
 						"type": "string"
@@ -568,6 +612,19 @@
 				"type": "event"
 			},
 			{
+				"inputs": [],
+				"name": "FEE_BASIS_POINTS",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -583,6 +640,25 @@
 				"name": "approveRouter",
 				"outputs": [],
 				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "calculateFee",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "pure",
 				"type": "function"
 			},
 			{
@@ -632,6 +708,19 @@
 				"name": "executeTradeForUser",
 				"outputs": [],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "feeCollector",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
@@ -694,6 +783,19 @@
 					}
 				],
 				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_newCollector",
+						"type": "address"
+					}
+				],
+				"name": "setFeeCollector",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -812,11 +914,11 @@
 	},
 	"sources": {
 		"contracts/userThreshold.sol": {
-			"keccak256": "0xf3a88149bf5e076b89776b39216acf95805d6cb109b081cf078364794e562a2d",
+			"keccak256": "0x1f5c691fcf4f29d7b93c3526e995e59cc4185134dbb632832c25987f7e2709cc",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://0577642e375dd526d3f27abc2421e5a6556f5aff42dc6ee421abe8ffd516499b",
-				"dweb:/ipfs/QmepA7bxKbBv5RFJNzwGoW2P8gVedw7Gu3QSSMCeJ1q2rA"
+				"bzz-raw://0851d11b6ef9cb6d160c6d6e87ffce414c653a2cec2b752ba9825ad2e7187517",
+				"dweb:/ipfs/QmeAvRsDZ1CmWseSjbrzT4BMX3j5rHHzTrtk7Sa2STuTGU"
 			]
 		}
 	},

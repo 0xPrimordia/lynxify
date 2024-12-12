@@ -22,8 +22,11 @@ interface IHederaTokenService {
 contract userThreshold {
     address public owner;
     uint256 public currentPrice;
-    address constant SAUCERSWAP_ROUTER = address(0x0000000000000000000000000000000000159398);  // 0.0.1414040
-    address constant HEDERA_TOKEN_SERVICE = address(0x0000000000000000000000000000000000000167);  // 0.0.359
+    uint256 public constant FEE_BASIS_POINTS = 8; // 0.08% fee
+    address public feeCollector;
+    
+    address constant SAUCERSWAP_ROUTER = address(0x0000000000000000000000000000000000159398);
+    address constant HEDERA_TOKEN_SERVICE = address(0x0000000000000000000000000000000000000167);
 
     struct Threshold {
         uint256 stopLossThreshold;
@@ -80,6 +83,8 @@ contract userThreshold {
         address recipient,
         bytes path
     );
+    event FeeCollected(address indexed collector, uint256 amount);
+    event FeeCalculated(uint256 tradeAmount, uint256 feeAmount, uint256 finalTradeAmount);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
@@ -88,6 +93,16 @@ contract userThreshold {
 
     constructor(address _owner) {
         owner = _owner;
+        feeCollector = _owner; // Initially set fee collector to owner
+    }
+
+    function setFeeCollector(address _newCollector) external onlyOwner {
+        require(_newCollector != address(0), "Invalid fee collector address");
+        feeCollector = _newCollector;
+    }
+
+    function calculateFee(uint256 amount) public pure returns (uint256) {
+        return (amount * FEE_BASIS_POINTS) / 10000;
     }
 
     function approveRouter(address token, uint256 amount) public {
@@ -171,64 +186,51 @@ contract userThreshold {
 
     function executeTradeForUser(string memory hederaAccountId, string memory orderType, bytes memory path) public payable {
         Threshold storage threshold = userThresholds[hederaAccountId];
-        
-        emit ExecuteTradeDebug(
-            "Initial state",
-            hederaAccountId,
-            threshold.isActive,
-            orderType,
-            msg.value,
-            path
-        );
-
         require(threshold.isActive, "User thresholds are not active");
 
-        uint256 relevantAmount = 0;
-        if (keccak256(abi.encodePacked(orderType)) == keccak256(abi.encodePacked("stopLoss"))) {
-            relevantAmount = threshold.stopLossAmount;
-        } else if (keccak256(abi.encodePacked(orderType)) == keccak256(abi.encodePacked("buyOrder"))) {
-            relevantAmount = threshold.buyOrderAmount;
-        }
-        require(msg.value <= relevantAmount, "Amount exceeds threshold limit");
+        // Handle fee calculation and collection
+        (uint256 tradeAmount) = _handleFees(msg.value);
 
+        // Execute the trade
+        uint256 amountOut = _executeSwap(hederaAccountId, tradeAmount, path);
+
+        // Update threshold and emit event
+        threshold.isActive = false;
+        emit OrderExecuted(
+            hederaAccountId,
+            orderType,
+            currentPrice,
+            threshold.tokenAddress,
+            amountOut
+        );
+    }
+
+    function _handleFees(uint256 amount) internal returns (uint256) {
+        uint256 feeAmount = calculateFee(amount);
+        uint256 tradeAmount = amount - feeAmount;
+
+        emit FeeCalculated(amount, feeAmount, tradeAmount);
+
+        (bool feeSuccess,) = feeCollector.call{value: feeAmount}("");
+        require(feeSuccess, "Fee transfer failed");
+        emit FeeCollected(feeCollector, feeAmount);
+
+        return tradeAmount;
+    }
+
+    function _executeSwap(string memory hederaAccountId, uint256 tradeAmount, bytes memory path) internal returns (uint256) {
         ISaucerSwapV2SwapRouter ROUTER = ISaucerSwapV2SwapRouter(SAUCERSWAP_ROUTER);
-        
-        // FIXED: Generate recipient address correctly from Hedera ID
-        // Convert string like "0.0.4340026" to EVM address format
-        string[] memory parts = new string[](3);
-        parts = split(hederaAccountId, ".");
-        require(parts.length == 3, "Invalid Hedera account ID format");
-        
-        uint256 shard = stringToUint(parts[0]);
-        uint256 realm = stringToUint(parts[1]);
-        uint256 accountNum = stringToUint(parts[2]);
-        
-        // Construct the address in the same way Hedera SDK does
-        address recipientAddress = address(
-            uint160(
-                (shard << 40) | (realm << 32) | accountNum
-            )
-        );
+        address recipientAddress = _deriveRecipientAddress(hederaAccountId);
 
-        emit RouterCallDetails(
-            "Router setup",
-            msg.value,
-            SAUCERSWAP_ROUTER,
-            recipientAddress,
-            path
-        );
-
-        // FIXED: Match exact parameters from working test
         ISaucerSwapV2SwapRouter.ExactInputParams memory params = 
             ISaucerSwapV2SwapRouter.ExactInputParams({
                 path: path,
                 recipient: recipientAddress,
-                deadline: block.timestamp + 60,  // Match 60 seconds from test
-                amountIn: msg.value,
-                amountOutMinimum: 0  // Match test's 0 minimum
+                deadline: block.timestamp + 60,
+                amountIn: tradeAmount,
+                amountOutMinimum: 0
             });
 
-        // Encode calls for multicall - unchanged but with better logging
         bytes[] memory encodedCalls = new bytes[](2);
         encodedCalls[0] = abi.encodeWithSelector(
             ROUTER.exactInput.selector,
@@ -238,26 +240,8 @@ contract userThreshold {
             ROUTER.refundETH.selector
         );
 
-        emit MultiCallSetup(
-            "Multicall setup",
-            encodedCalls.length,
-            encodedCalls[0],
-            encodedCalls[1]
-        );
-
-        // FIXED: Better error handling and parameter logging
-        emit RouterParams(
-            "Final params",
-            params.path,
-            params.recipient,
-            params.amountIn,
-            params.amountOutMinimum,
-            SAUCERSWAP_ROUTER,
-            params.deadline
-        );
-
         uint256 amountOut;
-        try ROUTER.multicall{value: msg.value}(encodedCalls) returns (bytes[] memory results) {
+        try ROUTER.multicall{value: tradeAmount}(encodedCalls) returns (bytes[] memory results) {
             amountOut = abi.decode(results[0], (uint256));
             emit SwapResult("Swap success", amountOut, recipientAddress);
         } catch Error(string memory reason) {
@@ -268,18 +252,24 @@ contract userThreshold {
             revert("Router call failed: unknown reason");
         }
 
-        threshold.isActive = false;
+        return amountOut;
+    }
 
-        emit OrderExecuted(
-            hederaAccountId,
-            orderType,
-            currentPrice,
-            threshold.tokenAddress,
-            amountOut
+    function _deriveRecipientAddress(string memory hederaAccountId) internal pure returns (address) {
+        string[] memory parts = split(hederaAccountId, ".");
+        require(parts.length == 3, "Invalid Hedera account ID format");
+        
+        uint256 shard = stringToUint(parts[0]);
+        uint256 realm = stringToUint(parts[1]);
+        uint256 accountNum = stringToUint(parts[2]);
+        
+        return address(
+            uint160(
+                (shard << 40) | (realm << 32) | accountNum
+            )
         );
     }
 
-    // Helper function to split string
     function split(string memory _base, string memory _delimiter) internal pure returns (string[] memory) {
         bytes memory baseBytes = bytes(_base);
         uint count = 1;
@@ -302,7 +292,6 @@ contract userThreshold {
         return parts;
     }
 
-    // Helper function to get substring
     function substring(string memory str, uint startIndex, uint endIndex) internal pure returns (string memory) {
         bytes memory strBytes = bytes(str);
         bytes memory result = new bytes(endIndex-startIndex);
@@ -312,7 +301,6 @@ contract userThreshold {
         return string(result);
     }
 
-    // Helper function to convert string to uint
     function stringToUint(string memory s) internal pure returns (uint) {
         bytes memory b = bytes(s);
         uint result = 0;
