@@ -9,6 +9,7 @@
   - [✓] Test threshold triggers
 
 ## Frontend Tasks
+- [ ] setup feedback form for supabase or vercel form if they have that
 - [✓] add logic to calc trade amount / recieve amount when either is changed
 - [✓] Clean up price chart styling
 - [✓] Set up user feedback UI
@@ -34,6 +35,10 @@
   - [ ] Deploy NFT contract to mainnet
   - [ ] Update environment variables
   - [ ] Mint NFTs on mainnet
+
+## Admin Tasks
+- [ ] move hosting to Jason as owner for client and worker service
+- [ ] Get SAFE (or other) agreement in place and signed for Kevin
 
 ## NFT Related
 - [ ] Enhance NFT visual styling
