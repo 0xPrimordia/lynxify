@@ -50,10 +50,9 @@ export default function DexPage() {
     const [tradePrice, setTradePrice] = useState(0);
     const [stopLoss, setStopLoss] = useState(false);
     const [buyOrder, setBuyOrder] = useState(false);
-    const [stopLossPrice, setStopLossPrice] = useState<number>(0);
-    const [buyOrderPrice, setBuyOrderPrice] = useState<number>(0);
-    const [stopLossCap, setStopLossCap] = useState<number>(0);
-    const [buyOrderCap, setBuyOrderCap] = useState<number>(0);
+    const [buyOrderPrice, setBuyOrderPrice] = useState("0.0");
+    const [stopLossCap, setStopLossCap] = useState("0.0");
+    const [buyOrderCap, setBuyOrderCap] = useState("0.0");
     const [thresholds, setThresholds] = useState<Threshold[]>([]);
     const [currentPool, setCurrentPool] = useState<any>(null);
     const [currentToken, setCurrentToken] = useState<Token>(
@@ -69,10 +68,21 @@ export default function DexPage() {
             symbol: "HBAR"
         }
     )
+    const [stopLossPrice, setStopLossPrice] = useState(currentToken.priceUsd.toString());
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
     const prevPoolsRef = useRef<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [receiveAmount, setReceiveAmount] = useState("0.0");
+    const [sellOrder, setSellOrder] = useState(false);
+    const [sellOrderPrice, setSellOrderPrice] = useState(currentToken.priceUsd.toString());
+    const [sellOrderCap, setSellOrderCap] = useState("0.0");
+
+    useEffect(() => {
+        if (currentToken && currentToken.priceUsd) {
+            setStopLossPrice(currentToken.priceUsd.toString());
+            setSellOrderPrice(currentToken.priceUsd.toString());
+        }
+    }, [currentToken]);
 
     useEffect(() => {
         if (isLoading || nftGateLoading) return; // Don't redirect while loading
@@ -134,6 +144,30 @@ export default function DexPage() {
         }
     }, [tokens]); // Only run when tokens are loaded/updated
 
+    const formatPrice = (price: number) => {
+        // Handle invalid values
+        if (!price || !isFinite(price)) {
+            console.warn('Invalid price detected:', price);
+            return '$0.00';
+        }
+
+        // Handle HBARX edge case (or any token with clearly invalid price)
+        if (price > 1e10 || price.toString().includes('e+')) {
+            console.warn('Invalid price data detected:', {
+                token: currentToken.symbol,
+                price: price
+            });
+            return 'Price Unavailable';
+        }
+
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 8
+        }).format(price);
+    };
+
     const handleQuote = async () => {
         try {
             console.log('Initiating trade')
@@ -170,20 +204,13 @@ export default function DexPage() {
         }
     };
 
-    const setDateInterval = (interval: string) => {
-        if (interval === "WEEK") {
-            pastDate.setDate(currentDate.getDate() - 7);
-            setInterval('WEEK');
+    const adjustStopLossPrice = (percentageChange: number) => {
+        const currentPrice = parseFloat(stopLossPrice);
+        if (!isNaN(currentPrice)) {
+            const newPrice = currentPrice * (1 - percentageChange);
+            setStopLossPrice(newPrice.toFixed(8)); // Using 8 decimal places for precision
         }
-        if (interval === "DAY") {
-            pastDate.setDate(currentDate.getDate() - 1);
-            setInterval('DAY');
-        }
-        if (interval === "HOUR") {
-            pastDate.setDate(currentDate.getDate() - 1);
-            setInterval('HOUR');
-        }
-    }
+    };
 
     const selectCurrentToken = async (tokenId:string) => {
         const token = tokens.find((token:Token) => token.id === tokenId);
@@ -194,26 +221,20 @@ export default function DexPage() {
         }
     }
 
-    const selectTradeToken = (tokenId: string) => {
-        const token = tokens.find((token:Token) => token.id === tokenId);
-        if (token) {
-            setTradeToken(token);
-            setTradePrice(token.price);
-            //handleCurrentPool();
-        }
-    }
-
-    const saveThresholds = async () => {
+    const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
         const response = await fetch('/api/thresholds/setThresholds', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ 
-                stopLoss: stopLossPrice, 
-                buyOrder: buyOrderPrice,
-                stopLossCap: stopLossCap,
-                buyOrderCap: buyOrderCap,
+                type,
+                price: type === 'stopLoss' ? stopLossPrice :
+                      type === 'buyOrder' ? buyOrderPrice :
+                      sellOrderPrice,
+                cap: type === 'stopLoss' ? stopLossCap :
+                     type === 'buyOrder' ? buyOrderCap :
+                     sellOrderCap,
                 hederaAccountId: account,
                 tokenA: currentPool.tokenA.id,
                 tokenB: currentPool.tokenB.id,
@@ -297,6 +318,15 @@ export default function DexPage() {
         setTradeAmount(formattedBalance);
     };
 
+    const hanndleMaxClickStopLoss = async () => {
+        if (!currentToken) return;
+        
+        const balance = await getTokenBalance(currentToken.id);
+        // Convert from smallest unit to decimal representation based on token decimals
+        const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
+        setStopLossCap(formattedBalance);
+    };
+
     const handleInputFocus = (event: FocusEvent<Element>) => {
         if (event.target instanceof HTMLInputElement) {
             event.target.select();
@@ -354,6 +384,22 @@ export default function DexPage() {
         }
     };
 
+    const adjustSellOrderPrice = (percentageChange: number) => {
+        const currentPrice = parseFloat(sellOrderPrice);
+        if (!isNaN(currentPrice)) {
+            const newPrice = currentPrice * (1 + percentageChange);
+            setSellOrderPrice(newPrice.toFixed(8));
+        }
+    };
+
+    const handleMaxClickSellOrder = async () => {
+        if (!currentToken) return;
+        
+        const balance = await getTokenBalance(currentToken.id);
+        const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
+        setSellOrderCap(formattedBalance);
+    };
+
     if (isLoading || nftGateLoading) {
         return <div>Loading...</div>;
     }
@@ -382,25 +428,23 @@ export default function DexPage() {
                             {thresholds.length > 0 ? (
                                 <Table>
                                     <TableHeader>
+                                        <TableColumn>Threshold Type</TableColumn>
                                         <TableColumn>Token A</TableColumn>
                                         <TableColumn>Token B</TableColumn>
                                         <TableColumn>Fee</TableColumn>
-                                        <TableColumn>Stop Loss</TableColumn>
-                                        <TableColumn>Stop Loss Cap</TableColumn>
-                                        <TableColumn>Buy Order</TableColumn>
-                                        <TableColumn>Buy Order Cap</TableColumn>
+                                        <TableColumn>Price</TableColumn>
+                                        <TableColumn>Cap</TableColumn>
                                         <TableColumn>Delete</TableColumn>
                                     </TableHeader>
                                     <TableBody>
                                         {thresholds.map((threshold: Threshold) => (
                                             <TableRow key={threshold.id}>
+                                                <TableCell>{threshold.type}</TableCell>
                                                 <TableCell>{threshold.tokenA}</TableCell>
                                                 <TableCell>{threshold.tokenB}</TableCell>
                                                 <TableCell>{threshold.fee}</TableCell>
-                                                <TableCell>${threshold.stopLoss}</TableCell>
-                                                <TableCell>{threshold.stopLossCap}</TableCell>
-                                                <TableCell>${threshold.buyOrder}</TableCell>
-                                                <TableCell>{threshold.buyOrderCap}</TableCell>
+                                                <TableCell>${threshold.price}</TableCell>
+                                                <TableCell>{threshold.cap}</TableCell>
                                                 <TableCell>
                                                     <Button onClick={() => deleteThreshold(threshold.id)}>Delete</Button>
                                                 </TableCell>
@@ -424,7 +468,9 @@ export default function DexPage() {
                             <p>{currentToken.name}</p>
                         </div>
                         <div className="pl-1">
-                            <span className="text-xl text-green-500">${currentToken.priceUsd.toFixed(12)}</span>
+                            <span className="text-xl text-green-500">
+                                {formatPrice(currentToken.priceUsd)}
+                            </span>
                         </div>
                         <Dropdown placement="bottom-start">
                             <DropdownTrigger>
@@ -522,24 +568,197 @@ export default function DexPage() {
                                 </div>
                             }
                         />
+                        <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                     </div>
-                    <div className="w-full flex flex-col gap-4">
+                    <div className="w-full flex flex-col gap-4 pb-8">
                         <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
+                        {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
+                            <p>Sell Price (usd)</p>
+                            <Input
+                                onFocus={handleInputFocus}
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                startContent={
+                                    <div className="flex items-center mr-2">
+                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                    </div>
+                                }
+                                maxLength={12} 
+                                onChange={(e) => setStopLossPrice(e.target.value)} 
+                                step="0.000001" 
+                                type="number" 
+                                value={stopLossPrice.toString()}
+                            />
+                            <div className="flex gap-2 mt-2">
+                                <Button 
+                                    size="sm" 
+                                    variant="flat" 
+                                    onClick={() => adjustStopLossPrice(0.01)}
+                                >
+                                    -1%
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    variant="flat" 
+                                    onClick={() => adjustStopLossPrice(0.05)}
+                                >
+                                    -5%
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    variant="flat" 
+                                    onClick={() => adjustStopLossPrice(0.10)}
+                                >
+                                    -10%
+                                </Button>
+                            </div>
+                            <p>Sell Cap (qty of tokens to sell)</p>
+                            <Input
+                                onFocus={handleInputFocus}
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                maxLength={12} 
+                                onChange={(e) => setStopLossCap(e.target.value)} 
+                                step="0.000001" 
+                                type="number" 
+                                value={stopLossCap.toString()}
+                                endContent={
+                                    <Chip onClick={hanndleMaxClickStopLoss} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                }
+                            />
+                            {stopLoss && (
+                                <Button className="mb-2" onClick={() => saveThresholds('stopLoss')}>
+                                    Set Stop-Loss
+                                </Button>
+                            )}
+                        </div>}
                         <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
+                        {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
+                            <p>Buy Price (usd)</p>
+                            <Input 
+                                onFocus={handleInputFocus}
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                maxLength={12} 
+                                onChange={(e) => setBuyOrderPrice(e.target.value)} 
+                                step="0.000001" 
+                                type="number" 
+                                value={buyOrderPrice.toString()} 
+                                startContent={
+                                    <div className="flex items-center mr-2">
+                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                    </div>
+                                }
+                            />
+                            <Input 
+                                onFocus={handleInputFocus}
+                                maxLength={12} 
+                                onChange={(e) => setBuyOrderCap(e.target.value)} 
+                                step="0.000001" 
+                                type="number" 
+                                value={buyOrderCap.toString()} 
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                            />
+                        </div>}
+                        {buyOrder && (
+                            <Button className="mb-2" onClick={() => saveThresholds('buyOrder')}>
+                                Set Buy Order
+                            </Button>
+                        )}
+                        <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setSellOrder}>Sell Order</Switch>
+                        {sellOrder && <div className="w-full my-4 flex flex-col gap-4">
+                            <p>Sell Price (usd)</p>
+                            <Input
+                                onFocus={handleInputFocus}
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                startContent={
+                                    <div className="flex items-center mr-2">
+                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                    </div>
+                                }
+                                maxLength={12} 
+                                onChange={(e) => setSellOrderPrice(e.target.value)} 
+                                step="0.000001" 
+                                type="number" 
+                                value={sellOrderPrice.toString()}
+                            />
+                            <div className="flex gap-2 mt-2">
+                                <Button 
+                                    size="sm" 
+                                    variant="flat" 
+                                    onClick={() => adjustSellOrderPrice(0.01)}
+                                >
+                                    +1%
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    variant="flat" 
+                                    onClick={() => adjustSellOrderPrice(0.05)}
+                                >
+                                    +5%
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    variant="flat" 
+                                    onClick={() => adjustSellOrderPrice(0.10)}
+                                >
+                                    +10%
+                                </Button>
+                            </div>
+                            <p>Sell Cap (qty of tokens to sell)</p>
+                            <Input
+                                onFocus={handleInputFocus}
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                maxLength={12} 
+                                onChange={(e) => setSellOrderCap(e.target.value)} 
+                                step="0.000001" 
+                                type="number" 
+                                value={sellOrderCap.toString()}
+                                endContent={
+                                    <Chip onClick={handleMaxClickSellOrder} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                }
+                            />
+                            {sellOrder && (
+                                <Button className="mb-2" onClick={() => saveThresholds('sellOrder')}>
+                                    Set Sell Order
+                                </Button>
+                            )}
+                        </div>}
                     </div>
                     
-                    {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
-                        <Input maxLength={12} onChange={(e) => setStopLossPrice(Number(e.target.value))} step="0.000001" type="number" value={stopLossPrice.toString()} label="Sell Price (usd)" labelPlacement="outside" />
-                        <Input maxLength={12} onChange={(e) => setStopLossCap(Number(e.target.value))} step="0.000001" type="number" value={stopLossCap.toString()} label="Sell Cap" labelPlacement="outside" />
-                    </div>}
-                    {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
-                        <Input maxLength={12} onChange={(e) => setBuyOrderPrice(Number(e.target.value))} step="0.000001" type="number" value={buyOrderPrice.toString()} label="Buy Price (usd)" labelPlacement="outside" />
-                        <Input maxLength={12} onChange={(e) => setBuyOrderCap(Number(e.target.value))} step="0.000001" type="number" value={buyOrderCap.toString()} label="Buy Order Cap" labelPlacement="outside" />
-                    </div>}
-                    {(buyOrder || stopLoss) && (
-                        <Button className="mb-6" onClick={() => saveThresholds()}>Set Thresholds</Button>
-                    )}
-                    <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                 </div>
             </div>
         </div>

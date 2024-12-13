@@ -105,8 +105,7 @@ async function setAndVerifyThreshold(client: Client, contractId: string, hederaA
 
 async function executeTradeForUser(client: Client, contractId: string, hederaAccountId: string) {
     console.log('\nExecuting trade...');
-    
-    // Same parameters as API
+
     const orderType = "stopLoss";
     const path = "0000000000000000000000000000000000120f46000bb800000000000000000000000000000000000014f5";
 
@@ -116,19 +115,26 @@ async function executeTradeForUser(client: Client, contractId: string, hederaAcc
         path
     });
 
-    const executeTx = new ContractExecuteTransaction()
-        .setContractId(ContractId.fromString(contractId))
-        .setGas(1000000)
-        .setFunction("executeTradeForUser", new ContractFunctionParameters()
-            .addString(hederaAccountId)
-            .addString(orderType)
-            .addBytes(Buffer.from(path, 'hex'))
-        );
+    const response = await fetch('http://localhost:3000/api/thresholds/executeOrder', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.API_KEY!,
+        },
+        body: JSON.stringify({
+            thresholdId: 'your-threshold-id',
+            orderType: orderType
+        })
+    });
 
-    const executeResponse = await executeTx.execute(client);
-    const receipt = await executeResponse.getReceipt(client);
-    console.log('Execute transaction:', executeResponse.transactionId.toString());
-    console.log('Receipt status:', receipt.status.toString());
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Trade execution failed:', errorData.error);
+        return;
+    }
+
+    const result = await response.json();
+    console.log('Trade executed successfully:', result);
 }
 
 async function main() {

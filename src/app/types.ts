@@ -52,10 +52,9 @@ export type ApiLiquidityPoolV2 = {
   export type Threshold = {
     id: number;
     userId: string;
-    stopLoss: number;
-    buyOrder: number;
-    stopLossCap: number;
-    buyOrderCap: number;
+    type: 'stopLoss' | 'buyOrder' | 'sellOrder';
+    price: number;
+    cap: number;
     hederaAccountId: string;
     tokenA: string;
     tokenB: string;
@@ -65,7 +64,6 @@ export type ApiLiquidityPoolV2 = {
     lastChecked: string;
     createdAt: string;
     status: string;
-    poolId: string;
     lastExecutedAt: string;
     txHash: string;
   }
