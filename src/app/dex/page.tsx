@@ -12,6 +12,8 @@ import { Threshold } from "../types";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { getQuoteExactInput } from "../lib/saucerswap";
 import { ethers } from 'ethers';
+import { QuestionMarkCircleIcon } from "@heroicons/react/16/solid";
+import { Tooltip } from "@nextui-org/react";
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -316,6 +318,7 @@ export default function DexPage() {
         // Convert from smallest unit to decimal representation based on token decimals
         const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
         setTradeAmount(formattedBalance);
+        calculateTradeAmount(formattedBalance);
     };
 
     const hanndleMaxClickStopLoss = async () => {
@@ -571,7 +574,24 @@ export default function DexPage() {
                         <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
                     </div>
                     <div className="w-full flex flex-col gap-4 pb-8">
-                        <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setStopLoss}>Stop Loss</Switch>
+                        <div className="flex items-center gap-2">
+                            <Switch 
+                                isDisabled={currentPool ? false : true} 
+                                size="sm" 
+                                color="default" 
+                                onValueChange={setStopLoss}
+                            >
+                                Stop Loss
+                            </Switch>
+                            <Tooltip 
+                                content="Automatically sells your tokens when the price falls below the specified threshold"
+                                className="max-w-[200px]"
+                                placement="bottom"
+                                showArrow={true}
+                            >
+                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                            </Tooltip>
+                        </div>
                         {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
                             <p>Sell Price (usd)</p>
                             <Input
@@ -642,7 +662,24 @@ export default function DexPage() {
                                 </Button>
                             )}
                         </div>}
-                        <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setBuyOrder}>Buy Order</Switch>
+                        <div className="flex items-center gap-2">
+                            <Switch 
+                                isDisabled={currentPool ? false : true} 
+                                size="sm" 
+                                color="default" 
+                                onValueChange={setBuyOrder}
+                            >
+                                Buy Order
+                            </Switch>
+                            <Tooltip 
+                                content="Automatically buys tokens when the price falls to the specified threshold"
+                                className="max-w-[200px]"
+                                placement="bottom"
+                                showArrow={true}
+                            >
+                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                            </Tooltip>
+                        </div>
                         {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
                             <p>Buy Price (usd)</p>
                             <Input 
@@ -686,7 +723,24 @@ export default function DexPage() {
                                 Set Buy Order
                             </Button>
                         )}
-                        <Switch isDisabled={currentPool ? false : true} size="sm" color="default" onValueChange={setSellOrder}>Sell Order</Switch>
+                        <div className="flex items-center gap-2">
+                            <Switch 
+                                isDisabled={currentPool ? false : true} 
+                                size="sm" 
+                                color="default" 
+                                onValueChange={setSellOrder}
+                            >
+                                Sell Order
+                            </Switch>
+                            <Tooltip 
+                                content="Automatically sells your tokens when the price rises to the specified threshold"
+                                className="max-w-[200px]"
+                                placement="bottom"
+                                showArrow={true}
+                            >
+                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                            </Tooltip>
+                        </div>
                         {sellOrder && <div className="w-full my-4 flex flex-col gap-4">
                             <p>Sell Price (usd)</p>
                             <Input
