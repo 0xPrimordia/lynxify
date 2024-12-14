@@ -23,10 +23,9 @@ const Thresholds = () => {
             <h1>Thresholds</h1>
             {thresholds.map((threshold) => (
                 <div key={threshold.id}>
-                    <p>{threshold.stopLoss}</p>
-                    <p>{threshold.buyOrder}</p>
-                    <p>{threshold.stopLossCap}</p>
-                    <p>{threshold.buyOrderCap}</p>
+                    <p>{threshold.type}</p>
+                    <p>{threshold.price}</p>
+                    <p>{threshold.cap}</p>
                     <p>{threshold.hederaAccountId}</p>
                     <p>{threshold.tokenA}</p>
                     <p>{threshold.tokenB}</p>

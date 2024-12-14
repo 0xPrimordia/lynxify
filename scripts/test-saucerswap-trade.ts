@@ -10,7 +10,8 @@ import {
     HbarUnit,
     AccountInfoQuery,
     TokenAssociateTransaction,
-    TokenId
+    TokenId,
+    AccountBalanceQuery
 } from "@hashgraph/sdk";
 import dotenv from "dotenv";
 
@@ -163,6 +164,30 @@ async function main() {
                    ContractId.fromString('0.0.1414040').toSolidityAddress().toLowerCase()
         });
 
+        // Calculate expected fee before trade
+        const FEE_BASIS_POINTS = 8; // 0.08%
+        const expectedFee = (Number(amountInTinybar.toString()) * FEE_BASIS_POINTS) / 10000;
+        const expectedTradeAmount = Number(amountInTinybar.toString()) - expectedFee;
+
+        console.log('Fee details:', {
+            totalAmount: amountInTinybar.toString(),
+            feeAmount: expectedFee.toString(),
+            netTradeAmount: expectedTradeAmount.toString(),
+            feePercentage: `${FEE_BASIS_POINTS/100}%`
+        });
+
+        // Get initial balance of fee collector
+        const contractQuery = new ContractCallQuery()
+            .setContractId(ContractId.fromString(contractId))
+            .setGas(100000)
+            .setFunction("feeCollector");
+        const feeCollectorEvmAddress = (await contractQuery.execute(client)).getAddress();
+
+        // Use operator ID directly since it's already in Hedera format
+        const initialBalance = await new AccountBalanceQuery()
+            .setAccountId(operatorId)  // Using operatorId which is already properly formatted
+            .execute(client);
+
         // Execute trade through contract
         console.log('\nExecuting trade through contract...');
         console.log('Trade parameters:', {
@@ -172,7 +197,9 @@ async function main() {
             path: path.toString('hex'),
             hbarAmount: hbarAmount.toString(),
             tokenAssociated: isAssociated,
-            orderType: 'stopLoss'
+            orderType: 'stopLoss',
+            expectedFee: expectedFee.toString(),
+            expectedTradeAmount: expectedTradeAmount.toString()
         });
 
         const tradeTx = new ContractExecuteTransaction()
@@ -190,11 +217,30 @@ async function main() {
         const tradeResponse = await tradeTx.execute(client);
         const tradeRecord = await tradeResponse.getRecord(client);
         
+        // Verify fee collection using same operatorId
+        const finalBalance = await new AccountBalanceQuery()
+            .setAccountId(operatorId)
+            .execute(client);
+
+        const balanceDiff = finalBalance.hbars.toTinybars().subtract(initialBalance.hbars.toTinybars());
+        
+        console.log('Fee collection verification:', {
+            expectedFee: expectedFee.toString(),
+            actualFeePaid: balanceDiff.toString(),
+            feeCollectorAddress: feeCollectorEvmAddress,
+            feesMatch: balanceDiff.toString() === expectedFee.toString()
+        });
+
+        // Log trade execution details
         console.log('Trade execution details:', {
             result: tradeRecord.contractFunctionResult?.bytes,
             hbarTransfers: tradeRecord.transfers.map(t => ({
                 account: t.accountId?.toString(),
                 amount: t.amount.toString()
+            })),
+            events: tradeRecord.contractFunctionResult?.logs?.map(log => ({
+                data: log.data,
+                topics: log.topics
             }))
         });
 

@@ -43,8 +43,9 @@ export default function MonitorPage() {
             <tr key={threshold.id}>
               <td>{threshold.id}</td>
               <td>{threshold.status}</td>
-              <td>${threshold.stopLoss}</td>
-              <td>${threshold.buyOrder}</td>
+              <td>${threshold.price}</td>
+              <td>${threshold.cap}</td>
+              <td>{threshold.type}</td>
               <td>{new Date(threshold.lastChecked).toLocaleString()}</td>
               <td>{threshold.lastError}</td>
             </tr>
