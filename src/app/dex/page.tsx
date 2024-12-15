@@ -10,10 +10,17 @@ import { useNFTGate } from "../hooks/useNFTGate";
 import { SignAndExecuteTransactionParams, SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
 import { Threshold } from "../types";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
-import { getQuoteExactInput } from "../lib/saucerswap";
-import { ethers } from 'ethers';
 import { QuestionMarkCircleIcon } from "@heroicons/react/16/solid";
 import { Tooltip } from "@nextui-org/react";
+import { 
+    getSwapType, 
+    swapHbarToToken, 
+    swapTokenToHbar, 
+    swapTokenToToken, 
+    getQuoteExactInput,
+    type SwapResponse 
+} from '../lib/saucerswap';
+import { ethers } from 'ethers';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -30,12 +37,11 @@ import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { Button, ButtonGroup } from '@nextui-org/react';
-import { swapExactTokenForToken } from "../lib/saucerswap";
 import { usePoolContext } from "../hooks/usePools";
   
 export default function DexPage() {
     const router = useRouter();
-    const { account, userId, dAppConnector } = useWalletContext();
+    const { account, userId, dAppConnector, client, signAndExecuteTransaction } = useWalletContext();
     const { hasAccess, isLoading: nftGateLoading } = useNFTGate(account);
     const currentDate = new Date();
     const pastDate = new Date();
@@ -172,37 +178,63 @@ export default function DexPage() {
 
     const handleQuote = async () => {
         try {
-            console.log('Initiating trade')
-            if (!dAppConnector || !tradeToken || !currentToken) {
-                console.error('Missing required dependencies');
+            if (!currentToken || !tradeToken || !account || !dAppConnector || !currentPool) {
+                console.error('Missing required parameters');
                 return;
             }
 
-            const deadline = Math.floor(Date.now() / 1000) + 30 * 60;
-            const result = await swapExactTokenForToken(
-                tradeAmount.toString(), 
-                currentToken.id,
-                tradeToken.id,
-                3000,
-                account!,
-                deadline,
-                0
-            );
+            const swapType = getSwapType(currentToken.id, tradeToken.id);
+            let result: SwapResponse;
 
-            if (!result) {
-                console.error('No transaction result');
-                return;
+            switch (swapType) {
+                case 'hbarToToken':
+                    result = await swapHbarToToken(
+                        tradeAmount.toString(),
+                        tradeToken.id,
+                        currentPool.fee || 3000,
+                        account,
+                        Math.floor(Date.now() / 1000) + 60,
+                        0
+                    );
+                    break;
+
+                case 'tokenToHbar':
+                    result = await swapTokenToHbar(
+                        tradeAmount.toString(),
+                        currentToken.id,
+                        currentPool.fee || 3000,
+                        account,
+                        Math.floor(Date.now() / 1000) + 60,
+                        0,
+                        currentToken.decimals
+                    );
+                    break;
+
+                case 'tokenToToken':
+                    result = await swapTokenToToken(
+                        tradeAmount.toString(),
+                        currentToken.id,
+                        tradeToken.id,
+                        currentPool.fee || 3000,
+                        account,
+                        Math.floor(Date.now() / 1000) + 60,
+                        0,
+                        currentToken.decimals
+                    );
+                    break;
             }
 
-            const swapParams: SignAndExecuteTransactionParams = {
-                transactionList: result,
-                signerAccountId: `hedera:testnet:${account}`,
+            if (result.tx) {
+                await signAndExecuteTransaction({
+                    transactionList: result.tx,
+                    signerAccountId: account
+                });
+            } else if (result.amountOut) {
+                console.log('Swap completed with amount:', result.amountOut);
             }
 
-            const swapResults = await dAppConnector.signAndExecuteTransaction(swapParams);
-            console.log('Transaction results:', swapResults);
         } catch (error) {
-            console.error('Error swapping tokens', error);
+            console.error('Error in handleQuote:', error);
         }
     };
 

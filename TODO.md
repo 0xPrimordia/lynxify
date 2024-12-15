@@ -9,6 +9,10 @@
   - [✓] Test threshold triggers
 
 ## Frontend Tasks
+- [ ] Add configurable slippage tolerance to DEX
+  - [ ] Add slippage settings UI (typical range 0.1% - 5%)
+  - [ ] Implement slippage calculations in trade execution
+  - [ ] Add user warnings for high slippage settings
 - [ ] setup feedback form for supabase or vercel form if they have that
 - [ ] Update threshold UI for 0.08% fee
   - [ ] Add fee display in threshold setup
@@ -79,3 +83,50 @@
 - [ ] Research and evaluate custom bridge solution
 - [ ] Alternative: get hashport working
 - [ ] LP staking for single token with auto pair matching
+
+## Production Readiness Tasks
+- [ ] Make fee calculations fully dynamic
+  - [ ] Update getQuoteExactInput to use dynamic decimals
+  - [ ] Add fee validation checks
+  - [ ] Add fee bounds checking
+  - [ ] Add fee documentation
+
+- [ ] Improve network configuration
+  - [ ] Create network configuration file
+  - [ ] Make client network dynamic based on env
+  - [ ] Add network validation checks
+  - [ ] Add network switching support
+
+- [ ] Optimize gas handling
+  - [ ] Implement dynamic gas estimation
+  - [ ] Add gas price monitoring
+  - [ ] Add gas limit safety bounds
+  - [ ] Add gas price alerts for admin
+
+- [ ] Contract configuration improvements
+  - [ ] Move contract addresses to config file
+  - [ ] Add address validation
+  - [ ] Add network-specific address mapping
+  - [ ] Add contract version checking
+
+- [ ] Add production safety checks
+  - [ ] Implement input validation throughout
+  - [ ] Add transaction amount limits
+  - [ ] Add rate limiting
+  - [ ] Add error monitoring integration
+  - [ ] Add automated testing for edge cases
+  - [ ] Add transaction simulation before execution
+  - [ ] Add emergency pause functionality
+
+- [ ] Performance optimization
+  - [ ] Implement request caching
+  - [ ] Add request batching
+  - [ ] Optimize API calls
+  - [ ] Add performance monitoring
+
+- [ ] Security enhancements
+  - [ ] Add comprehensive input sanitization
+  - [ ] Implement rate limiting
+  - [ ] Add transaction signing validation
+  - [ ] Add admin access controls
+  - [ ] Add security monitoring integration
