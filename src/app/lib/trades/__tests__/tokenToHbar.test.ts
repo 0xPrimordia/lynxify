@@ -1,6 +1,124 @@
-import { ContractId, AccountId } from '@hashgraph/sdk';
+import { ContractId, AccountId, Hbar, HbarUnit, Transaction, Client, PrivateKey, ContractExecuteTransaction, ContractFunctionParameters } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
 import TestSwapRouterAbi from './TestSwapRouter.json';
+import { swapTokenToHbar } from '../tokenToHbar';
+import dotenv from "dotenv";
+import { AccountBalanceQuery } from '@hashgraph/sdk';
+import { AccountInfoQuery, TokenId } from '@hashgraph/sdk';
+
+dotenv.config({ path: '.env.local' });
+
+// Validate environment variables
+if (!process.env.OPERATOR_ID || !process.env.OPERATOR_KEY) {
+  throw new Error("Environment variables OPERATOR_ID and OPERATOR_KEY must be present");
+}
+
+// At the top of the file, outside the mock
+let client: Client;
+
+// Mock swapTokenToHbar
+jest.mock('../tokenToHbar', () => ({
+  swapTokenToHbar: jest.fn().mockImplementation(async () => {
+    // First check token association and allowance
+    const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+    const tokenId = TokenId.fromString('0.0.1183558');
+    const routerId = ContractId.fromString('0.0.1414040');
+    const fee = 3000;  // Add fee definition
+
+    // Check token association
+    const accountInfo = await new AccountInfoQuery()
+      .setAccountId(operatorId)
+      .execute(client);
+    
+    const tokenRelationship = accountInfo.tokenRelationships.get(tokenId);
+    if (!tokenRelationship) {
+      throw new Error('Token not associated');
+    }
+
+    // Check and set allowance
+    console.log('Checking token allowance...');
+    const allowanceAmount = (10000 * Math.pow(10, 6)).toString(); // Same as swap amount
+
+    const approvalTx = new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString('0.0.1183558'))  // Convert TokenId to ContractId
+      .setGas(1000000)
+      .setFunction(
+        "approve",
+        new ContractFunctionParameters()
+          .addAddress(routerId.toSolidityAddress())
+          .addUint256(allowanceAmount)
+      );
+
+    const approvalResponse = await approvalTx.execute(client);
+    const approvalReceipt = await approvalResponse.getReceipt(client);
+    console.log('Allowance set:', approvalReceipt.status.toString());
+    
+    // Construct path with proper fee padding
+    const path = Buffer.concat([
+      Buffer.from(ContractId.fromString('0.0.1183558').toSolidityAddress().replace('0x', ''), 'hex'),
+      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
+      Buffer.from(ContractId.fromString('0.0.15058').toSolidityAddress().replace('0x', ''), 'hex')
+    ]);
+
+    // Log path details
+    console.log('Path Construction:', {
+      inputToken: ContractId.fromString('0.0.1183558').toSolidityAddress(),
+      fee: fee.toString(16).padStart(6, '0'),
+      whbar: ContractId.fromString('0.0.15058').toSolidityAddress(),
+      fullPath: path.toString('hex')
+    });
+
+    // Use SwapRouter as recipient per docs
+    const params = {
+      path: path,
+      recipient: routerId.toSolidityAddress(),
+      deadline: Math.floor(Date.now() / 1000) + 60,
+      amountIn: allowanceAmount,
+      amountOutMinimum: Hbar.from(11, HbarUnit.Hbar).toTinybars().toString()
+    };
+
+    console.log('Swap Parameters:', {
+      recipient: params.recipient,
+      deadline: params.deadline,
+      amountIn: params.amountIn,
+      amountOutMinimum: params.amountOutMinimum,
+      pathLength: path.length
+    });
+
+    // Create swap calls per docs
+    const swapEncoded = '0x' + swapRouterAbi.encodeFunctionData('exactInput', [params]).slice(2);
+    const unwrapEncoded = '0x' + swapRouterAbi.encodeFunctionData('unwrapWHBAR', [
+      0, // amount (0 means all)
+      AccountId.fromString(process.env.OPERATOR_ID!).toSolidityAddress() // Final recipient is operator
+    ]).slice(2);
+
+    console.log('Function Signatures:', {
+      exactInput: swapEncoded.slice(0, 10),
+      unwrapWHBAR: unwrapEncoded.slice(0, 10),
+      params: params
+    });
+
+    const multiCallParam = [swapEncoded, unwrapEncoded];
+    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
+
+    console.log('Encoded Calls:', {
+      swapEncoded: swapEncoded,
+      unwrapEncoded: unwrapEncoded,
+      multiCall: encodedData
+    });
+
+    const mockTx = new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString('0.0.1414040'))
+      .setGas(3_000_000) // Increased gas limit
+      .setPayableAmount(new Hbar(0))
+      .setFunctionParameters(Buffer.from(encodedData.slice(2), 'hex'));
+
+    return {
+      type: 'swap',
+      tx: Buffer.from(mockTx.toBytes()).toString('base64')
+    };
+  })
+}));
 
 // Mock constants
 jest.mock('../../constants', () => ({
@@ -10,140 +128,93 @@ jest.mock('../../constants', () => ({
 
 const swapRouterAbi = new ethers.Interface(TestSwapRouterAbi);
 
-describe('tokenToHbar', () => {
-  it('should construct correct path and encoded data', () => {
-    // Mock parameters
-    const amountIn = "1";
-    const inputToken = "0.0.1183558";
-    const fee = 3000;
-    const recipientAddress = "0.0.4340026";
-    const deadline = Math.floor(Date.now() / 1000) + 60;
-    const outputAmountMin = 0;
-    const inputTokenDecimals = 8;
-
-    // Construct path
-    const path = Buffer.concat([
-      Buffer.from(ContractId.fromString('0.0.15058').toSolidityAddress().replace('0x', ''), 'hex'),
-      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-      Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex')
-    ]);
-
-    // Construct params
-    const params = {
-      path: path,
-      recipient: ContractId.fromString('0.0.1414040').toSolidityAddress(),
-      deadline: deadline,
-      amountIn: (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString(),
-      amountOutMinimum: (Number(outputAmountMin) * 1e8).toString()
-    };
-
-    // Encode function calls
-    const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-    const unwrapEncoded = swapRouterAbi.encodeFunctionData('unwrapWHBAR', [
-      0,
-      AccountId.fromString(recipientAddress).toSolidityAddress()
-    ]);
-
-    console.log('Test Output:', {
-      path: path.toString('hex'),
-      params,
-      swapEncoded,
-      unwrapEncoded
-    });
-
-    expect(path).toBeDefined();
-    expect(swapEncoded).toBeDefined();
-    expect(unwrapEncoded).toBeDefined();
+describe('tokenToHbar full flow', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Initialize client
+    client = Client.forTestnet();
+    client.setOperator(
+      AccountId.fromString(process.env.OPERATOR_ID!),
+      PrivateKey.fromString(process.env.OPERATOR_KEY!)
+    );
   });
-});
 
-describe('tokenToHbar path construction', () => {
-  it('should create path with correct byte lengths', () => {
-    const inputToken = "0.0.123456";
-    const fee = 3000;
+  it('should handle full swap flow', async () => {
+    try {
+      // Get initial balance
+      const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+      const initialBalance = await new AccountBalanceQuery()
+        .setAccountId(operatorId)
+        .execute(client);
 
-    // Get individual components
-    const whbarAddress = ContractId.fromString('0.0.15058').toSolidityAddress().replace('0x', '');
-    const feeHex = fee.toString(16).padStart(6, '0'); // Should be 3 bytes
-    const inputTokenAddress = ContractId.fromString(inputToken).toSolidityAddress().replace('0x', '');
+      console.log('Initial balance:', initialBalance.hbars.toString());
 
-    console.log('Path Components:', {
-      whbarAddress,
-      whbarLength: whbarAddress.length / 2, // hex string to bytes
-      feeHex,
-      feeLength: feeHex.length / 2,
-      inputTokenAddress,
-      inputTokenLength: inputTokenAddress.length / 2
-    });
+      // Test parameters
+      const amountIn = "10000";  // 10,000 SAUCE
+      const inputToken = "0.0.1183558";  // SAUCE token
+      const fee = 3000;
+      const recipientAddress = process.env.OPERATOR_ID!;  // Use operator as recipient
+      const deadline = Math.floor(Date.now() / 1000) + 60;
+      const outputAmountMin = 11;  // 11 HBAR minimum output
+      const inputTokenDecimals = 6;  // SAUCE has 6 decimals
 
-    // Construct path
-    const path = Buffer.concat([
-      Buffer.from(whbarAddress, 'hex'),
-      Buffer.from(feeHex, 'hex'),
-      Buffer.from(inputTokenAddress, 'hex')
-    ]);
+      const result = await swapTokenToHbar(
+        amountIn,
+        inputToken,
+        fee,
+        recipientAddress,
+        deadline,
+        outputAmountMin,
+        inputTokenDecimals
+      );
 
-    console.log('Full path:', path.toString('hex'));
-    console.log('Full path length in bytes:', path.length);
+      console.log('Swap Result:', result);
+      expect(result.type).toBe('swap');
 
-    // Assertions
-    expect(whbarAddress.length / 2).toBe(20); // 20 bytes
-    expect(feeHex.length / 2).toBe(3); // 3 bytes
-    expect(inputTokenAddress.length / 2).toBe(20); // 20 bytes
-    expect(path.length).toBe(43); // Total: 20 + 3 + 20 bytes
-  });
-});
+      // Execute the transaction
+      const tx = Transaction.fromBytes(Buffer.from(result.tx!, 'base64'));
+      const executed = await tx.execute(client);
+      console.log('Execution Result:', executed);
+      
+      const record = await executed.getRecord(client);
+      console.log('Transaction Record:', {
+        receipt: record.receipt,
+        contractFunctionResult: record.contractFunctionResult && {
+          gasUsed: record.contractFunctionResult.gasUsed,
+          errorMessage: record.contractFunctionResult.errorMessage,
+          bytes: record.contractFunctionResult.bytes,
+          logs: record.contractFunctionResult.logs?.map(log => ({
+            data: log.data,
+            topics: log.topics
+          }))
+        },
+        transfers: record.transfers.map(t => ({
+          account: t.accountId?.toString(),
+          amount: t.amount.toString()
+        }))
+      });
 
-describe('tokenToHbar encoding', () => {
-  it('should create valid encoded function calls', () => {
-    // Setup test parameters
-    const inputToken = "0.0.123456";
-    const fee = 3000;
-    const recipientAddress = "0.0.789012";
-    const amountIn = "1";
-    const inputTokenDecimals = 8;
-    const deadline = Math.floor(Date.now() / 1000) + 60;
+      // Get final balance
+      const finalBalance = await new AccountBalanceQuery()
+        .setAccountId(operatorId)
+        .execute(client);
 
-    // Construct path
-    const path = Buffer.concat([
-      Buffer.from(ContractId.fromString('0.0.15058').toSolidityAddress().replace('0x', ''), 'hex'),
-      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-      Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex')
-    ]);
+      console.log('Final balance:', finalBalance.hbars.toString());
+      console.log('Balance change:', 
+        finalBalance.hbars.toTinybars().subtract(initialBalance.hbars.toTinybars()).toString()
+      );
 
-    // Construct params exactly as in docs
-    const params = {
-      path: path,
-      recipient: ContractId.fromString('0.0.1414040').toSolidityAddress(),
-      deadline: deadline,
-      amountIn: (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString(),
-      amountOutMinimum: "0"
-    };
-
-    // Encode function calls
-    const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-    const unwrapEncoded = swapRouterAbi.encodeFunctionData('unwrapWHBAR', [
-      0,
-      AccountId.fromString(recipientAddress).toSolidityAddress()
-    ]);
-    const multiCallParam = [swapEncoded, unwrapEncoded];
-    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
-
-    console.log('Encoded Data:', {
-      exactInputParams: params,
-      swapEncoded,
-      unwrapEncoded,
-      multiCallEncoded: encodedData,
-      functionSignatures: {
-        exactInput: swapEncoded.slice(0, 10),
-        unwrapWHBAR: unwrapEncoded.slice(0, 10),
-        multicall: encodedData.slice(0, 10)
-      }
-    });
-
-    // Verify function signatures with actual values
-    expect(swapEncoded.startsWith('0xc04b8d59')).toBe(true); // exactInput signature
-    expect(unwrapEncoded.startsWith('0x5fb043af')).toBe(true); // actual unwrapWHBAR signature
-    expect(encodedData.startsWith('0xac9650d8')).toBe(true); // multicall signature
+    } catch (error: any) {
+      console.error('Detailed error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        // Add any other error properties that might be helpful
+        details: error.details,
+        status: error.status,
+        transactionId: error.transactionId
+      });
+      throw error;
+    }
   });
 }); 

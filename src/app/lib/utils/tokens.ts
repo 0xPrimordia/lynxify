@@ -61,7 +61,7 @@ export const approveTokenForSwap = async (
     
     const transaction = await new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(tokenId))
-      .setGas(400000)
+      .setGas(1_000_000)
       .setFunction(
         "approve",
         new ContractFunctionParameters()

@@ -130,3 +130,18 @@
   - [ ] Add transaction signing validation
   - [ ] Add admin access controls
   - [ ] Add security monitoring integration
+
+## Swap Improvements
+
+- [ ] add trade direction switch option
+
+### Add Quote Support for Token->HBAR Swaps
+- [ ] Add Quoter contract address to environment variables
+- [ ] Implement quote functionality similar to SaucerSwap UI
+- [ ] Use quote to calculate minimum output with slippage
+- [ ] Add proper error handling for "too little amount" errors
+- [ ] Test with various input amounts to verify minimum thresholds
+- [ ] Add debug logging for quote results
+
+Reference: Test implementation in `tokenToHbar.test.ts` (lines 152-159) shows minimum output of 11 HBAR for 10,000 SAUCE
+

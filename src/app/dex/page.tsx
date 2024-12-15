@@ -229,8 +229,26 @@ export default function DexPage() {
                     transactionList: result.tx,
                     signerAccountId: account
                 });
-            } else if (result.amountOut) {
-                console.log('Swap completed with amount:', result.amountOut);
+
+                // If it was an approval, execute the swap after
+                if (result.type === "approve") {
+                    result = await swapTokenToHbar(
+                        tradeAmount.toString(),
+                        currentToken.id,
+                        currentPool.fee || 3000,
+                        account,
+                        Math.floor(Date.now() / 1000) + 60,
+                        0,
+                        currentToken.decimals
+                    );
+                    
+                    if (result.tx) {
+                        await signAndExecuteTransaction({
+                            transactionList: result.tx,
+                            signerAccountId: account
+                        });
+                    }
+                }
             }
 
         } catch (error) {

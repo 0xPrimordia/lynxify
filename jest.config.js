@@ -7,6 +7,9 @@ module.exports = {
       tsconfig: 'tsconfig.json'
     }]
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(@hashgraph/hedera-wallet-connect)/)'
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   }

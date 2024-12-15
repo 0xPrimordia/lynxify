@@ -13,6 +13,9 @@ export type SwapResponse = {
   type: 'approval' | 'associate' | 'swap';
   tx?: string;
   amountOut?: any;
+} | {
+  type: 'approve';
+  tx: string;
 };
 
 // Export the function directly
