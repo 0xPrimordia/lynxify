@@ -85,8 +85,8 @@
 - [ ] LP staking for single token with auto pair matching
 
 ## Production Readiness Tasks
-- [ ] Make fee calculations fully dynamic
-  - [ ] Update getQuoteExactInput to use dynamic decimals
+- [✓] Make fee calculations fully dynamic
+  - [✓] Update getQuoteExactInput to use dynamic decimals
   - [ ] Add fee validation checks
   - [ ] Add fee bounds checking
   - [ ] Add fee documentation
