@@ -10,7 +10,7 @@ import {
   DAppSigner,
 } from '@hashgraph/hedera-wallet-connect';
 import { SessionTypes } from '@walletconnect/types';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/utils/supabase/client';
 
 const appMetadata = {
     name: "Lynxify",
@@ -71,14 +71,7 @@ export const WalletProvider = ({children}:useWalletProps) => {
     init();
 
     // Add auth state listener
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state changed:', { event, userId: session?.user?.id });
       if (session?.user?.id) {
         console.log('Setting userId from auth change:', session.user.id);
@@ -101,11 +94,6 @@ export const WalletProvider = ({children}:useWalletProps) => {
 
   const init = async () => {
     console.log("Initializing wallet and checking for existing session...");
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     console.log('Initial session check:', { session, error: sessionError });
@@ -192,17 +180,12 @@ export const WalletProvider = ({children}:useWalletProps) => {
         console.log('Account ID:', accountId);
 
         // First check if user exists in database
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
-
-        const { data: existingUser } = await supabase
+        const { data: users } = await supabase
           .from('Users')
           .select('*')
-          .eq('hederaAccountId', accountId)
-          .single();
-
+          .eq('hederaAccountId', accountId);
+        
+          const existingUser = users && users.length > 0 ? users[0] : null;
         if (!existingUser) {
           // Only request signature if user doesn't exist
           const message = "Authenticate with Lynxify";
@@ -256,6 +239,10 @@ export const WalletProvider = ({children}:useWalletProps) => {
             } else {
               console.error('No user ID in auth response:', authData);
             }
+
+            if (authData.token) {
+              localStorage.setItem('authToken', authData.token);
+            }
           } catch (signError: any) {
             console.error('Error signing or authenticating:', signError);
             setError(signError.message || 'Failed to sign message or authenticate');
@@ -291,17 +278,12 @@ export const WalletProvider = ({children}:useWalletProps) => {
   const handleDisconnectSessions = async () => {
     try {
       await dAppConnector?.disconnectAll();
-      
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
       await supabase.auth.signOut();
-
       setSessions([]);
       setSigners([]);
       setAccount("");
       setUserId(null);
+      localStorage.removeItem('authToken');
     } catch (error: any) {
       console.error('Error disconnecting sessions:', error);
       setError(error.message || 'Failed to disconnect sessions');

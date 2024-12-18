@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useEffect, useRef, FocusEvent } from "react";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem } from "@nextui-org/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert } from "@nextui-org/react";
+
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import dynamic from 'next/dynamic'
@@ -21,6 +22,7 @@ import {
     type SwapResponse 
 } from '../lib/saucerswap';
 import { ethers } from 'ethers';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -41,7 +43,7 @@ import { usePoolContext } from "../hooks/usePools";
   
 export default function DexPage() {
     const router = useRouter();
-    const { account, userId, dAppConnector, client, signAndExecuteTransaction } = useWalletContext();
+    const { account, userId, signAndExecuteTransaction } = useWalletContext();
     const { hasAccess, isLoading: nftGateLoading } = useNFTGate(account);
     const currentDate = new Date();
     const pastDate = new Date();
@@ -84,6 +86,17 @@ export default function DexPage() {
     const [sellOrder, setSellOrder] = useState(false);
     const [sellOrderPrice, setSellOrderPrice] = useState(currentToken.priceUsd.toString());
     const [sellOrderCap, setSellOrderCap] = useState("0.0");
+    const supabase = createClientComponentClient()
+    const [alertState, setAlertState] = useState<{
+        isVisible: boolean;
+        message: string;
+        type: 'success' | 'danger';
+    }>({
+        isVisible: false,
+        message: '',
+        type: 'success'
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -112,7 +125,6 @@ export default function DexPage() {
         console.log('Wallet Context:', {
             account,
             userId,
-            hasWallet: !!dAppConnector
         });
         const fetchThresholds = async () => {
             if (!userId) {
@@ -178,7 +190,7 @@ export default function DexPage() {
 
     const handleQuote = async () => {
         try {
-            if (!currentToken || !tradeToken || !account || !dAppConnector || !currentPool) {
+            if (!currentToken || !tradeToken || !account || !currentPool) {
                 console.error('Missing required parameters');
                 return;
             }
@@ -274,33 +286,64 @@ export default function DexPage() {
     }
 
     const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
-        const response = await fetch('/api/thresholds/setThresholds', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                type,
-                price: type === 'stopLoss' ? stopLossPrice :
-                      type === 'buyOrder' ? buyOrderPrice :
-                      sellOrderPrice,
-                cap: type === 'stopLoss' ? stopLossCap :
-                     type === 'buyOrder' ? buyOrderCap :
-                     sellOrderCap,
-                hederaAccountId: account,
-                tokenA: currentPool.tokenA.id,
-                tokenB: currentPool.tokenB.id,
-                fee: currentPool.fee,
-                userId: userId
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to set thresholds');
+        if (!account || !userId || !currentPool) {
+            setAlertState({
+                isVisible: true,
+                message: "Missing required data: account, userId, or pool",
+                type: "danger"
+            });
+            return;
         }
-        const data = await response.json();
-        console.log(data.message);
-    }
+
+        setIsSubmitting(true);
+        try {
+            const response = await fetch('/api/thresholds/setThresholds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type,
+                    price: type === 'stopLoss' ? stopLossPrice :
+                           type === 'buyOrder' ? buyOrderPrice :
+                           sellOrderPrice,
+                    cap: type === 'stopLoss' ? stopLossCap :
+                         type === 'buyOrder' ? buyOrderCap :
+                         sellOrderCap,
+                    hederaAccountId: account,
+                    tokenA: currentPool.tokenA.id,
+                    tokenB: currentPool.tokenB.id,
+                    fee: currentPool.fee,
+                    userId: userId
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to set thresholds');
+            }
+
+            setAlertState({
+                isVisible: true,
+                message: `${type} threshold set successfully!`,
+                type: "success"
+            });
+
+            // Refresh thresholds data
+            const refreshResponse = await fetch(`/api/thresholds?userId=${userId}`);
+            const refreshedData = await refreshResponse.json();
+            setThresholds(refreshedData);
+
+        } catch (error: any) {
+            console.error('Error setting threshold:', error);
+            setAlertState({
+                isVisible: true,
+                message: error.message || "Failed to set threshold",
+                type: "danger"
+            });
+        } finally {
+            setIsSubmitting(false);
+            resetThresholdForm(type); // Move reset here to ensure it happens regardless of success/failure
+        }
+    };
 
     const handleCurrentPool = (poolId: string | Set<string>) => {
         
@@ -453,418 +496,492 @@ export default function DexPage() {
         setSellOrderCap(formattedBalance);
     };
 
+    useEffect(() => {
+        const checkAuth = async () => {
+            const { data: { user }, error } = await supabase.auth.getUser()
+            console.log('Current auth state:', { user, error })
+        }
+        checkAuth()
+    }, [supabase])
+
+    const resetThresholdForm = (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
+        switch(type) {
+            case 'stopLoss':
+                setStopLoss(false);
+                setStopLossCap("0.0");
+                setStopLossPrice(currentToken?.priceUsd?.toString() || "0.0");
+                break;
+            case 'buyOrder':
+                setBuyOrder(false);
+                setBuyOrderCap("0.0");
+                setBuyOrderPrice("0.0");
+                break;
+            case 'sellOrder':
+                setSellOrder(false);
+                setSellOrderCap("0.0");
+                setSellOrderPrice(currentToken?.priceUsd?.toString() || "0.0");
+                break;
+        }
+    };
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (alertState.isVisible) {
+            timer = setTimeout(() => {
+                setAlertState(prev => ({ ...prev, isVisible: false }));
+            }, 3000); // Hide after 3 seconds
+        }
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
+    }, [alertState.isVisible]);
+
     if (isLoading || nftGateLoading) {
         return <div>Loading...</div>;
     }
 
     return (    
-        <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
-            <div className="flex w-full">
-                <div className="grow pr-8">
-                    <Tabs 
-                        aria-label="section" 
-                        selectedKey={selectedSection} 
-                        onSelectionChange={(key) => setSelectedSection(key.toString())}
-                    >
-                        <Tab key="chart" title='Price Chart'>
-                            <div className="w-full h-[350px]">
-                                {error ? (
-                                    <div className="flex justify-center items-center h-full">
-                                        <p>Error loading chart data</p>
-                                    </div>
+        <>
+            <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
+                <div className="flex w-full">
+                    <div className="grow pr-8">
+                        <Tabs 
+                            aria-label="section" 
+                            selectedKey={selectedSection} 
+                            onSelectionChange={(key) => setSelectedSection(key.toString())}
+                        >
+                            <Tab key="chart" title='Price Chart'>
+                                <div className="w-full h-[350px]">
+                                    {error ? (
+                                        <div className="flex justify-center items-center h-full">
+                                            <p>Error loading chart data</p>
+                                        </div>
+                                    ) : (
+                                        <ApexChart data={data || []} />
+                                    )}
+                                </div>
+                            </Tab>
+                            <Tab key="thresholds" title='Thresholds'>
+                                {thresholds.length > 0 ? (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableColumn>Threshold Type</TableColumn>
+                                            <TableColumn>Token A</TableColumn>
+                                            <TableColumn>Token B</TableColumn>
+                                            <TableColumn>Fee</TableColumn>
+                                            <TableColumn>Price</TableColumn>
+                                            <TableColumn>Cap</TableColumn>
+                                            <TableColumn>Delete</TableColumn>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {thresholds.map((threshold: Threshold) => (
+                                                <TableRow key={threshold.id}>
+                                                    <TableCell>{threshold.type}</TableCell>
+                                                    <TableCell>{threshold.tokenA}</TableCell>
+                                                    <TableCell>{threshold.tokenB}</TableCell>
+                                                    <TableCell>{threshold.fee}</TableCell>
+                                                    <TableCell>${threshold.price}</TableCell>
+                                                    <TableCell>{threshold.cap}</TableCell>
+                                                    <TableCell>
+                                                        <Button onClick={() => deleteThreshold(threshold.id)}>Delete</Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
                                 ) : (
-                                    <ApexChart data={data || []} />
+                                    <div>No thresholds found</div>
                                 )}
-                            </div>
-                        </Tab>
-                        <Tab key="thresholds" title='Thresholds'>
-                            {thresholds.length > 0 ? (
-                                <Table>
-                                    <TableHeader>
-                                        <TableColumn>Threshold Type</TableColumn>
-                                        <TableColumn>Token A</TableColumn>
-                                        <TableColumn>Token B</TableColumn>
-                                        <TableColumn>Fee</TableColumn>
-                                        <TableColumn>Price</TableColumn>
-                                        <TableColumn>Cap</TableColumn>
-                                        <TableColumn>Delete</TableColumn>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {thresholds.map((threshold: Threshold) => (
-                                            <TableRow key={threshold.id}>
-                                                <TableCell>{threshold.type}</TableCell>
-                                                <TableCell>{threshold.tokenA}</TableCell>
-                                                <TableCell>{threshold.tokenB}</TableCell>
-                                                <TableCell>{threshold.fee}</TableCell>
-                                                <TableCell>${threshold.price}</TableCell>
-                                                <TableCell>{threshold.cap}</TableCell>
-                                                <TableCell>
-                                                    <Button onClick={() => deleteThreshold(threshold.id)}>Delete</Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            ) : (
-                                <div>No thresholds found</div>
-                            )}
-                        </Tab>
-                    </Tabs>
-                </div>
-                <div className="relative h-14 pr-6">
-                    <div className="w-full flex">
-                        {currentToken && currentToken.icon && (
-                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} />
-                        )}
-                        <div className="px-3">
-                            <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
-                            <p>{currentToken.name}</p>
-                        </div>
-                        <div className="pl-1">
-                            <span className="text-xl text-green-500">
-                                {formatPrice(currentToken.priceUsd)}
-                            </span>
-                        </div>
-                        <Dropdown placement="bottom-start">
-                            <DropdownTrigger>
-                                <div className="w-5 pt-1 pl-1 cursor-pointer">
-                                    <ChevronDownIcon />
-                                </div>
-                            </DropdownTrigger>
-                            <DropdownMenu 
-                                onAction={(key) => (selectCurrentToken(key as string) )} 
-                                className="max-h-72 overflow-scroll w-full" 
-                                aria-label="Token Selection" 
-                                items={Array.isArray(tokens) ? tokens : []} 
-                                variant="flat"
-                            >
-                                {(token:Token) => (
-                                    <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
-                                            <p>{token.name}</p>
-                                    </DropdownItem>
-                                )}
-                            </DropdownMenu>
-                        </Dropdown>
+                            </Tab>
+                        </Tabs>
                     </div>
-                    <div className="w-full pt-8 pb-8">
-                        {Array.isArray(currentPools) && currentPools.length > 0 && (
-                            <div className="mb-8">
-                                {!currentPool ? (
-                                    <Select 
-                                        items={currentPools}
-                                        label="Select Pool"
-                                        isDisabled={account ? false : true}
-                                        onSelectionChange={(key) => handleCurrentPool(key as string)}
-                                        selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
-                                        placeholder="Select Pool"
-                                    >
-                                        {(pool:any) => (
-                                            <SelectItem key={pool.id.toString()}>{pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%</SelectItem>
-                                        )}
-                                    </Select>
-                                ):(
-                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onClick={() => setCurrentPool(null)}>Clear</Button></p>
-                                )}
-                                
+                    <div className="relative h-14 pr-6">
+                        <div className="w-full flex">
+                            {currentToken && currentToken.icon && (
+                                <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} />
+                            )}
+                            <div className="px-3">
+                                <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
+                                <p>{currentToken.name}</p>
                             </div>
-                        
-                        )}
-                        {!Array.isArray(currentPools) || currentPools.length === 0 && (
-                            <p className="pb-8">No pools found for {currentToken.symbol}</p>
-                        )}
-                        <p className="mb-4">Trade Amount</p>
-                        <Input
-                            type="number"
-                            value={String(tradeAmount)}
-                            description="  "
-                            onChange={(e) => {
-                                setTradeAmount(e.target.value);
-                                calculateTradeAmount(e.target.value);
-                            }}
-                            onFocus={handleInputFocus}
-                            isDisabled={tradeToken ? false : true}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                            <div className="pl-1">
+                                <span className="text-xl text-green-500">
+                                    {formatPrice(currentToken.priceUsd)}
+                                </span>
+                            </div>
+                            <Dropdown placement="bottom-start">
+                                <DropdownTrigger>
+                                    <div className="w-5 pt-1 pl-1 cursor-pointer">
+                                        <ChevronDownIcon />
+                                    </div>
+                                </DropdownTrigger>
+                                <DropdownMenu 
+                                    onAction={(key) => (selectCurrentToken(key as string) )} 
+                                    className="max-h-72 overflow-scroll w-full" 
+                                    aria-label="Token Selection" 
+                                    items={Array.isArray(tokens) ? tokens : []} 
+                                    variant="flat"
+                                >
+                                    {(token:Token) => (
+                                        <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
+                                                <p>{token.name}</p>
+                                        </DropdownItem>
+                                    )}
+                                </DropdownMenu>
+                            </Dropdown>
+                        </div>
+                        <div className="w-full pt-8 pb-8">
+                            {Array.isArray(currentPools) && currentPools.length > 0 && (
+                                <div className="mb-8">
+                                    {!currentPool ? (
+                                        <Select 
+                                            items={currentPools}
+                                            label="Select Pool"
+                                            isDisabled={account ? false : true}
+                                            onSelectionChange={(key) => handleCurrentPool(key as string)}
+                                            selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
+                                            placeholder="Select Pool"
+                                        >
+                                            {(pool:any) => (
+                                                <SelectItem key={pool.id.toString()}>{pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%</SelectItem>
+                                            )}
+                                        </Select>
+                                    ):(
+                                        <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onClick={() => setCurrentPool(null)}>Clear</Button></p>
+                                    )}
+                                    
                                 </div>
-                            }
-                            endContent={
-                                <Chip onClick={handleMaxClick} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
-                            }
-                            step="0.000001"
-                        />
+                            
+                            )}
+                            {!Array.isArray(currentPools) || currentPools.length === 0 && (
+                                <p className="pb-8">No pools found for {currentToken.symbol}</p>
+                            )}
+                            <p className="mb-4">Trade Amount</p>
+                            <Input
+                                type="number"
+                                value={String(tradeAmount)}
+                                description="  "
+                                onChange={(e) => {
+                                    setTradeAmount(e.target.value);
+                                    calculateTradeAmount(e.target.value);
+                                }}
+                                onFocus={handleInputFocus}
+                                isDisabled={tradeToken ? false : true}
+                                className="text-lg"
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                startContent={
+                                    <div className="flex items-center mr-2">
+                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                    </div>
+                                }
+                                endContent={
+                                    <Chip onClick={handleMaxClick} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                }
+                                step="0.000001"
+                            />
 
-                        <p className="mt-4">Receive Amount</p>
-                        <Input
-                            type="number"
-                            value={receiveAmount}
-                            className="text-lg pt-4"
-                            isReadOnly={true}
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            step="0.000001"
-                            isDisabled={tradeToken ? false : true}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    {tradeToken && <Image className="mt-1" width={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                            <p className="mt-4">Receive Amount</p>
+                            <Input
+                                type="number"
+                                value={receiveAmount}
+                                className="text-lg pt-4"
+                                isReadOnly={true}
+                                classNames={{
+                                    input: "text-xl pl-4",
+                                    inputWrapper: "items-center h-16",
+                                    mainWrapper: "h-16",
+                                }}
+                                step="0.000001"
+                                isDisabled={tradeToken ? false : true}
+                                startContent={
+                                    <div className="flex items-center mr-2">
+                                        {tradeToken && <Image className="mt-1" width={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                    </div>
+                                }
+                            />
+                            <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
+                        </div>
+                        <div className="w-full flex flex-col gap-4 pb-8">
+                            <div className="flex items-center gap-2">
+                                <Switch 
+                                    isDisabled={currentPool ? false : true} 
+                                    size="sm" 
+                                    color="default" 
+                                    isSelected={stopLoss}
+                                    onValueChange={setStopLoss}
+                                >
+                                    Stop Loss
+                                </Switch>
+                                <Tooltip 
+                                    content="Automatically sells your tokens when the price falls below the specified threshold"
+                                    className="max-w-[200px]"
+                                    placement="bottom"
+                                    showArrow={true}
+                                >
+                                    <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                                </Tooltip>
+                            </div>
+                            {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
+                                <p>Sell Price (usd)</p>
+                                <Input
+                                    onFocus={handleInputFocus}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                        </div>
+                                    }
+                                    maxLength={12} 
+                                    onChange={(e) => setStopLossPrice(e.target.value)} 
+                                    step="0.000001" 
+                                    type="number" 
+                                    value={stopLossPrice.toString()}
+                                />
+                                <div className="flex gap-2 mt-2">
+                                    <Button 
+                                        size="sm" 
+                                        variant="flat" 
+                                        onClick={() => adjustStopLossPrice(0.01)}
+                                    >
+                                        -1%
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        variant="flat" 
+                                        onClick={() => adjustStopLossPrice(0.05)}
+                                    >
+                                        -5%
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        variant="flat" 
+                                        onClick={() => adjustStopLossPrice(0.10)}
+                                    >
+                                        -10%
+                                    </Button>
                                 </div>
-                            }
-                        />
-                        <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
-                    </div>
-                    <div className="w-full flex flex-col gap-4 pb-8">
-                        <div className="flex items-center gap-2">
-                            <Switch 
-                                isDisabled={currentPool ? false : true} 
-                                size="sm" 
-                                color="default" 
-                                onValueChange={setStopLoss}
-                            >
-                                Stop Loss
-                            </Switch>
-                            <Tooltip 
-                                content="Automatically sells your tokens when the price falls below the specified threshold"
-                                className="max-w-[200px]"
-                                placement="bottom"
-                                showArrow={true}
-                            >
-                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
-                            </Tooltip>
-                        </div>
-                        {stopLoss && <div className="w-full my-4 flex flex-col gap-4">
-                            <p>Sell Price (usd)</p>
-                            <Input
-                                onFocus={handleInputFocus}
-                                className="text-lg"
-                                classNames={{
-                                    input: "text-xl pl-4",
-                                    inputWrapper: "items-center h-16",
-                                    mainWrapper: "h-16",
-                                }}
-                                startContent={
-                                    <div className="flex items-center mr-2">
-                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
-                                    </div>
-                                }
-                                maxLength={12} 
-                                onChange={(e) => setStopLossPrice(e.target.value)} 
-                                step="0.000001" 
-                                type="number" 
-                                value={stopLossPrice.toString()}
-                            />
-                            <div className="flex gap-2 mt-2">
-                                <Button 
+                                <p>Sell Cap (qty of tokens to sell)</p>
+                                <Input
+                                    onFocus={handleInputFocus}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    maxLength={12} 
+                                    onChange={(e) => setStopLossCap(e.target.value)} 
+                                    step="0.000001" 
+                                    type="number" 
+                                    value={stopLossCap.toString()}
+                                    endContent={
+                                        <Chip onClick={hanndleMaxClickStopLoss} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                    }
+                                />
+                                {stopLoss && (
+                                    <Button 
+                                        className="mb-2" 
+                                        onClick={() => saveThresholds('stopLoss')}
+                                        isLoading={isSubmitting}
+                                        isDisabled={isSubmitting}
+                                    >
+                                        Set Stop-Loss
+                                    </Button>
+                                )}
+                            </div>}
+                            <div className="flex items-center gap-2">
+                                <Switch 
+                                    isDisabled={currentPool ? false : true} 
                                     size="sm" 
-                                    variant="flat" 
-                                    onClick={() => adjustStopLossPrice(0.01)}
+                                    color="default" 
+                                    isSelected={buyOrder}
+                                    onValueChange={setBuyOrder}
                                 >
-                                    -1%
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    variant="flat" 
-                                    onClick={() => adjustStopLossPrice(0.05)}
+                                    Buy Order
+                                </Switch>
+                                <Tooltip 
+                                    content="Automatically buys tokens when the price falls to the specified threshold"
+                                    className="max-w-[200px]"
+                                    placement="bottom"
+                                    showArrow={true}
                                 >
-                                    -5%
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    variant="flat" 
-                                    onClick={() => adjustStopLossPrice(0.10)}
-                                >
-                                    -10%
-                                </Button>
+                                    <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                                </Tooltip>
                             </div>
-                            <p>Sell Cap (qty of tokens to sell)</p>
-                            <Input
-                                onFocus={handleInputFocus}
-                                className="text-lg"
-                                classNames={{
-                                    input: "text-xl pl-4",
-                                    inputWrapper: "items-center h-16",
-                                    mainWrapper: "h-16",
-                                }}
-                                maxLength={12} 
-                                onChange={(e) => setStopLossCap(e.target.value)} 
-                                step="0.000001" 
-                                type="number" 
-                                value={stopLossCap.toString()}
-                                endContent={
-                                    <Chip onClick={hanndleMaxClickStopLoss} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
-                                }
-                            />
-                            {stopLoss && (
-                                <Button className="mb-2" onClick={() => saveThresholds('stopLoss')}>
-                                    Set Stop-Loss
+                            {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
+                                <p>Buy Price (usd)</p>
+                                <Input 
+                                    onFocus={handleInputFocus}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    maxLength={12} 
+                                    onChange={(e) => setBuyOrderPrice(e.target.value)} 
+                                    step="0.000001" 
+                                    type="number" 
+                                    value={buyOrderPrice.toString()} 
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                        </div>
+                                    }
+                                />
+                                <Input 
+                                    onFocus={handleInputFocus}
+                                    maxLength={12} 
+                                    onChange={(e) => setBuyOrderCap(e.target.value)} 
+                                    step="0.000001" 
+                                    type="number" 
+                                    value={buyOrderCap.toString()} 
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                />
+                            </div>}
+                            {buyOrder && (
+                                <Button 
+                                    className="mb-2" 
+                                    onClick={() => saveThresholds('buyOrder')}
+                                    isLoading={isSubmitting}
+                                    isDisabled={isSubmitting}
+                                >
+                                    Set Buy Order
                                 </Button>
                             )}
-                        </div>}
-                        <div className="flex items-center gap-2">
-                            <Switch 
-                                isDisabled={currentPool ? false : true} 
-                                size="sm" 
-                                color="default" 
-                                onValueChange={setBuyOrder}
-                            >
-                                Buy Order
-                            </Switch>
-                            <Tooltip 
-                                content="Automatically buys tokens when the price falls to the specified threshold"
-                                className="max-w-[200px]"
-                                placement="bottom"
-                                showArrow={true}
-                            >
-                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
-                            </Tooltip>
-                        </div>
-                        {buyOrder && <div className="w-full my-4 flex flex-col gap-4">
-                            <p>Buy Price (usd)</p>
-                            <Input 
-                                onFocus={handleInputFocus}
-                                className="text-lg"
-                                classNames={{
-                                    input: "text-xl pl-4",
-                                    inputWrapper: "items-center h-16",
-                                    mainWrapper: "h-16",
-                                }}
-                                maxLength={12} 
-                                onChange={(e) => setBuyOrderPrice(e.target.value)} 
-                                step="0.000001" 
-                                type="number" 
-                                value={buyOrderPrice.toString()} 
-                                startContent={
-                                    <div className="flex items-center mr-2">
-                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
-                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                    </div>
-                                }
-                            />
-                            <Input 
-                                onFocus={handleInputFocus}
-                                maxLength={12} 
-                                onChange={(e) => setBuyOrderCap(e.target.value)} 
-                                step="0.000001" 
-                                type="number" 
-                                value={buyOrderCap.toString()} 
-                                className="text-lg"
-                                classNames={{
-                                    input: "text-xl pl-4",
-                                    inputWrapper: "items-center h-16",
-                                    mainWrapper: "h-16",
-                                }}
-                            />
-                        </div>}
-                        {buyOrder && (
-                            <Button className="mb-2" onClick={() => saveThresholds('buyOrder')}>
-                                Set Buy Order
-                            </Button>
-                        )}
-                        <div className="flex items-center gap-2">
-                            <Switch 
-                                isDisabled={currentPool ? false : true} 
-                                size="sm" 
-                                color="default" 
-                                onValueChange={setSellOrder}
-                            >
-                                Sell Order
-                            </Switch>
-                            <Tooltip 
-                                content="Automatically sells your tokens when the price rises to the specified threshold"
-                                className="max-w-[200px]"
-                                placement="bottom"
-                                showArrow={true}
-                            >
-                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
-                            </Tooltip>
-                        </div>
-                        {sellOrder && <div className="w-full my-4 flex flex-col gap-4">
-                            <p>Sell Price (usd)</p>
-                            <Input
-                                onFocus={handleInputFocus}
-                                className="text-lg"
-                                classNames={{
-                                    input: "text-xl pl-4",
-                                    inputWrapper: "items-center h-16",
-                                    mainWrapper: "h-16",
-                                }}
-                                startContent={
-                                    <div className="flex items-center mr-2">
-                                        <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                        <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                        {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
-                                    </div>
-                                }
-                                maxLength={12} 
-                                onChange={(e) => setSellOrderPrice(e.target.value)} 
-                                step="0.000001" 
-                                type="number" 
-                                value={sellOrderPrice.toString()}
-                            />
-                            <div className="flex gap-2 mt-2">
-                                <Button 
+                            <div className="flex items-center gap-2">
+                                <Switch 
+                                    isDisabled={currentPool ? false : true} 
                                     size="sm" 
-                                    variant="flat" 
-                                    onClick={() => adjustSellOrderPrice(0.01)}
+                                    color="default" 
+                                    isSelected={sellOrder}
+                                    onValueChange={setSellOrder}
                                 >
-                                    +1%
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    variant="flat" 
-                                    onClick={() => adjustSellOrderPrice(0.05)}
+                                    Sell Order
+                                </Switch>
+                                <Tooltip 
+                                    content="Automatically sells your tokens when the price rises to the specified threshold"
+                                    className="max-w-[200px]"
+                                    placement="bottom"
+                                    showArrow={true}
                                 >
-                                    +5%
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    variant="flat" 
-                                    onClick={() => adjustSellOrderPrice(0.10)}
-                                >
-                                    +10%
-                                </Button>
+                                    <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                                </Tooltip>
                             </div>
-                            <p>Sell Cap (qty of tokens to sell)</p>
-                            <Input
-                                onFocus={handleInputFocus}
-                                className="text-lg"
-                                classNames={{
-                                    input: "text-xl pl-4",
-                                    inputWrapper: "items-center h-16",
-                                    mainWrapper: "h-16",
-                                }}
-                                maxLength={12} 
-                                onChange={(e) => setSellOrderCap(e.target.value)} 
-                                step="0.000001" 
-                                type="number" 
-                                value={sellOrderCap.toString()}
-                                endContent={
-                                    <Chip onClick={handleMaxClickSellOrder} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
-                                }
-                            />
-                            {sellOrder && (
-                                <Button className="mb-2" onClick={() => saveThresholds('sellOrder')}>
-                                    Set Sell Order
-                                </Button>
-                            )}
-                        </div>}
+                            {sellOrder && <div className="w-full my-4 flex flex-col gap-4">
+                                <p>Sell Price (usd)</p>
+                                <Input
+                                    onFocus={handleInputFocus}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                        </div>
+                                    }
+                                    maxLength={12} 
+                                    onChange={(e) => setSellOrderPrice(e.target.value)} 
+                                    step="0.000001" 
+                                    type="number" 
+                                    value={sellOrderPrice.toString()}
+                                />
+                                <div className="flex gap-2 mt-2">
+                                    <Button 
+                                        size="sm" 
+                                        variant="flat" 
+                                        onClick={() => adjustSellOrderPrice(0.01)}
+                                    >
+                                        +1%
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        variant="flat" 
+                                        onClick={() => adjustSellOrderPrice(0.05)}
+                                    >
+                                        +5%
+                                    </Button>
+                                    <Button 
+                                        size="sm" 
+                                        variant="flat" 
+                                        onClick={() => adjustSellOrderPrice(0.10)}
+                                    >
+                                        +10%
+                                    </Button>
+                                </div>
+                                <p>Sell Cap (qty of tokens to sell)</p>
+                                <Input
+                                    onFocus={handleInputFocus}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    maxLength={12} 
+                                    onChange={(e) => setSellOrderCap(e.target.value)} 
+                                    step="0.000001" 
+                                    type="number" 
+                                    value={sellOrderCap.toString()}
+                                    endContent={
+                                        <Chip onClick={handleMaxClickSellOrder} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                    }
+                                />
+                                {sellOrder && (
+                                    <Button 
+                                        className="mb-2" 
+                                        onClick={() => saveThresholds('sellOrder')}
+                                        isLoading={isSubmitting}
+                                        isDisabled={isSubmitting}
+                                    >
+                                        Set Sell Order
+                                    </Button>
+                                )}
+                            </div>}
+                        </div>
+                        
                     </div>
-                    
                 </div>
             </div>
-        </div>
+            
+            {alertState.isVisible && (
+                <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+                    <Alert 
+                        className="min-w-[300px]"
+                        color={alertState.type}
+                        variant="solid"
+                        isClosable
+                        onClose={() => setAlertState(prev => ({ ...prev, isVisible: false }))}
+                    >
+                        {alertState.message}
+                    </Alert>
+                </div>
+            )}
+        </>
     );
 }

@@ -8,9 +8,10 @@ module.exports = {
     }]
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@hashgraph/hedera-wallet-connect)/)'
+    'node_modules/(?!(@hashgraph/hedera-wallet-connect|node-fetch)/)'
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
-  }
+  },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
 }; 

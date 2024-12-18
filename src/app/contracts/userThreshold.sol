@@ -29,62 +29,42 @@ contract userThreshold {
     address constant HEDERA_TOKEN_SERVICE = address(0x0000000000000000000000000000000000000167);
 
     struct Threshold {
-        uint256 stopLossThreshold;
-        uint256 buyOrderThreshold; 
-        string hederaAccountId;
-        address tokenAddress;
-        uint256 stopLossAmount;
-        uint256 buyOrderAmount;
-        bool isActive;
+        uint256 price;              // Price threshold in basis points
+        string hederaAccountId;     // User's Hedera account ID
+        address tokenA;             // First token in pair
+        address tokenB;             // Second token in pair
+        uint256 cap;               // Amount to trade
+        bool isActive;             // Whether the threshold is active
     }
 
     mapping(string => Threshold) public userThresholds;
 
-    event ThresholdsSet(string hederaAccountId, uint256 stopLossThreshold, uint256 buyOrderThreshold, address tokenAddress, uint256 stopLossAmount, uint256 buyOrderAmount);
-    event ThresholdDebug(string message, string hederaAccountId, bool exists, bool isActive, uint256 stopLossAmount, uint256 buyOrderAmount);
-    event ThresholdsDeactivated(string hederaAccountId);
-    event OrderExecuted(string hederaAccountId, string orderType, uint256 currentPrice, address tokenAddress, uint256 amountOut);
-    event ExecuteTradeDebug(string message, string hederaAccountId, bool isActive, string orderType, uint256 amount, bytes path);
-    event StringCompare(string message, string stored, string lookup, bytes32 storedHash, bytes32 lookupHash);
-    event RouterApprovalResult(string message, address token, uint256 amount, int64 result);
-    event PathDebug(string message, bytes path, address recipient);
-    event AmountDebug(string message, uint256 hbarAmount, uint256 relevantAmount, uint256 minimumOut);
-    event MultiCallDebug(string message, bytes[] calls);
-    event SwapResult(string message, uint256 amountOut, address recipient);
-    event RecipientDebug(string message, string hederaAccountId, address derivedAddress);
-    event RouterCallDebug(string message, bytes encodedCall);
-    event PreTradeCheck(
-        string message,
-        uint256 msgValue,
-        uint256 thresholdAmount,
-        bool thresholdActive,
+    event ThresholdSet(
+        string hederaAccountId,
+        uint256 price,
+        address tokenA,
+        address tokenB, 
+        uint256 cap
+    );
+
+    event OrderExecuted(
+        string hederaAccountId,
         string orderType,
-        bytes path
+        uint256 currentPrice,
+        address tokenA,
+        address tokenB,
+        uint256 amountOut
     );
-    event RouterParams(
-        string message,
-        bytes path,
-        address recipient,
-        uint256 amountIn,
-        uint256 amountOutMinimum,
-        address router,
-        uint256 deadline
-    );
-    event MultiCallSetup(
-        string message,
-        uint256 callCount,
-        bytes firstCall,
-        bytes secondCall
-    );
-    event RouterCallDetails(
-        string message,
-        uint256 msgValue,
-        address router,
-        address recipient,
-        bytes path
-    );
+
     event FeeCollected(address indexed collector, uint256 amount);
     event FeeCalculated(uint256 tradeAmount, uint256 feeAmount, uint256 finalTradeAmount);
+
+    event RouterApprovalResult(
+        string message,
+        address token,
+        uint256 amount,
+        int64 result
+    );
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
@@ -93,16 +73,12 @@ contract userThreshold {
 
     constructor(address _owner) {
         owner = _owner;
-        feeCollector = _owner; // Initially set fee collector to owner
+        feeCollector = _owner;
     }
 
     function setFeeCollector(address _newCollector) external onlyOwner {
         require(_newCollector != address(0), "Invalid fee collector address");
         feeCollector = _newCollector;
-    }
-
-    function calculateFee(uint256 amount) public pure returns (uint256) {
-        return (amount * FEE_BASIS_POINTS) / 10000;
     }
 
     function approveRouter(address token, uint256 amount) public {
@@ -112,76 +88,41 @@ contract userThreshold {
             SAUCERSWAP_ROUTER,  // spender
             amount
         );
-        emit RouterApprovalResult("Router approval attempt", token, amount, result);
         require(result == 0, "Router approval failed");
     }
 
-    function getThreshold(string memory hederaAccountId) public view returns (
-        uint256 stopLossThreshold,
-        uint256 buyOrderThreshold,
-        string memory storedHederaId,
-        address tokenAddress,
-        uint256 stopLossAmount,
-        uint256 buyOrderAmount,
-        bool isActive
-    ) {
-        Threshold memory threshold = userThresholds[hederaAccountId];
-        return (
-            threshold.stopLossThreshold,
-            threshold.buyOrderThreshold,
-            threshold.hederaAccountId,
-            threshold.tokenAddress,
-            threshold.stopLossAmount,
-            threshold.buyOrderAmount,
-            threshold.isActive
-        );
+    function calculateFee(uint256 amount) public pure returns (uint256) {
+        return (amount * FEE_BASIS_POINTS) / 10000;
     }
 
-    function setThresholds(
-        uint256 _stopLossThreshold,
-        uint256 _buyOrderThreshold,
+    function setThreshold(
+        uint256 _price,
         string memory _hederaAccountId,
-        address _tokenAddress,
-        uint256 _stopLossAmount,
-        uint256 _buyOrderAmount
+        address _tokenA,
+        address _tokenB,
+        uint256 _cap
     ) public {
-        require(_stopLossThreshold > 0 && _stopLossThreshold <= 10000, "Stop loss threshold must be between 1 and 10000 basis points");
-        require(_buyOrderThreshold > 0 && _buyOrderThreshold <= 10000, "Buy order threshold must be between 1 and 10000 basis points");
-        require(_stopLossAmount > 0, "Stop loss amount must be greater than zero");
-        require(_buyOrderAmount > 0, "Buy order amount must be greater than zero");
-        require(_tokenAddress != address(0), "Token address must be valid");
+        require(_price > 0 && _price <= 10000, "Price must be between 1 and 10000 basis points");
+        require(_cap > 0, "Cap must be greater than zero");
+        require(_tokenA != address(0) && _tokenB != address(0), "Token addresses must be valid");
         require(bytes(_hederaAccountId).length > 0, "Hedera account ID must not be empty");
-
-        emit ThresholdDebug(
-            "Before setting threshold",
-            _hederaAccountId,
-            false,
-            false,
-            _stopLossAmount,
-            _buyOrderAmount
-        );
-
+        
         userThresholds[_hederaAccountId] = Threshold(
-            _stopLossThreshold,
-            _buyOrderThreshold,
+            _price,
             _hederaAccountId,
-            _tokenAddress,
-            _stopLossAmount,
-            _buyOrderAmount,
+            _tokenA,
+            _tokenB,
+            _cap,
             true
         );
-        
-        Threshold memory setThreshold = userThresholds[_hederaAccountId];
-        emit ThresholdDebug(
-            "After setting threshold",
-            _hederaAccountId,
-            true,
-            setThreshold.isActive,
-            setThreshold.stopLossAmount,
-            setThreshold.buyOrderAmount
-        );
 
-        emit ThresholdsSet(_hederaAccountId, _stopLossThreshold, _buyOrderThreshold, _tokenAddress, _stopLossAmount, _buyOrderAmount);
+        emit ThresholdSet(
+            _hederaAccountId,
+            _price,
+            _tokenA,
+            _tokenB,
+            _cap
+        );
     }
 
     function executeTradeForUser(string memory hederaAccountId, string memory orderType, bytes memory path) public payable {
@@ -200,7 +141,8 @@ contract userThreshold {
             hederaAccountId,
             orderType,
             currentPrice,
-            threshold.tokenAddress,
+            threshold.tokenA,
+            threshold.tokenB,
             amountOut
         );
     }
@@ -243,12 +185,9 @@ contract userThreshold {
         uint256 amountOut;
         try ROUTER.multicall{value: tradeAmount}(encodedCalls) returns (bytes[] memory results) {
             amountOut = abi.decode(results[0], (uint256));
-            emit SwapResult("Swap success", amountOut, recipientAddress);
         } catch Error(string memory reason) {
-            emit SwapResult("Swap failed with reason", 0, recipientAddress);
             revert(string(abi.encodePacked("Router call failed: ", reason)));
         } catch {
-            emit SwapResult("Swap failed with unknown reason", 0, recipientAddress);
             revert("Router call failed: unknown reason");
         }
 
@@ -270,6 +209,31 @@ contract userThreshold {
         );
     }
 
+    function getThreshold(string memory hederaAccountId) public view returns (
+        uint256 price,
+        string memory storedHederaId,
+        address tokenA,
+        address tokenB,
+        uint256 cap,
+        bool isActive
+    ) {
+        Threshold memory threshold = userThresholds[hederaAccountId];
+        return (
+            threshold.price,
+            threshold.hederaAccountId,
+            threshold.tokenA,
+            threshold.tokenB,
+            threshold.cap,
+            threshold.isActive
+        );
+    }
+
+    function deactivateThresholds(string memory hederaAccountId) public {
+        require(userThresholds[hederaAccountId].isActive, "No active thresholds found");
+        userThresholds[hederaAccountId].isActive = false;
+    }
+
+    // Helper functions for string manipulation
     function split(string memory _base, string memory _delimiter) internal pure returns (string[] memory) {
         bytes memory baseBytes = bytes(_base);
         uint count = 1;
@@ -311,15 +275,5 @@ contract userThreshold {
             }
         }
         return result;
-    }
-
-    function calculateMinimumAmountOut(uint256 amountIn, uint256 slippageTolerance) internal pure returns (uint256) {
-        return amountIn * slippageTolerance / 1000;
-    }
-
-    function deactivateThresholds(string memory hederaAccountId) public {
-        require(userThresholds[hederaAccountId].isActive, "No active thresholds found");
-        userThresholds[hederaAccountId].isActive = false;
-        emit ThresholdsDeactivated(hederaAccountId);
     }
 }

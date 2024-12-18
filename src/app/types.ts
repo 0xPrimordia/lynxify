@@ -67,3 +67,9 @@ export type ApiLiquidityPoolV2 = {
     lastExecutedAt: string;
     txHash: string;
   }
+
+  export type User = {
+    id: string;
+    hederaAccountId: string;
+    created_at: string;
+  }
