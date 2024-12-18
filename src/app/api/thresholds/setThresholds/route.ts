@@ -1,74 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServiceRoleClient } from '@/utils/supabase';
 import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
-import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Missing or invalid authorization token' }),
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Extract the token
-    const token = authHeader.split(' ')[1];
-
-    // Initialize Supabase client
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
-
-    // Verify the JWT and get user data
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Invalid authorization token' }),
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
+    // Get the request body first
     const body = await req.json();
+    const { hederaAccountId } = body;
+    
+    console.log('Received request with body:', body);
+    console.log('Looking for user with Hedera ID:', hederaAccountId);
 
-    // Verify that the userId in the request matches the authenticated user
-    if (body.userId !== user.id) {
+    // Use service client directly to find user by Hedera ID
+    const serviceClient = createServiceRoleClient();
+    
+    // Find user by Hedera account ID first
+    const { data: dbUser, error: userError } = await serviceClient
+      .from('Users')
+      .select('*')
+      .eq('hederaAccountId', hederaAccountId)
+      .single();
+
+    if (!dbUser) {
       return new NextResponse(
-        JSON.stringify({ error: 'Unauthorized: User ID mismatch' }),
-        { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ 
+          error: 'User not found',
+          hederaAccountId,
+          queryError: userError,
+          requestBody: body
+        }),
+        { status: 404 }
       );
     }
 
-    const { 
-      stopLoss, 
-      buyOrder, 
-      stopLossCap, 
-      buyOrderCap, 
-      hederaAccountId, 
-      tokenA,
-      tokenB,
-      fee,
-      poolId,
-      userId 
-    } = body;
+    // Create threshold record in database first
+    const { data: pendingThreshold, error: insertError } = await serviceClient
+      .from('Thresholds')
+      .insert({
+        userId: dbUser.id,
+        ...body,
+        isActive: false,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        lastChecked: new Date().toISOString(),
+        lastExecutedAt: new Date().toISOString(),
+        lastError: '',
+        txHash: ''
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      return new NextResponse(
+        JSON.stringify({ error: `Failed to create threshold record: ${insertError.message}` }),
+        { status: 500 }
+      );
+    }
 
     // Initialize Hedera client
     const client = Client.forTestnet();
@@ -77,106 +65,81 @@ export async function POST(req: NextRequest) {
       PrivateKey.fromString(process.env.OPERATOR_KEY!)
     );
 
-    try {
-      // Convert price thresholds to basis points
-      const stopLossBasisPoints = Math.floor(stopLoss * 10000);
-      const buyOrderBasisPoints = Math.floor(buyOrder * 10000);
-      
-      // Convert amounts to wei (using 6 decimals for SAUCE token)
-      const stopLossAmount = ethers.parseUnits(stopLossCap.toString(), 6);
-      const buyOrderAmount = ethers.parseUnits(buyOrderCap.toString(), 6);
+    // Convert price to basis points and format cap amount
+    const priceBasisPoints = Math.floor(body.price * 10000);
+    const formattedCap = ethers.parseUnits(body.cap.toString(), 18); // Using standard ERC20 decimals
+    
+    // Convert token IDs to solidity addresses
+    const tokenAAddress = `0x${ContractId.fromString(body.tokenA).toSolidityAddress()}`;
+    const tokenBAddress = `0x${ContractId.fromString(body.tokenB).toSolidityAddress()}`;
 
-      // Convert token ID to EVM address
-      const tokenAddress = `0x${ContractId.fromString(tokenA).toSolidityAddress()}`;
-
-      // FIRST: Set thresholds in the contract
-      const contractExecuteTx = new ContractExecuteTransaction()
-        .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
-        .setGas(1000000)
-        .setFunction("setThresholds", new ContractFunctionParameters()
-          .addUint256(stopLossBasisPoints)
-          .addUint256(buyOrderBasisPoints)
+    // Create contract execute transaction with updated parameters
+    const contractExecuteTx = new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
+      .setGas(1000000)
+      .setFunction(
+        "setThreshold",
+        new ContractFunctionParameters()
+          .addUint256(priceBasisPoints)
           .addString(hederaAccountId)
-          .addAddress(tokenAddress)
-          .addUint256(stopLossAmount.toString())
-          .addUint256(buyOrderAmount.toString())
-        );
-
-      // Execute contract transaction
-      const txResponse = await contractExecuteTx.execute(client);
-      const receipt = await txResponse.getReceipt(client);
-
-      if (receipt.status.toString() !== "SUCCESS") {
-        return new NextResponse(
-          JSON.stringify({ error: `Contract transaction failed with status: ${receipt.status.toString()}` }),
-          { 
-            status: 500,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-
-      // SECOND: After successful contract execution, store in Supabase
-      const { data: threshold, error: insertError } = await supabase
-        .from('Thresholds')
-        .insert([{
-          userId: user.id,
-          hederaAccountId,
-          tokenA,
-          tokenB,
-          fee,
-          stopLoss,
-          buyOrder,
-          stopLossCap,
-          buyOrderCap,
-          isActive: true,
-          txHash: txResponse.transactionId.toString()
-        }])
-        .select()
-        .single();
-
-      if (insertError) {
-        return new NextResponse(
-          JSON.stringify({ error: `Failed to store threshold in database: ${insertError.message}` }),
-          { 
-            status: 500,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-
-      return new NextResponse(
-        JSON.stringify({
-          message: 'Thresholds set successfully',
-          txHash: txResponse.transactionId.toString(),
-          id: threshold.id
-        }),
-        { 
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          .addAddress(tokenAAddress)
+          .addAddress(tokenBAddress)
+          .addUint256(formattedCap.toString())
       );
 
-    } catch (error: any) {
+    const txResponse = await contractExecuteTx.execute(client);
+    const receipt = await txResponse.getReceipt(client);
+
+    if (receipt.status.toString() !== "SUCCESS") {
+      // If contract fails, update database record to failed
+      await serviceClient
+        .from('Thresholds')
+        .update({ 
+          status: 'failed',
+          lastError: `Contract transaction failed: ${receipt.status.toString()}`
+        })
+        .eq('id', pendingThreshold.id);
+
       return new NextResponse(
-        JSON.stringify({ error: `Failed to set thresholds: ${error.message}` }),
-        { 
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: `Contract transaction failed with status: ${receipt.status.toString()}` }),
+        { status: 500 }
       );
     }
-  } catch (error: any) {
+
+    // If successful, update the threshold record with transaction info
+    const { error: updateError } = await serviceClient
+      .from('Thresholds')
+      .update({ 
+        isActive: true,
+        status: 'active',
+        txHash: txResponse.transactionId.toString(),
+        lastChecked: new Date().toISOString()
+      })
+      .eq('id', pendingThreshold.id);
+
+    if (updateError) {
+      console.error('Failed to update threshold record:', updateError);
+    }
+
     return new NextResponse(
-      JSON.stringify({ error: 'An unexpected error occurred' }),
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({
+        message: 'Threshold set successfully',
+        txHash: txResponse.transactionId.toString(),
+        id: pendingThreshold.id
+      }),
+      { status: 200 }
+    );
+
+  } catch (error: any) {
+    console.error('Error in setThresholds:', error);
+    return new NextResponse(
+      JSON.stringify({ error: `Failed to set thresholds: ${error.message}` }),
+      { status: 500 }
     );
   }
 }
 
+// Keep other HTTP method handlers
 export async function GET(req: NextRequest) {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }

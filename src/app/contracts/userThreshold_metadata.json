@@ -21,80 +21,6 @@
 				"inputs": [
 					{
 						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "hbarAmount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "relevantAmount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "minimumOut",
-						"type": "uint256"
-					}
-				],
-				"name": "AmountDebug",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "hederaAccountId",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bool",
-						"name": "isActive",
-						"type": "bool"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "orderType",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "amount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "path",
-						"type": "bytes"
-					}
-				],
-				"name": "ExecuteTradeDebug",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
 						"internalType": "uint256",
 						"name": "tradeAmount",
 						"type": "uint256"
@@ -140,56 +66,6 @@
 					{
 						"indexed": false,
 						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes[]",
-						"name": "calls",
-						"type": "bytes[]"
-					}
-				],
-				"name": "MultiCallDebug",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "callCount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "firstCall",
-						"type": "bytes"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "secondCall",
-						"type": "bytes"
-					}
-				],
-				"name": "MultiCallSetup",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
 						"name": "hederaAccountId",
 						"type": "string"
 					},
@@ -208,7 +84,13 @@
 					{
 						"indexed": false,
 						"internalType": "address",
-						"name": "tokenAddress",
+						"name": "tokenA",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "tokenB",
 						"type": "address"
 					},
 					{
@@ -219,99 +101,6 @@
 					}
 				],
 				"name": "OrderExecuted",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "path",
-						"type": "bytes"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "recipient",
-						"type": "address"
-					}
-				],
-				"name": "PathDebug",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "msgValue",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "thresholdAmount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "bool",
-						"name": "thresholdActive",
-						"type": "bool"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "orderType",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "path",
-						"type": "bytes"
-					}
-				],
-				"name": "PreTradeCheck",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "hederaAccountId",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "derivedAddress",
-						"type": "address"
-					}
-				],
-				"name": "RecipientDebug",
 				"type": "event"
 			},
 			{
@@ -351,264 +140,35 @@
 					{
 						"indexed": false,
 						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "encodedCall",
-						"type": "bytes"
-					}
-				],
-				"name": "RouterCallDebug",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "msgValue",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "router",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "recipient",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "path",
-						"type": "bytes"
-					}
-				],
-				"name": "RouterCallDetails",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes",
-						"name": "path",
-						"type": "bytes"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "recipient",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "amountIn",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "amountOutMinimum",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "router",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "deadline",
-						"type": "uint256"
-					}
-				],
-				"name": "RouterParams",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "stored",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "lookup",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes32",
-						"name": "storedHash",
-						"type": "bytes32"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes32",
-						"name": "lookupHash",
-						"type": "bytes32"
-					}
-				],
-				"name": "StringCompare",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "amountOut",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "recipient",
-						"type": "address"
-					}
-				],
-				"name": "SwapResult",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "message",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "hederaAccountId",
-						"type": "string"
-					},
-					{
-						"indexed": false,
-						"internalType": "bool",
-						"name": "exists",
-						"type": "bool"
-					},
-					{
-						"indexed": false,
-						"internalType": "bool",
-						"name": "isActive",
-						"type": "bool"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "stopLossAmount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "buyOrderAmount",
-						"type": "uint256"
-					}
-				],
-				"name": "ThresholdDebug",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
-						"name": "hederaAccountId",
-						"type": "string"
-					}
-				],
-				"name": "ThresholdsDeactivated",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "string",
 						"name": "hederaAccountId",
 						"type": "string"
 					},
 					{
 						"indexed": false,
 						"internalType": "uint256",
-						"name": "stopLossThreshold",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "buyOrderThreshold",
+						"name": "price",
 						"type": "uint256"
 					},
 					{
 						"indexed": false,
 						"internalType": "address",
-						"name": "tokenAddress",
+						"name": "tokenA",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "tokenB",
 						"type": "address"
 					},
 					{
 						"indexed": false,
 						"internalType": "uint256",
-						"name": "stopLossAmount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "buyOrderAmount",
+						"name": "cap",
 						"type": "uint256"
 					}
 				],
-				"name": "ThresholdsSet",
+				"name": "ThresholdSet",
 				"type": "event"
 			},
 			{
@@ -735,12 +295,7 @@
 				"outputs": [
 					{
 						"internalType": "uint256",
-						"name": "stopLossThreshold",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "buyOrderThreshold",
+						"name": "price",
 						"type": "uint256"
 					},
 					{
@@ -750,17 +305,17 @@
 					},
 					{
 						"internalType": "address",
-						"name": "tokenAddress",
+						"name": "tokenA",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "tokenB",
 						"type": "address"
 					},
 					{
 						"internalType": "uint256",
-						"name": "stopLossAmount",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "buyOrderAmount",
+						"name": "cap",
 						"type": "uint256"
 					},
 					{
@@ -802,12 +357,7 @@
 				"inputs": [
 					{
 						"internalType": "uint256",
-						"name": "_stopLossThreshold",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "_buyOrderThreshold",
+						"name": "_price",
 						"type": "uint256"
 					},
 					{
@@ -817,21 +367,21 @@
 					},
 					{
 						"internalType": "address",
-						"name": "_tokenAddress",
+						"name": "_tokenA",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "_tokenB",
 						"type": "address"
 					},
 					{
 						"internalType": "uint256",
-						"name": "_stopLossAmount",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "_buyOrderAmount",
+						"name": "_cap",
 						"type": "uint256"
 					}
 				],
-				"name": "setThresholds",
+				"name": "setThreshold",
 				"outputs": [],
 				"stateMutability": "nonpayable",
 				"type": "function"
@@ -848,12 +398,7 @@
 				"outputs": [
 					{
 						"internalType": "uint256",
-						"name": "stopLossThreshold",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "buyOrderThreshold",
+						"name": "price",
 						"type": "uint256"
 					},
 					{
@@ -863,17 +408,17 @@
 					},
 					{
 						"internalType": "address",
-						"name": "tokenAddress",
+						"name": "tokenA",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "tokenB",
 						"type": "address"
 					},
 					{
 						"internalType": "uint256",
-						"name": "stopLossAmount",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "buyOrderAmount",
+						"name": "cap",
 						"type": "uint256"
 					},
 					{
@@ -914,11 +459,11 @@
 	},
 	"sources": {
 		"contracts/userThreshold.sol": {
-			"keccak256": "0x1f5c691fcf4f29d7b93c3526e995e59cc4185134dbb632832c25987f7e2709cc",
+			"keccak256": "0x83404b9b17c0c7272e474ec02a025479070bbc4388d94f6b5c638a1b591d9dd7",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://0851d11b6ef9cb6d160c6d6e87ffce414c653a2cec2b752ba9825ad2e7187517",
-				"dweb:/ipfs/QmeAvRsDZ1CmWseSjbrzT4BMX3j5rHHzTrtk7Sa2STuTGU"
+				"bzz-raw://4ae79b38a6b6a0491820c01ec281b2aee176a09789534574e4f54403d5db9dab",
+				"dweb:/ipfs/QmP4QBL2EXMahVe8Zbimcz5PV8Krw5ebBmcJw1PLHhtYK1"
 			]
 		}
 	},
