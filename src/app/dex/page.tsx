@@ -23,6 +23,9 @@ import {
 } from '../lib/saucerswap';
 import { ethers } from 'ethers';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import { Link } from "@nextui-org/react";
+import TestnetAlert from "../components/TestnetAlert";
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -542,7 +545,8 @@ export default function DexPage() {
 
     return (    
         <>
-            <div className="z-10 w-full items-center justify-between font-mono text-sm lg:flex pt-4">
+            <TestnetAlert />
+            <div className={`z-10 w-full items-center justify-between font-mono text-sm lg:flex ${process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet' ? 'pt-24' : 'pt-4'}`}>
                 <div className="flex w-full">
                     <div className="grow pr-8">
                         <Tabs 
