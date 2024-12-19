@@ -11,6 +11,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      colors: {
+        background: "#000000",
+        foreground: "#ffffff",
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
@@ -18,6 +22,15 @@ const config: Config = {
       },
     },
   },
-  plugins: [nextui({layout: {disabledOpacity: '0.3'}})],
+  plugins: [nextui({
+    themes: {
+      dark: {
+        colors: {
+          background: "#000000",
+          foreground: "#ffffff",
+        },
+      },
+    },
+  })],
 };
 export default config;

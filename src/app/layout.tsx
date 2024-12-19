@@ -22,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html className="dark" lang="en">
-      <body className={inter.className + " dark text-foreground bg-background min-h-screen"}>
+      <body className={inter.className + " dark text-foreground bg-background min-h-screen !bg-black"}>
         <WalletProvider>
           <SaucerSwapProvider>
             <PoolProvider>
