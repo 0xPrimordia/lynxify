@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     // Get the request body first
     const body = await req.json();
-    const { hederaAccountId } = body;
+    const { hederaAccountId, slippageBasisPoints } = body;
     
     console.log('Received request with body:', body);
     console.log('Looking for user with Hedera ID:', hederaAccountId);
@@ -34,12 +34,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create threshold record in database first
+    // Create threshold record with slippage
     const { data: pendingThreshold, error: insertError } = await serviceClient
       .from('Thresholds')
       .insert({
         userId: dbUser.id,
         ...body,
+        slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
         isActive: false,
         status: 'pending',
         createdAt: new Date().toISOString(),

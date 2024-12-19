@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect, useRef, FocusEvent } from "react";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert } from "@nextui-org/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent } from "@nextui-org/react";
 
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
@@ -26,6 +26,9 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
 import { Link } from "@nextui-org/react";
 import TestnetAlert from "../components/TestnetAlert";
+import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
+import { Button } from '@nextui-org/react';
+import { WHBAR_ID } from "../lib/constants";
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -41,7 +44,6 @@ const ApexChart = dynamic(
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
-import { Button, ButtonGroup } from '@nextui-org/react';
 import { usePoolContext } from "../hooks/usePools";
   
 export default function DexPage() {
@@ -100,6 +102,12 @@ export default function DexPage() {
         type: 'success'
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [slippageTolerance, setSlippageTolerance] = useState<number>(0.5);
+    const [customSlippage, setCustomSlippage] = useState<string>("");
+    const [showCustomSlippage, setShowCustomSlippage] = useState<boolean>(false);
+    const [stopLossSlippage, setStopLossSlippage] = useState<number>(0.5);
+    const [buyOrderSlippage, setBuyOrderSlippage] = useState<number>(0.5);
+    const [sellOrderSlippage, setSellOrderSlippage] = useState<number>(0.5);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -191,17 +199,28 @@ export default function DexPage() {
         }).format(price);
     };
 
+    useEffect(() => {
+        console.log('Current slippage tolerance:', {
+            slippageTolerance,
+            basisPoints: Math.floor(slippageTolerance * 100)
+        });
+    }, [slippageTolerance]);
+
     const handleQuote = async () => {
+        if (!currentPool || !currentToken || !tradeToken || !account) return;
+
         try {
-            if (!currentToken || !tradeToken || !account || !currentPool) {
-                console.error('Missing required parameters');
-                return;
-            }
+            let result: any = { tx: null, type: null };
+            const slippageBasisPoints = Math.floor(slippageTolerance * 100);
 
-            const swapType = getSwapType(currentToken.id, tradeToken.id);
-            let result: SwapResponse;
+            console.log('Trade execution parameters:', {
+                tradeAmount,
+                slippageTolerance,
+                slippageBasisPoints,
+                tradeType: getTradeType()
+            });
 
-            switch (swapType) {
+            switch (getTradeType()) {
                 case 'hbarToToken':
                     result = await swapHbarToToken(
                         tradeAmount.toString(),
@@ -209,8 +228,9 @@ export default function DexPage() {
                         currentPool.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
-                        0
+                        slippageBasisPoints
                     );
+                    console.log('HBAR to Token swap result:', result);
                     break;
 
                 case 'tokenToHbar':
@@ -220,7 +240,7 @@ export default function DexPage() {
                         currentPool.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
-                        0,
+                        slippageBasisPoints,
                         currentToken.decimals
                     );
                     break;
@@ -233,28 +253,28 @@ export default function DexPage() {
                         currentPool.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
-                        0,
+                        slippageBasisPoints,
                         currentToken.decimals
                     );
                     break;
             }
 
             if (result.tx) {
+                console.log('Attempting to execute transaction:', result);
                 await signAndExecuteTransaction({
                     transactionList: result.tx,
                     signerAccountId: account
                 });
 
-                // If it was an approval, execute the swap after
-                if (result.type === "approve") {
-                    result = await swapTokenToHbar(
+                // If it was an association, execute the swap after
+                if (result.type === "associate") {
+                    result = await swapHbarToToken(
                         tradeAmount.toString(),
-                        currentToken.id,
+                        tradeToken.id,
                         currentPool.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
-                        0,
-                        currentToken.decimals
+                        slippageBasisPoints
                     );
                     
                     if (result.tx) {
@@ -300,6 +320,12 @@ export default function DexPage() {
 
         setIsSubmitting(true);
         try {
+            const slippageBasisPoints = Math.floor(
+                (type === 'stopLoss' ? stopLossSlippage :
+                 type === 'buyOrder' ? buyOrderSlippage :
+                 sellOrderSlippage) * 100
+            );
+
             const response = await fetch('/api/thresholds/setThresholds', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -315,7 +341,8 @@ export default function DexPage() {
                     tokenA: currentPool.tokenA.id,
                     tokenB: currentPool.tokenB.id,
                     fee: currentPool.fee,
-                    userId: userId
+                    userId: userId,
+                    slippageBasisPoints
                 }),
             });
 
@@ -554,6 +581,136 @@ export default function DexPage() {
         };
     }, [alertState.isVisible]);
 
+    const handleSlippageChange = (value: number | string) => {
+        if (typeof value === 'number') {
+            setSlippageTolerance(value);
+            setShowCustomSlippage(false);
+            setCustomSlippage("");
+        } else {
+            // Handle custom input
+            const parsed = parseFloat(value);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 100) {
+                setSlippageTolerance(parsed);
+            }
+            setCustomSlippage(value);
+        }
+    };
+
+    const SlippageSelector = () => (
+        <Popover placement="top">
+            <PopoverTrigger>
+                <Button 
+                    size="sm" 
+                    variant="light" 
+                    startContent={<AdjustmentsHorizontalIcon className="w-4 h-4" />}
+                >
+                    {slippageTolerance}% Slippage
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+                <div className="p-4">
+                    <p className="text-sm mb-2">Slippage Tolerance</p>
+                    <div className="flex gap-2 mb-2">
+                        {[0.1, 0.5, 1.0].map((value) => (
+                            <Button
+                                key={value}
+                                size="sm"
+                                variant={slippageTolerance === value ? "solid" : "light"}
+                                onClick={() => handleSlippageChange(value)}
+                            >
+                                {value}%
+                            </Button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant={showCustomSlippage ? "solid" : "light"}
+                            onClick={() => setShowCustomSlippage(true)}
+                        >
+                            Custom
+                        </Button>
+                        {showCustomSlippage && (
+                            <Input
+                                size="sm"
+                                type="number"
+                                value={customSlippage}
+                                onChange={(e) => handleSlippageChange(e.target.value)}
+                                placeholder="0.00"
+                                endContent="%"
+                                min="0.01"
+                                max="99.99"
+                                step="0.01"
+                                className="w-24"
+                            />
+                        )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Your transaction will revert if the price changes unfavorably by more than this percentage.
+                    </p>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+
+    const getTradeType = () => {
+        if (!currentToken || !tradeToken) return null;
+
+        if (currentToken.id === WHBAR_ID) {
+            return 'hbarToToken';
+        }
+        else if (tradeToken.id === WHBAR_ID) {
+            return 'tokenToHbar';
+        }
+        else {
+            return 'tokenToToken';
+        }
+    };
+
+    const ThresholdSlippageSelector = ({ 
+        slippage, 
+        setSlippage, 
+        label = "Slippage Tolerance" 
+    }: { 
+        slippage: number; 
+        setSlippage: (value: number) => void; 
+        label?: string;
+    }) => (
+        <div className="flex items-center justify-between gap-2 mt-2">
+            <span className="text-sm text-default-500">{label}</span>
+            <Popover placement="top">
+                <PopoverTrigger>
+                    <Button 
+                        size="sm" 
+                        variant="light" 
+                        startContent={<AdjustmentsHorizontalIcon className="w-4 h-4" />}
+                    >
+                        {slippage}% Slippage
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent>
+                    <div className="p-4">
+                        <div className="flex gap-2 mb-2">
+                            {[0.1, 0.5, 1.0].map((value) => (
+                                <Button
+                                    key={value}
+                                    size="sm"
+                                    variant={slippage === value ? "solid" : "light"}
+                                    onClick={() => setSlippage(value)}
+                                >
+                                    {value}%
+                                </Button>
+                            ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                            Your transaction will revert if the price changes unfavorably by more than this percentage.
+                        </p>
+                    </div>
+                </PopoverContent>
+            </Popover>
+        </div>
+    );
+
     if (isLoading || nftGateLoading) {
         return <div>Loading...</div>;
     }
@@ -724,7 +881,19 @@ export default function DexPage() {
                                     </div>
                                 }
                             />
-                            <Button isDisabled={currentPool ? false : true} onClick={handleQuote} className="w-full mt-12" endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}>Trade</Button>
+                            <ThresholdSlippageSelector 
+                                slippage={slippageTolerance} 
+                                setSlippage={setSlippageTolerance}
+                                label="Trade Slippage"
+                            />
+                            <Button 
+                                isDisabled={currentPool ? false : true} 
+                                onClick={handleQuote} 
+                                className="w-full" 
+                                endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
+                            >
+                                Trade
+                            </Button>
                         </div>
                         <div className="w-full flex flex-col gap-4 pb-8">
                             <div className="flex items-center gap-2">
@@ -810,16 +979,18 @@ export default function DexPage() {
                                         <Chip onClick={hanndleMaxClickStopLoss} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
                                     }
                                 />
-                                {stopLoss && (
-                                    <Button 
-                                        className="mb-2" 
-                                        onClick={() => saveThresholds('stopLoss')}
-                                        isLoading={isSubmitting}
-                                        isDisabled={isSubmitting}
-                                    >
-                                        Set Stop-Loss
-                                    </Button>
-                                )}
+                                <ThresholdSlippageSelector 
+                                    slippage={stopLossSlippage} 
+                                    setSlippage={setStopLossSlippage}
+                                />
+                                <Button 
+                                    className="mb-2" 
+                                    onClick={() => saveThresholds('stopLoss')}
+                                    isLoading={isSubmitting}
+                                    isDisabled={isSubmitting}
+                                >
+                                    Set Stop-Loss
+                                </Button>
                             </div>}
                             <div className="flex items-center gap-2">
                                 <Switch 
@@ -877,6 +1048,10 @@ export default function DexPage() {
                                         inputWrapper: "items-center h-16",
                                         mainWrapper: "h-16",
                                     }}
+                                />
+                                <ThresholdSlippageSelector 
+                                    slippage={buyOrderSlippage} 
+                                    setSlippage={setBuyOrderSlippage}
                                 />
                             </div>}
                             {buyOrder && (
@@ -972,16 +1147,18 @@ export default function DexPage() {
                                         <Chip onClick={handleMaxClickSellOrder} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
                                     }
                                 />
-                                {sellOrder && (
-                                    <Button 
-                                        className="mb-2" 
-                                        onClick={() => saveThresholds('sellOrder')}
-                                        isLoading={isSubmitting}
-                                        isDisabled={isSubmitting}
-                                    >
-                                        Set Sell Order
-                                    </Button>
-                                )}
+                                <ThresholdSlippageSelector 
+                                    slippage={sellOrderSlippage} 
+                                    setSlippage={setSellOrderSlippage}
+                                />
+                                <Button 
+                                    className="mb-2" 
+                                    onClick={() => saveThresholds('sellOrder')}
+                                    isLoading={isSubmitting}
+                                    isDisabled={isSubmitting}
+                                >
+                                    Set Sell Order
+                                </Button>
                             </div>}
                         </div>
                         

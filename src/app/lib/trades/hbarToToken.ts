@@ -1,4 +1,4 @@
-import { ContractId, ContractExecuteTransaction, TransactionId, Hbar, AccountId } from '@hashgraph/sdk';
+import { ContractId, ContractExecuteTransaction, TransactionId, Hbar, AccountId, HbarUnit } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 import { WHBAR_ID, SWAP_ROUTER_ADDRESS } from '../constants';
@@ -14,7 +14,7 @@ export const swapHbarToToken = async (
   fee: number,
   recipientAddress: string,
   deadline: number,
-  outputAmountMin: number
+  slippageBasisPoints: number
 ) => {
   try {
     // Check output token association first
@@ -23,10 +23,22 @@ export const swapHbarToToken = async (
       return { type: 'associate' as const, tx: await associateToken(recipientAddress, outputToken) };
     }
 
-    // Parse amount (HBAR uses 8 decimals)
-    const amountInSmallestUnit = (Number(amountIn) * 1e8).toString();
+    // Parse amount to tinybars
+    const amountInSmallestUnit = Hbar.from(amountIn, HbarUnit.Hbar).toTinybars().toString();
+    
+    // Calculate minimum output using provided slippage (basis points to percentage)
+    const slippagePercent = slippageBasisPoints / 10000;
+    const outputMinInTokens = (Number(amountInSmallestUnit) * (1 - slippagePercent)).toString();
 
-    // Construct path exactly like the working example but with WHBAR
+    console.log('Swap Parameters:', {
+      amountIn,
+      amountInSmallestUnit,
+      slippageBasisPoints,
+      slippagePercent,
+      outputMinInTokens
+    });
+
+    // Construct path
     const path = Buffer.concat([
       Buffer.from(ContractId.fromString(WHBAR_ID).toSolidityAddress().replace('0x', ''), 'hex'),
       Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
@@ -39,7 +51,7 @@ export const swapHbarToToken = async (
       recipient: AccountId.fromString(recipientAddress).toSolidityAddress(),
       deadline: Math.floor(Date.now() / 1000) + 60,
       amountIn: amountInSmallestUnit,
-      amountOutMinimum: outputAmountMin
+      amountOutMinimum: outputMinInTokens
     };
 
     // Create swap calls - include refundETH for HBAR swaps

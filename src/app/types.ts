@@ -66,6 +66,7 @@ export type ApiLiquidityPoolV2 = {
     status: string;
     lastExecutedAt: string;
     txHash: string;
+    slippageBasisPoints: number;
   }
 
   export type User = {

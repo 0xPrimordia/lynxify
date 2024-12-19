@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, Hbar, HbarUnit } from "@hashgraph/sdk";
 import { createClient } from '@/utils/supabase/server';
+import { executeThresholdTrade } from '@/app/lib/threshold';
 
 export async function POST(req: NextRequest) {
   let thresholdId: string | null = null;
@@ -60,6 +61,16 @@ export async function POST(req: NextRequest) {
       toToken = threshold.tokenB;
       tradeAmount = threshold.cap;
     }
+
+    // Execute trade with stored slippage
+    const tradeResult = await executeThresholdTrade(
+      orderType,
+      {
+        ...threshold,
+        slippageBasisPoints: threshold.slippageBasisPoints || 50 // Use stored slippage or default
+      },
+      Buffer.from(threshold.path, 'hex')
+    );
 
     // Create contract execute transaction with proper parameters
     const contractExecuteTx = new ContractExecuteTransaction()
