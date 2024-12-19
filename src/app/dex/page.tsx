@@ -337,9 +337,24 @@ export default function DexPage() {
 
         } catch (error: any) {
             console.error('Error setting threshold:', error);
+            let errorMessage = 'Failed to set threshold';
+            
+            try {
+                const errorData = await error.response?.json();
+                console.log('Detailed error information:', errorData);
+                
+                errorMessage = errorData?.details || errorData?.error || errorMessage;
+                
+                if (errorData?.debugInfo) {
+                    console.log('Debug information:', errorData.debugInfo);
+                }
+            } catch (e) {
+                console.error('Error parsing error response:', e);
+            }
+            
             setAlertState({
                 isVisible: true,
-                message: error.message || "Failed to set threshold",
+                message: errorMessage,
                 type: "danger"
             });
         } finally {
@@ -848,6 +863,7 @@ export default function DexPage() {
                                         </div>
                                     }
                                 />
+                                <p>Buy Cap (qty of tokens to buy)</p>
                                 <Input 
                                     onFocus={handleInputFocus}
                                     maxLength={12} 

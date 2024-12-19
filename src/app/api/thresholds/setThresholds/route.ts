@@ -65,15 +65,25 @@ export async function POST(req: NextRequest) {
       PrivateKey.fromString(process.env.OPERATOR_KEY!)
     );
 
-    // Convert price to basis points and format cap amount
-    const priceBasisPoints = Math.floor(body.price * 10000);
-    const formattedCap = ethers.parseUnits(body.cap.toString(), 18); // Using standard ERC20 decimals
+    // Modified price conversion with bounds checking
+    const priceBasisPoints = Math.max(1, Math.min(10000, Math.floor(body.price * 10000)));
+    const formattedCap = ethers.parseUnits(body.cap.toString(), 18);
     
     // Convert token IDs to solidity addresses
     const tokenAAddress = `0x${ContractId.fromString(body.tokenA).toSolidityAddress()}`;
     const tokenBAddress = `0x${ContractId.fromString(body.tokenB).toSolidityAddress()}`;
 
-    // Create contract execute transaction with updated parameters
+    // Add debug logging for contract parameters
+    const debugParams = {
+      priceBasisPoints,
+      formattedCap: formattedCap.toString(),
+      tokenAAddress,
+      tokenBAddress,
+      hederaAccountId
+    };
+    console.log('Contract parameters:', debugParams);
+
+    // Create contract execute transaction
     const contractExecuteTx = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
       .setGas(1000000)
@@ -101,7 +111,14 @@ export async function POST(req: NextRequest) {
         .eq('id', pendingThreshold.id);
 
       return new NextResponse(
-        JSON.stringify({ error: `Contract transaction failed with status: ${receipt.status.toString()}` }),
+        JSON.stringify({ 
+          error: `Contract transaction failed with status: ${receipt.status.toString()}`,
+          debugInfo: {
+            requestBody: body,
+            contractParams: debugParams,
+            receipt: receipt
+          }
+        }),
         { status: 500 }
       );
     }
@@ -133,7 +150,15 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Error in setThresholds:', error);
     return new NextResponse(
-      JSON.stringify({ error: `Failed to set thresholds: ${error.message}` }),
+      JSON.stringify({ 
+        error: 'Failed to set thresholds', 
+        details: error.message,
+        debugInfo: {
+          errorName: error.name,
+          errorStack: error.stack,
+          errorMessage: error.message
+        }
+      }),
       { status: 500 }
     );
   }
