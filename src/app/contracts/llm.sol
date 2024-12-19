@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 contract NFTSale {
     address public owner;
     address public treasury; // Treasury account holding the NFTs
-    uint256 public price = 300 * 10**8; // 300 HBAR in tinybars
+    uint256 public price = 50 * 10**8; // 300 HBAR in tinybars
     uint256 public maxSupply = 100; // Maximum NFTs to sell
     uint256 public soldSupply = 0; // Counter for sold NFTs
     address public tokenAddress; // Hedera Token ID of the NFT
