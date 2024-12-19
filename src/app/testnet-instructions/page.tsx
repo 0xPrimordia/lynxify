@@ -31,7 +31,7 @@ export default function TestnetInstructions() {
                         
                         <li>
                             <strong>Connect Your Wallet</strong>
-                            <p>Use HashPack or Blade wallet and ensure it's configured for Testnet.</p>
+                            <p>Use HashPack or Blade wallet and ensure it&apos;s configured for Testnet.</p>
                         </li>
                         
                         <li>
