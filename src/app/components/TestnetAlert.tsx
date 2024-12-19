@@ -7,7 +7,7 @@ export default function TestnetAlert() {
     }
 
     return (
-        <div className="fixed top-[80px] left-0 right-0 z-50 flex justify-center px-4">
+        <div className="w-full flex justify-center px-4 mb-6">
             <Alert 
                 className="max-w-[800px] [&>svg]:!text-[#0159E0] border-[#0159E0]"
                 variant="bordered"

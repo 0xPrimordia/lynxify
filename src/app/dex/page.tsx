@@ -561,7 +561,7 @@ export default function DexPage() {
     return (    
         <>
             <TestnetAlert />
-            <div className={`z-10 w-full items-center justify-between font-mono text-sm lg:flex ${process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet' ? 'pt-24' : 'pt-4'}`}>
+            <div className={`z-10 w-full items-center justify-between font-mono text-sm lg:flex`}>
                 <div className="flex w-full">
                     <div className="grow pr-8">
                         <Tabs 
