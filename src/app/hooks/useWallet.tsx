@@ -15,8 +15,8 @@ import { supabase } from '@/utils/supabase/client';
 const appMetadata = {
     name: "Lynxify",
     description: "A Dex on Hedera for high volume trading",
-    icons: ["<Image url>"],
-    url: "http://localhost:3000"
+    icons: ["/share-image.png"],
+    url: process.env.NEXT_PUBLIC_APP_URL as string
 }
 
 interface WalletContextType {
