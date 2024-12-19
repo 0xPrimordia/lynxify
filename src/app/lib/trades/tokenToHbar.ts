@@ -21,23 +21,30 @@ export const swapTokenToHbar = async (
   fee: number,
   recipientAddress: string,
   deadline: number,
-  outputAmountMin: number,
+  slippageBasisPoints: number,
   inputTokenDecimals: number
 ) => {
   try {
     // Parse amount with proper decimals
     const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
     
-    // Calculate minimum output with 1% slippage if none provided
-    const outputMinInTinybars = outputAmountMin === 0 
-      ? (Number(amountInSmallestUnit) * 0.99).toString() // 1% slippage protection
-      : Hbar.from(outputAmountMin, HbarUnit.Hbar).toTinybars().toString();
+    // Calculate minimum output using provided slippage (basis points to percentage)
+    const slippagePercent = slippageBasisPoints / 10000;
+    const minimumOutput = Math.floor(Number(amountInSmallestUnit) * (1 - slippagePercent));
+    const outputMinInTinybars = minimumOutput.toString();
 
     console.log('Swap Parameters:', {
       amountIn,
       amountInSmallestUnit,
-      outputAmountMin,
-      outputMinInTinybars
+      slippageBasisPoints,
+      slippagePercent,
+      minimumOutput,
+      outputMinInTinybars,
+      inputTokenDecimals,
+      calculationSteps: {
+        slippageCalc: `${slippageBasisPoints} / 10000 = ${slippagePercent}`,
+        minimumCalc: `${amountInSmallestUnit} * (1 - ${slippagePercent}) = ${minimumOutput}`
+      }
     });
 
     // Check token association first

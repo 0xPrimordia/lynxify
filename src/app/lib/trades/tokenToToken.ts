@@ -15,17 +15,32 @@ export const swapTokenToToken = async (
   fee: number,
   recipientAddress: string,
   deadline: number,
-  outputAmountMin: number,
+  slippageBasisPoints: number,
   inputTokenDecimals: number
 ) => {
   try {
-    // First check if output token is associated
+    // Parse amount with proper decimals
+    const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
+    
+    // Calculate minimum output using provided slippage (basis points to percentage)
+    const slippagePercent = slippageBasisPoints / 10000;
+    const outputMinInTokens = (Number(amountInSmallestUnit) * (1 - slippagePercent)).toString();
+
+    console.log('Swap Parameters:', {
+      amountIn,
+      amountInSmallestUnit,
+      slippageBasisPoints,
+      slippagePercent,
+      outputMinInTokens
+    });
+
+    // Check token association first
     const isAssociated = await checkTokenAssociation(recipientAddress, outputToken);
     if (!isAssociated) {
       return { type: 'associate' as const, tx: await associateToken(recipientAddress, outputToken) };
     }
 
-    // Then check if input token is approved
+    // Check if input token is approved
     const isApproved = await checkTokenAllowance(
       inputToken,
       recipientAddress,
@@ -36,7 +51,7 @@ export const swapTokenToToken = async (
 
     if (!isApproved) {
       return { 
-        type: 'approval' as const, 
+        type: 'approve' as const, 
         tx: await approveTokenForSwap(
           inputToken,
           amountIn,
@@ -46,10 +61,7 @@ export const swapTokenToToken = async (
       };
     }
 
-    // Parse amount based on input token decimals
-    const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
-
-    // Construct path exactly like the working example
+    // Construct path
     const path = Buffer.concat([
       Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
       Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
@@ -62,7 +74,7 @@ export const swapTokenToToken = async (
       recipient: AccountId.fromString(recipientAddress).toSolidityAddress(),
       deadline: Math.floor(Date.now() / 1000) + 60,
       amountIn: amountInSmallestUnit,
-      amountOutMinimum: outputAmountMin
+      amountOutMinimum: outputMinInTokens
     };
 
     const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);

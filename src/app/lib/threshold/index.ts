@@ -14,7 +14,8 @@ import {
   export const executeThresholdTrade = async (
     type: ThresholdType,
     params: ThresholdInputParams,
-    path: Buffer
+    path: Buffer,
+    slippageBasisPoints: number = 50 // Default to 0.5%
   ) => {
     // For buy orders, we swap the tokens (trading B for A)
     const [effectiveTokenA, effectiveTokenB] = type === 'buyOrder' 
@@ -34,8 +35,8 @@ import {
         params.fee,
         params.hederaAccountId,
         Math.floor(Date.now() / 1000) + 60,
-        0, // Use default slippage
-        6 // Standard decimals - could be parameterized
+        slippageBasisPoints,
+        6
       );
     }
     
@@ -47,7 +48,7 @@ import {
         params.fee,
         params.hederaAccountId,
         Math.floor(Date.now() / 1000) + 60,
-        0
+        slippageBasisPoints
       );
     }
     
@@ -59,8 +60,8 @@ import {
         params.fee,
         params.hederaAccountId,
         Math.floor(Date.now() / 1000) + 60,
-        0,
-        6 // Standard decimals - could be parameterized
+        slippageBasisPoints,
+        6
       );
     }
   

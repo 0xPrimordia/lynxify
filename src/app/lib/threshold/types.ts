@@ -13,6 +13,7 @@ export interface ThresholdInputParams {
   tokenB: string;
   fee: number;
   isActive: boolean;
+  slippageBasisPoints?: number;
 }
 
 // Processed parameters for contract interaction
