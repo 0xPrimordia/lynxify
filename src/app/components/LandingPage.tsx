@@ -1,21 +1,29 @@
-import { Button } from "@nextui-org/react";
+import { Button, Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import Link from "next/link";
-import { Inria_Serif } from "next/font/google";
+import { Inria_Serif, VT323 } from "next/font/google";
 import { useNFTGate } from "../hooks/useNFTGate";
 import { useWalletContext } from "../hooks/useWallet";
 import { useState, useEffect } from "react";
 import TestnetAlert from "./TestnetAlert";
+import PurchaseNFT from "./purchaseNFT";
 
 const inriaSerif = Inria_Serif({ 
     weight: ["300", "400", "700"],
     subsets: ["latin"] 
 });
 
+const vt323 = VT323({ weight: "400", subsets: ["latin"] });
+
 const LandingPage = () => {
     const [remainingSupply, setRemainingSupply] = useState<number>(0);
-    const { account } = useWalletContext();
+    const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+    const { account, client } = useWalletContext();
     const { hasAccess } = useNFTGate(account);
     const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
+
+    const handleAccessDenied = () => {
+        setShowPurchaseModal(true);
+    };
 
     useEffect(() => {
         const fetchSupply = async () => {
@@ -49,22 +57,43 @@ const LandingPage = () => {
                     <p className="text-8xl font-bold text-[#0159E0]">{remainingSupply}</p>
                 </div>
                 {account && (
-                <Button 
-                    size="lg" 
-                    color="primary"
-                    as={Link}
-                    href={hasAccess ? "/dex" : "#"}
-                    onClick={(e) => {
-                        if (!hasAccess) {
-                            e.preventDefault();
-                            alert("Please purchase an NFT first");
-                        }
-                    }}
+                    <Button 
+                        size="lg" 
+                        color="primary"
+                        onClick={(e) => {
+                            if (!hasAccess) {
+                                e.preventDefault();
+                                handleAccessDenied();
+                            }
+                        }}
+                        href={hasAccess ? "/dex" : "#"}
+                        as={Link}
                     >
                         {hasAccess ? "Enter DEX" : "Purchase Access NFT"}
                     </Button>
                 )}
             </div>
+
+            <Modal 
+                isOpen={showPurchaseModal} 
+                onClose={() => setShowPurchaseModal(false)}
+                classNames={{
+                    base: "max-w-md mx-auto",
+                    header: vt323.className
+                }}
+                placement="center"
+            >
+                <ModalContent>
+                    <ModalHeader className="text-2xl">Purchase Access NFT</ModalHeader>
+                    <ModalBody>
+                        <PurchaseNFT 
+                            apiUrl="/api/nft"
+                            tokenId={process.env.NEXT_PUBLIC_ACCESS_NFT_TOKEN_ID || ""}
+                            client={client}
+                        />
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
         </>
     );
 };

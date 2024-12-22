@@ -71,17 +71,6 @@ const Header = () => {
                                 >
                                     Connect Wallet
                                 </Button>
-                                <Button 
-                                    className="ml-4" 
-                                    variant="bordered" 
-                                    style={{
-                                        borderColor: "#0159E0",
-                                        color: "#0159E0"
-                                    }}
-                                    onClick={handleAccessDenied}
-                                >
-                                    Get Access
-                                </Button>
                             </>
                         ) : (
                             <>
