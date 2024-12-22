@@ -6,6 +6,7 @@ import { useWalletContext } from "../hooks/useWallet";
 import { useState, useEffect } from "react";
 import TestnetAlert from "./TestnetAlert";
 import PurchaseNFT from "./purchaseNFT";
+import { useSearchParams } from 'next/navigation';
 
 const inriaSerif = Inria_Serif({ 
     weight: ["300", "400", "700"],
@@ -20,6 +21,13 @@ const LandingPage = () => {
     const { account, client } = useWalletContext();
     const { hasAccess } = useNFTGate(account);
     const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        if (searchParams.get('purchase') === 'true') {
+            setShowPurchaseModal(true);
+        }
+    }, [searchParams]);
 
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);
