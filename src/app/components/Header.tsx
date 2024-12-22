@@ -56,13 +56,45 @@ const Header = () => {
                 </NavbarBrand>
                 
                 <NavbarContent justify="end">
-                    <NavbarItem className="hidden lg:flex">
+                    <NavbarItem className="hidden lg:flex items-center">
                         {!isConnected ? (
-                            <p><Button className="mt-4" onClick={() => handleConnect()}>Connect Wallet</Button></p>
+                            <>
+                                <Button 
+                                    className="mt-0" 
+                                    variant="bordered"
+                                    style={{
+                                        backgroundColor: "white",
+                                        color: "black",
+                                        borderColor: "black"
+                                    }}
+                                    onClick={() => handleConnect()}
+                                >
+                                    Connect Wallet
+                                </Button>
+                                <Button 
+                                    className="ml-4" 
+                                    variant="bordered" 
+                                    style={{
+                                        borderColor: "#0159E0",
+                                        color: "#0159E0"
+                                    }}
+                                    onClick={handleAccessDenied}
+                                >
+                                    Get Access
+                                </Button>
+                            </>
                         ) : (
                             <>
-                                {!hasAccess && !isLoading && (
-                                    <Button className="mr-4" color="primary" onClick={handleAccessDenied}>
+                                {(!hasAccess && !isLoading) && (
+                                    <Button 
+                                        className="mr-4"
+                                        variant="bordered"
+                                        style={{
+                                            borderColor: "#0159E0",
+                                            color: "#0159E0"
+                                        }}
+                                        onClick={handleAccessDenied}
+                                    >
                                         Get Access
                                     </Button>
                                 )}
@@ -90,9 +122,17 @@ const Header = () => {
                 </NavbarContent>
             </Navbar>
 
-            <Modal isOpen={showPurchaseModal} onClose={() => setShowPurchaseModal(false)}>
+            <Modal 
+                isOpen={showPurchaseModal} 
+                onClose={() => setShowPurchaseModal(false)}
+                classNames={{
+                    base: "max-w-md mx-auto",
+                    header: vt323.className
+                }}
+                placement="center"
+            >
                 <ModalContent>
-                    <ModalHeader>Purchase Access NFT</ModalHeader>
+                    <ModalHeader className="text-2xl">Purchase Access NFT</ModalHeader>
                     <ModalBody>
                         <PurchaseNFT 
                             apiUrl="/api/nft"

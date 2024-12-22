@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "es2020",
     "module": "commonjs",
     "lib": [
       "dom",
       "es6",
-      "es2017"
+      "es2017",
+      "es2020"
     ],
     "allowJs": true,
     "outDir": "dist",
@@ -13,10 +14,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": "src",
+    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "./*"
+        "src/*"
       ]
     },
     "declaration": true,
@@ -38,7 +39,10 @@
   },
   "include": [
     "src/**/*",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "test/**/*",
+    "hardhat.config.ts",
+    "scripts/**/*"
   ],
   "exclude": [
     "node_modules",

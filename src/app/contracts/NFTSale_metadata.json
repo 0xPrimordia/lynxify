@@ -41,6 +41,70 @@
 				"type": "event"
 			},
 			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "PaymentReceived",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "buyer",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "PurchaseInitiated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "int64",
+						"name": "responseCode",
+						"type": "int64"
+					}
+				],
+				"name": "TransferResponse",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "currentTokenId",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -143,13 +207,6 @@
 				],
 				"stateMutability": "view",
 				"type": "function"
-			},
-			{
-				"inputs": [],
-				"name": "withdrawFunds",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
 			}
 		],
 		"devdoc": {
@@ -180,11 +237,11 @@
 	},
 	"sources": {
 		"contracts/lynxify.sol": {
-			"keccak256": "0xf228650ba450cbfa1694b75ab2ef5cce7fe3e3ee07c296135f372d0211a7c467",
+			"keccak256": "0x98953f8593c87be2dfdfe1d15279b5c0cfc7f5f89c180a2c8a82fbcc99b4500f",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://2fcd3d911c25b58e3d28a4c470cacd7816e2df69146344f006a0b642467d7d49",
-				"dweb:/ipfs/QmbS4zikQzpG4GxbsGQTYkczYEj82ssKZ2uJk52N6PCovy"
+				"bzz-raw://4a5109335dd8ad461ca14c1e6c0a4ef6d7318c7b9abb2b1a895cdce6d5001174",
+				"dweb:/ipfs/QmerZqsJd41SosieQZZaZfG1qvk7DKCUnxLpT2RYAecFJj"
 			]
 		}
 	},
