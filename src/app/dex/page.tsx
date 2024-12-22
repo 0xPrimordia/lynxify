@@ -412,14 +412,44 @@ export default function DexPage() {
     }
 
     const deleteThreshold = async (id: number) => {
-        // TODO: Implement delete threshold API method
-        const response = await fetch(`/api/thresholds/deleteThreshold?id=${id}`);
-        if (!response.ok) {
-            throw new Error('Failed to delete threshold');
+        try {
+            setIsSubmitting(true);
+            const response = await fetch(`/api/thresholds/deleteThreshold`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to delete threshold');
+            }
+
+            // Update local state to remove the deleted threshold
+            setThresholds(prevThresholds => 
+                prevThresholds.filter(threshold => threshold.id !== id)
+            );
+
+            setAlertState({
+                isVisible: true,
+                message: 'Threshold deleted successfully',
+                type: 'success'
+            });
+
+        } catch (error) {
+            console.error('Error deleting threshold:', error);
+            setAlertState({
+                isVisible: true,
+                message: error instanceof Error ? error.message : 'Failed to delete threshold',
+                type: 'danger'
+            });
+        } finally {
+            setIsSubmitting(false);
         }
-        const data = await response.json();
-        console.log(data.message);
-    }
+    };
 
     const getTokenBalance = async (tokenId: string) => {
         if (!account) return 0;
