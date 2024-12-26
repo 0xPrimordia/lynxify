@@ -10,6 +10,7 @@ import {
 import { ethers } from 'ethers';
 import NFTSaleAbi from '../contracts/NFTSale.json';
 import { checkTokenAssociation } from '../lib/utils/tokens';
+import { useRewards } from "../hooks/useRewards";
 
 // Helper function from SaucerSwap
 function hexToUint8Array(hex: string): Uint8Array {
@@ -110,8 +111,10 @@ function PurchaseNFT({
     tokenId: string, 
     client: Client
 }) {
-    const { account, signAndExecuteTransaction, dAppConnector } = useWalletContext();
+    const { account, signAndExecuteTransaction, dAppConnector, userId } = useWalletContext();
+    const { awardXP } = useRewards(userId || undefined, account || undefined);
     const [status, setStatus] = useState("");
+    const [isAwarding, setIsAwarding] = useState(false);
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
     const nftTokenId = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
     
@@ -255,7 +258,19 @@ function PurchaseNFT({
 
                 const result = await transferResponse.json();
                 console.log("NFT Transfer result:", result);
-                setStatus(`NFT transferred successfully!`);
+                
+                // Add loading state for XP award
+                setStatus("Awarding XP for purchase...");
+                setIsAwarding(true);
+                try {
+                    await awardXP('purchase_nft');
+                    setStatus(`NFT transferred successfully! XP awarded!`);
+                } catch (error) {
+                    console.error('Failed to award XP:', error);
+                    setStatus(`NFT transferred successfully! (XP award failed)`);
+                } finally {
+                    setIsAwarding(false);
+                }
             } else {
                 throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
             }
@@ -371,6 +386,7 @@ function PurchaseNFT({
                     "text-gray-600"
                 }`}>
                     {status}
+                    {isAwarding && <span className="ml-2">⌛</span>}
                 </p>
             )}
         </div>

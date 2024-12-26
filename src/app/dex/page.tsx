@@ -45,10 +45,12 @@ import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { usePoolContext } from "../hooks/usePools";
+import { useRewards } from "../hooks/useRewards";
   
 export default function DexPage() {
     const router = useRouter();
     const { account, userId, signAndExecuteTransaction } = useWalletContext();
+    const { awardXP } = useRewards(userId || undefined, account || undefined);
     const { hasAccess, isLoading: nftGateLoading } = useNFTGate(account);
     const currentDate = new Date();
     const pastDate = new Date();
@@ -284,6 +286,14 @@ export default function DexPage() {
                         });
                     }
                 }
+
+                if (result.type === "swap") {
+                    try {
+                        await awardXP('first_trade');
+                    } catch (error) {
+                        console.error('Failed to award XP for first trade:', error);
+                    }
+                }
             }
 
         } catch (error) {
@@ -361,6 +371,12 @@ export default function DexPage() {
             const refreshResponse = await fetch(`/api/thresholds?userId=${userId}`);
             const refreshedData = await refreshResponse.json();
             setThresholds(refreshedData);
+
+            try {
+                await awardXP('set_threshold');
+            } catch (error) {
+                console.error('Failed to award XP for setting threshold:', error);
+            }
 
         } catch (error: any) {
             console.error('Error setting threshold:', error);

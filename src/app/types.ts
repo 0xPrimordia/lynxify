@@ -95,3 +95,21 @@ export interface SessionState {
     wallet: WalletState;
     auth: AuthState;
 }
+  }
+
+  export type CompletedTask = {
+    completed_at: string;
+    xp_awarded: number;
+  }
+
+  export type UserAchievements = {
+    id?: string;
+    user_id: string;
+    hedera_account_id: string;
+    total_xp: number;
+    completed_tasks: {
+      [taskId: string]: CompletedTask;
+    };
+    created_at?: string;
+    updated_at?: string;
+  }

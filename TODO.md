@@ -1,20 +1,24 @@
 # TODO List
 
 ## Trading/Backend
-- [ ] Implement Token to Token trading (manual and thresholds)
-- [ ] Implement Token to HBAR trading (manual and thresholds)
+- [✓] Implement Token to Token trading (manual and thresholds)
+- [✓] Implement Token to HBAR trading (manual and thresholds)
+- [ ] Apply slippage tolerance to threshold execution
+  - [ ] Pass slippageBasisPoints to contract executeTradeForUser
+  - [ ] Update contract to handle slippage protection
+  - [ ] Add slippage validation in threshold execution
 - [✓] Implement and test auto-trading with thresholds
   - [✓] Configure wallet holding NFTs for gas fees
   - [✓] Set up trading parameters
   - [✓] Test threshold triggers
 
 ## Frontend Tasks
-- [ ] Add configurable slippage tolerance to DEX
-  - [ ] Add slippage settings UI (typical range 0.1% - 5%)
-  - [ ] Implement slippage calculations in trade execution
+- [✓] Add configurable slippage tolerance to DEX
+  - [✓] Add slippage settings UI (typical range 0.1% - 5%)
+  - [✓] Implement slippage calculations in trade execution
   - [ ] Add user warnings for high slippage settings
-- [ ] setup feedback form for supabase or vercel form if they have that
-- [ ] Update threshold UI for 0.08% fee
+- [✓] setup feedback form for supabase or vercel form if they have that
+- [✓] Update threshold UI for 0.08% fee
   - [ ] Add fee display in threshold setup
   - [ ] Update amount calculations to account for fee
   - [ ] Add fee explanation tooltip/documentation
@@ -31,8 +35,8 @@
 - [✓] fix bug on threshold tab: Error: Cell count must match column count. Found 1 cells and 8 columns.
 
 ## Documentation
-- [ ] Document wallet setup process
-- [ ] Add technical documentation for developers
+- [✓] Document wallet setup process
+- [✓] Add technical documentation for developers
 - [ ] Update README with new features
 
 
@@ -57,9 +61,9 @@
 - [ ] Update LP counter to reflect NFTs in operator wallet
 
 ## User Testing
-- [ ] test auth/register
-- [ ] Test NFT purchase flow
-- [ ] Test manual trading flow
+- [✓] test auth/register
+- [✓] Test NFT purchase flow
+- [✓] Test manual trading flow
 - [ ] Test auto-trading flow 
 
 ## Possible bugs (need testing from new users)

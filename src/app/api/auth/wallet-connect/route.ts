@@ -57,50 +57,37 @@ export async function POST(req: NextRequest) {
       
       // Check if user exists in DB
       console.log('Checking for existing DB record');
-      const { data: existingUsers, error: fetchError } = await supabase
+      const { data: existingUser, error: fetchError } = await serviceClient
         .from('Users')
-        .select<'*', User>('*')
-        .eq('hederaAccountId', accountId);
+        .select('*')
+        .eq('id', signInData.user.id)
+        .single();
 
-      console.log('DB lookup result:', {
-        usersFound: existingUsers?.length,
-        users: existingUsers,
-        error: fetchError
-      });
-
-      if (fetchError) {
+      if (fetchError && fetchError.code !== 'PGRST116') {
         console.error('Error checking for existing user:', fetchError);
         throw new Error('Failed to check for existing user');
       }
 
-      // Create DB record if it doesn't exist
-      if (!existingUsers || existingUsers.length === 0) {
+      // Only create DB record if user doesn't exist
+      if (!existingUser) {
         console.log('Creating DB record for existing auth user:', signInData.user.id);
         
-        const newUser: User = {
+        const newUser = {
           id: signInData.user.id,
           hederaAccountId: accountId,
           created_at: new Date().toISOString()
         };
 
-        console.log('Attempting to insert user record:', newUser);
-        const { error: insertError } = await supabase
+        const { error: insertError } = await serviceClient
           .from('Users')
-          .upsert(newUser, { 
-            onConflict: 'id',
-            ignoreDuplicates: true 
-          });
+          .insert(newUser);
 
         if (insertError) {
-          console.error('DB insert error details:', insertError);
-          // Don't throw error here, just log it since user exists
-          console.warn('Failed to create/update user record, continuing with session');
-        } else {
-          console.log('Successfully created/updated DB record');
+          console.error('DB insert error:', insertError);
+          throw new Error('Failed to create user record');
         }
       }
 
-      // Return session regardless of DB operation result
       return new NextResponse(
         JSON.stringify({ session: signInData.session }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -166,23 +153,20 @@ export async function POST(req: NextRequest) {
       console.log('Auth user created successfully:', createUserData?.user?.id);
 
       // Create DB record for new user
-      const newUser: User = {
+      const newUser = {
         id: createUserData.user.id,
         hederaAccountId: accountId,
         created_at: new Date().toISOString()
       };
 
-      console.log('Attempting to insert new user record:', newUser);
-      const { error: insertError } = await supabase
+      const { error: insertError } = await serviceClient
         .from('Users')
         .insert(newUser);
 
       if (insertError) {
-        console.error('DB insert error details:', insertError);
-        throw new Error(`Failed to create user record: ${insertError.message}`);
+        console.error('DB insert error:', insertError);
+        throw new Error('Failed to create user record');
       }
-
-      console.log('Successfully created DB record');
 
       // Sign in new user
       const { data: newSignInData, error: newSignInError } = await supabase.auth.signInWithPassword({
@@ -191,7 +175,6 @@ export async function POST(req: NextRequest) {
       });
 
       if (newSignInError || !newSignInData.session) {
-        console.error('Error signing in new user:', newSignInError);
         throw new Error('Failed to sign in new user');
       }
 
@@ -201,7 +184,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // If we get here, something else went wrong with sign in
     throw new Error(signInError?.message || 'Authentication failed');
 
   } catch (error: any) {

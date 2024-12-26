@@ -334,8 +334,91 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         message
       });
 
-      if (!signedMessage) {
-        throw new Error('Failed to sign authentication message');
+      const sessionAccount = session.namespaces?.hedera?.accounts?.[0];
+      if (sessionAccount) {
+        const accountId = sessionAccount.split(':').pop();
+        if (!accountId) throw new Error("Failed to extract account ID");
+        
+        console.log('Account ID:', accountId);
+
+        // First check if user exists in database
+        const { data: users } = await supabase
+          .from('Users')
+          .select('*')
+          .eq('hederaAccountId', accountId);
+        
+          const existingUser = users && users.length > 0 ? users[0] : null;
+        if (!existingUser) {
+          // Only request signature if user doesn't exist
+          const message = "Authenticate with Lynxify";
+          const signParams = {
+            signerAccountId: accountId,
+            message: message,
+          };
+
+          console.log('Sign params:', signParams);
+          try {
+            const signedMessage = await dAppConnector.signMessage(signParams);
+            console.log('Signed message from dAppConnector:', signedMessage);
+
+            const dataToSend = { 
+              accountId, 
+              signature: signedMessage,
+              message 
+            };
+
+            const response = await fetch('/api/auth/wallet-connect', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(dataToSend),
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Failed to authenticate user');
+            }
+
+            const authData = await response.json();
+            console.log('Auth response data:', authData);
+
+            if (authData.session) {
+              await supabase.auth.setSession(authData.session);
+              
+              // Let the auth state listener handle setting the userId
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) {
+                throw new Error('Failed to set auth session');
+              }
+            }
+
+            if (authData.token) {
+              localStorage.setItem('authToken', authData.token);
+            }
+          } catch (signError: any) {
+            console.error('Error signing or authenticating:', signError);
+            setError(signError.message || 'Failed to sign message or authenticate');
+            return;
+          }
+        }
+
+        // Set the account regardless of whether signature was needed
+        setAccount(accountId);
+        
+        const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+        if (supabaseSession?.user) {
+          console.log('Setting userId from session:', supabaseSession.user.id);
+          setUserId(supabaseSession.user.id);
+        } else {
+          console.log('No valid session found after connection');
+          // Optionally refresh the session
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+          if (refreshedSession?.user) {
+            console.log('Setting userId from refreshed session:', refreshedSession.user.id);
+            setUserId(refreshedSession.user.id);
+          }
+        }
       }
 
       // Authenticate with backend

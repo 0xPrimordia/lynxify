@@ -120,6 +120,20 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', thresholdId);
 
+    // Award XP for successful threshold execution
+    await supabase
+      .from('UserAchievements')
+      .upsert({
+        user_id: threshold.user_id,
+        hedera_account_id: threshold.hederaAccountId,
+        completed_tasks: {
+          execute_threshold: {
+            completed_at: new Date().toISOString(),
+            xp_awarded: 300  // EXECUTE_THRESHOLD.xp value
+          }
+        }
+      });
+
     return new NextResponse(
       JSON.stringify({
         message: `${orderType.toUpperCase()} order executed successfully!`,
