@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/utils/supabase';
+import { createServerSupabase } from '@/utils/supabase';
+import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { User } from '@/app/types';
 
@@ -22,18 +23,20 @@ function createPasswordHash(signature: any): string {
 }
 
 export async function POST(req: NextRequest) {
+  const cookieStore = cookies();
+  const supabase = createServerSupabase(cookieStore, true);
+  
   try {
     const body = await req.json();
     const { accountId, signature, message } = body;
     
     console.log('Received wallet connect request:', { accountId, signature, message });
-    const serviceClient = createServiceRoleClient();
 
     const email = `${accountId.replace(/\./g, '-')}@hedera.example.com`;
     
     // Try to sign in first
     console.log('Attempting initial sign in for:', email);
-    const { data: signInData, error: signInError } = await serviceClient.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password: createPasswordHash(signature)
     });
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
       
       // Check if user exists in DB
       console.log('Checking for existing DB record');
-      const { data: existingUsers, error: fetchError } = await serviceClient
+      const { data: existingUsers, error: fetchError } = await supabase
         .from('Users')
         .select<'*', User>('*')
         .eq('hederaAccountId', accountId);
@@ -65,7 +68,7 @@ export async function POST(req: NextRequest) {
         };
 
         console.log('Attempting to insert user record:', newUser);
-        const { error: insertError } = await serviceClient
+        const { error: insertError } = await supabase
           .from('Users')
           .upsert(newUser, { 
             onConflict: 'id',
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest) {
     if (signInError?.message?.includes('Invalid login credentials')) {
       console.log('Creating new user with Hedera ID:', accountId);
       
-      const { data: createUserData, error: createUserError } = await serviceClient.auth.admin.createUser({
+      const { data: createUserData, error: createUserError } = await supabase.auth.admin.createUser({
         email,
         password: createPasswordHash(signature),
         email_confirm: true,
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest) {
       };
 
       console.log('Attempting to insert new user record:', newUser);
-      const { error: insertError } = await serviceClient
+      const { error: insertError } = await supabase
         .from('Users')
         .insert(newUser);
 
@@ -130,7 +133,7 @@ export async function POST(req: NextRequest) {
       console.log('Successfully created DB record');
 
       // Sign in new user
-      const { data: newSignInData, error: newSignInError } = await serviceClient.auth.signInWithPassword({
+      const { data: newSignInData, error: newSignInError } = await supabase.auth.signInWithPassword({
         email,
         password: createPasswordHash(signature)
       });

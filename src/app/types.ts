@@ -1,3 +1,6 @@
+import { Session } from '@supabase/supabase-js';
+import { SessionTypes } from '@walletconnect/types';
+
 export type PriceHistory = {
     id: number;
     tokenId: string;
@@ -30,9 +33,9 @@ export type ApiLiquidityPoolV2 = {
     sqrtRatioX96: string;
     tickCurrent: number;
     liquidity: string;
-  }
+}
   
-  type ApiToken = {
+export type ApiToken = {
     decimals: number
     icon?: string
     id: string
@@ -47,9 +50,9 @@ export type ApiLiquidityPoolV2 = {
     website: string | null
     twitterHandle: string | null
     sentinelReport: string | null
-  }
+}
 
-  export type Threshold = {
+export type Threshold = {
     id: number;
     userId: string;
     type: 'stopLoss' | 'buyOrder' | 'sellOrder';
@@ -67,10 +70,28 @@ export type ApiLiquidityPoolV2 = {
     lastExecutedAt: string;
     txHash: string;
     slippageBasisPoints: number;
-  }
+}
 
-  export type User = {
+export type User = {
     id: string;
     hederaAccountId: string;
     created_at: string;
-  }
+}
+
+// Session State Types
+export interface WalletState {
+    isConnected: boolean;
+    accountId: string | null;
+    session: SessionTypes.Struct | null;
+}
+
+export interface AuthState {
+    isAuthenticated: boolean;
+    userId: string | null;
+    session: Session | null;
+}
+
+export interface SessionState {
+    wallet: WalletState;
+    auth: AuthState;
+}
