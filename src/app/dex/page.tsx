@@ -571,14 +571,6 @@ export default function DexPage() {
         setSellOrderCap(formattedBalance);
     };
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            const { data: { user }, error } = await supabase.auth.getUser()
-            console.log('Current auth state:', { user, error })
-        }
-        checkAuth()
-    }, [supabase])
-
     const resetThresholdForm = (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
         switch(type) {
             case 'stopLoss':
