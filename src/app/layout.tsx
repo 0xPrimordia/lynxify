@@ -7,6 +7,7 @@ import Header from "./components/Header";
 import { SaucerSwapProvider } from "./hooks/useTokens";
 import { PoolProvider } from "./hooks/usePools";
 import FeedbackForm from "./components/FeedbackForm";
+import FormspreeProvider from './components/FormspreeProvider';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,19 +24,21 @@ export default function RootLayout({
   return (
     <html className="dark" lang="en">
       <body className={inter.className + " dark text-foreground bg-background min-h-screen !bg-black"}>
-        <WalletProvider>
-          <SaucerSwapProvider>
-            <PoolProvider>
-              <NextUIProvider>
-                <Header />
-                <main className="flex flex-col items-center p-4">
-                  {children}
-                </main>
-                <FeedbackForm />
-              </NextUIProvider>
-            </PoolProvider>
-          </SaucerSwapProvider>
-        </WalletProvider>
+        <FormspreeProvider>
+          <WalletProvider>
+            <SaucerSwapProvider>
+              <PoolProvider>
+                <NextUIProvider>
+                  <Header />
+                  <main className="flex flex-col items-center p-4">
+                    {children}
+                  </main>
+                  <FeedbackForm />
+                </NextUIProvider>
+              </PoolProvider>
+            </SaucerSwapProvider>
+          </WalletProvider>
+        </FormspreeProvider>
       </body>
     </html>
   );

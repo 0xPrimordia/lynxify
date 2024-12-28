@@ -7,17 +7,35 @@ import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
 const FeedbackForm = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [state, handleSubmit] = useForm("2627553113380224651");
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [state, handleSubmit] = useForm("xyzyarnr");
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await handleSubmit({
-      message: feedback
-    });
-    if (state.succeeded) {
+    
+    try {
+      await handleSubmit({
+        message: feedback
+      });
+      
+      // Immediately show success and start close timer
+      setShowSuccess(true);
       setFeedback('');
-      setIsOpen(false);
+      
+      setTimeout(() => {
+        setIsOpen(false);
+        setShowSuccess(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Form submission error:', error);
     }
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setShowSuccess(false);
+    setFeedback('');
   };
 
   return (
@@ -31,19 +49,25 @@ const FeedbackForm = () => {
         <ExclamationCircleIcon className="w-6 h-6" />
       </Button>
 
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
+      <Modal isOpen={isOpen} onClose={handleClose}>
         <ModalContent>
           <form onSubmit={onSubmit}>
             <ModalHeader>Submit Feedback</ModalHeader>
             <ModalBody>
-              <Textarea
-                name="message"
-                placeholder="Tell us what's on your mind..."
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                minRows={3}
-                required
-              />
+              {showSuccess ? (
+                <div className="text-green-500 text-center py-4">
+                  Thank you for your feedback!
+                </div>
+              ) : (
+                <Textarea
+                  name="message"
+                  placeholder="Tell us what's on your mind..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  minRows={3}
+                  required
+                />
+              )}
               {state.errors && (
                 <div className="text-red-500 text-sm mt-2">
                   An error occurred while submitting the form.
@@ -51,16 +75,18 @@ const FeedbackForm = () => {
               )}
             </ModalBody>
             <ModalFooter>
-              <Button color="danger" variant="light" onClick={() => setIsOpen(false)}>
+              <Button color="danger" variant="light" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button 
-                color="primary" 
-                type="submit" 
-                disabled={state.submitting}
-              >
-                {state.submitting ? 'Submitting...' : 'Submit'}
-              </Button>
+              {!showSuccess && (
+                <Button 
+                  color="primary" 
+                  type="submit" 
+                  disabled={state.submitting || showSuccess}
+                >
+                  {state.submitting ? 'Submitting...' : 'Submit'}
+                </Button>
+              )}
             </ModalFooter>
           </form>
         </ModalContent>
