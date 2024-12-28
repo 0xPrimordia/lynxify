@@ -29,7 +29,7 @@ let testAccounts: { accountId: AccountId; key: PrivateKey; }[] = [];
 describe("NFTSale", function () {
     const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_NFT_TOKEN_ID!;
     const NFT_SALE_CONTRACT = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS!;
-    const OPERATOR_ID = process.env.OPERATOR_ID!;
+    const OPERATOR_ID = process.env.NEXT_PUBLIC_OPERATOR_ID!;
     const TREASURY_KEY = process.env.OPERATOR_KEY!;
 
     let client: Client;

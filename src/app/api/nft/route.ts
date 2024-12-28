@@ -11,7 +11,7 @@ import {
 export async function POST(req: NextRequest) {
     const body = await req.json();
     const { tokenId, buyer, transactionId } = body;
-    const treasuryId = process.env.OPERATOR_ID;
+    const treasuryId = process.env.NEXT_PUBLIC_OPERATOR_ID;
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
 
     if (!tokenId || !buyer || !transactionId || !contractAddress) {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     try {
         const client = Client.forTestnet();
-        client.setOperator(process.env.OPERATOR_ID as string, process.env.OPERATOR_KEY as string);
+        client.setOperator(process.env.NEXT_PUBLIC_OPERATOR_ID as string, process.env.OPERATOR_KEY as string);
 
         // Get the serial number from contract
         const tokenIdQuery = new ContractCallQuery()
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         });
 
         const transferTx = new TransferTransaction()
-            .addNftTransfer(tokenId, serialNumber, process.env.OPERATOR_ID as string, buyer)
+            .addNftTransfer(tokenId, serialNumber, process.env.NEXT_PUBLIC_OPERATOR_ID as string, buyer)
             .freezeWith(client);
 
         console.log('Transaction created, signing...');

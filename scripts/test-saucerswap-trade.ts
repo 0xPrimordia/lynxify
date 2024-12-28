@@ -18,7 +18,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: '.env.local' });
 
 // Validate environment variables
-if (!process.env.OPERATOR_ID || !process.env.OPERATOR_KEY || !process.env.CONTRACT_ADDRESS_HEDERA || !process.env.TEST_TOKEN_A || !process.env.HBAR_AMOUNT || !process.env.TEST_POOL_ID) {
+if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY || !process.env.CONTRACT_ADDRESS_HEDERA || !process.env.TEST_TOKEN_A || !process.env.HBAR_AMOUNT || !process.env.TEST_POOL_ID) {
     throw new Error(
         "Environment variables OPERATOR_ID, OPERATOR_KEY, CONTRACT_ADDRESS_HEDERA, TEST_TOKEN_A, HBAR_AMOUNT, and TEST_POOL_ID must be present"
     );
@@ -45,11 +45,11 @@ async function main() {
     // Initialize client
     const client = Client.forTestnet();
     client.setOperator(
-        AccountId.fromString(process.env.OPERATOR_ID!),
+        AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
         PrivateKey.fromString(process.env.OPERATOR_KEY!)
     );
 
-    const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+    const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
     const contractId = process.env.CONTRACT_ADDRESS_HEDERA!;
     const sauceToken = process.env.TEST_TOKEN_A!;
     const WHBAR = '0.0.15058';

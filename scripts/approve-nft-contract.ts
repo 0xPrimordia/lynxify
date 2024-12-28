@@ -12,7 +12,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: '.env.local' });
 
 async function main() {
-    if (!process.env.OPERATOR_ID || !process.env.OPERATOR_KEY || 
+    if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY || 
         !process.env.NEXT_PUBLIC_NFT_TOKEN_ID || !process.env.NEXT_PUBLIC_NFT_TOKEN_EVM_ID ||
         !process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_EVM_ADDRESS) {
         throw new Error("Environment variables must be present");
@@ -20,7 +20,7 @@ async function main() {
 
     const client = Client.forTestnet();
     client.setOperator(
-        AccountId.fromString(process.env.OPERATOR_ID),
+        AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID),
         PrivateKey.fromString(process.env.OPERATOR_KEY)
     );
 

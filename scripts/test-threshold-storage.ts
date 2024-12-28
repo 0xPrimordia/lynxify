@@ -156,11 +156,11 @@ async function main() {
         // Initialize Hedera client
         const client = Client.forTestnet();
         client.setOperator(
-            AccountId.fromString(process.env.OPERATOR_ID!),
+            AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
             PrivateKey.fromString(process.env.OPERATOR_KEY!)
         );
 
-        const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+        const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
         const contractId = process.env.CONTRACT_ADDRESS_HEDERA!;
 
         console.log('Using addresses:');

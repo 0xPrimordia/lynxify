@@ -8,7 +8,7 @@ import { AccountBalanceQuery } from '@hashgraph/sdk';
 dotenv.config({ path: '.env.local' });
 
 // Validate environment variables
-if (!process.env.OPERATOR_ID || !process.env.OPERATOR_KEY) {
+if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY) {
   throw new Error("Environment variables OPERATOR_ID and OPERATOR_KEY must be present");
 }
 
@@ -17,7 +17,7 @@ let client: Client;
 // Mock swapTokenToHbar
 jest.mock('../tokenToHbar', () => ({
   swapTokenToHbar: jest.fn().mockImplementation(async () => {
-    const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+    const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
     const tokenId = '0.0.1183558';  // SAUCE token
     const routerId = '0.0.1414040';  // SaucerSwap Router
     const fee = 3000;
@@ -42,7 +42,7 @@ jest.mock('../tokenToHbar', () => ({
     const swapEncoded = '0x' + swapRouterAbi.encodeFunctionData('exactInput', [params]).slice(2);
     const unwrapEncoded = '0x' + swapRouterAbi.encodeFunctionData('unwrapWHBAR', [
       0,
-      AccountId.fromString(process.env.OPERATOR_ID!).toSolidityAddress()
+      AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!).toSolidityAddress()
     ]).slice(2);
 
     const multiCallParam = [swapEncoded, unwrapEncoded];
@@ -68,13 +68,13 @@ describe('tokenToHbar full flow', () => {
     jest.clearAllMocks();
     client = Client.forTestnet();
     client.setOperator(
-      AccountId.fromString(process.env.OPERATOR_ID!),
+      AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
       PrivateKey.fromString(process.env.OPERATOR_KEY!)
     );
   });
 
   it('should handle full swap flow', async () => {
-    const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+    const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
     const amountIn = "10000";  // 10,000 SAUCE
     const inputToken = "0.0.1183558";  // SAUCE token
     const fee = 3000;
@@ -86,7 +86,7 @@ describe('tokenToHbar full flow', () => {
       amountIn,
       inputToken,
       fee,
-      process.env.OPERATOR_ID!,
+      process.env.NEXT_PUBLIC_OPERATOR_ID!,
       deadline,
       outputAmountMin,
       inputTokenDecimals

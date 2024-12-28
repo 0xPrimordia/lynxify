@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     // Initialize Hedera client
     const client = Client.forTestnet();
     client.setOperator(
-      AccountId.fromString(process.env.OPERATOR_ID!),
+      AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
       PrivateKey.fromString(process.env.OPERATOR_KEY!)
     );
 

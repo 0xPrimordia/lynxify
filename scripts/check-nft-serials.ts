@@ -10,7 +10,7 @@ async function main() {
     try {
         console.log('Checking NFTs for:', {
             tokenId: process.env.NEXT_PUBLIC_NFT_TOKEN_ID,
-            treasury: process.env.OPERATOR_ID
+            treasury: process.env.NEXT_PUBLIC_OPERATOR_ID
         });
 
         const response = await fetch(

@@ -16,7 +16,7 @@ const inriaSerif = Inria_Serif({
 const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 
 const LandingPage = () => {
-    const [remainingSupply, setRemainingSupply] = useState<number>(0);
+    const [nftCount, setNftCount] = useState<number>(0);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const { account, client } = useWalletContext();
     const { hasAccess } = useNFTGate(account);
@@ -34,22 +34,40 @@ const LandingPage = () => {
     };
 
     useEffect(() => {
-        const fetchSupply = async () => {
+        const fetchNFTCount = async () => {
             try {
-                const response = await fetch(
-                    `https://testnet.mirrornode.hedera.com/api/v1/tokens/${NFT_TOKEN_ID}`
+                console.log('Fetching NFTs for:', {
+                    tokenId: NFT_TOKEN_ID,
+                    operatorId: process.env.NEXT_PUBLIC_OPERATOR_ID
+                });
+
+                // Get the first serial number in the collection
+                const initialResponse = await fetch(
+                    `https://testnet.mirrornode.hedera.com/api/v1/tokens/${NFT_TOKEN_ID}/nfts?account.id=${process.env.NEXT_PUBLIC_OPERATOR_ID}&order=desc&limit=1`
                 );
-                const data = await response.json();
-                const maxSupply = data.max_supply;
-                const currentSupply = data.total_supply;
-                setRemainingSupply(maxSupply - currentSupply);
+                
+                if (!initialResponse.ok) {
+                    throw new Error(`HTTP error! status: ${initialResponse.status}`);
+                }
+                
+                const initialData = await initialResponse.json();
+                console.log('Initial NFT Response:', initialData);
+                
+                if (initialData.nfts && initialData.nfts.length > 0) {
+                    // The highest serial number will be the total count since they're sequential
+                    const highestSerial = initialData.nfts[0].serial_number;
+                    setNftCount(highestSerial);
+                } else {
+                    setNftCount(0);
+                }
             } catch (error) {
-                console.error('Error fetching token supply:', error);
+                console.error('Error fetching NFT count:', error);
+                setNftCount(0);
             }
         };
 
-        fetchSupply();
-    }, []);
+        fetchNFTCount();
+    }, [NFT_TOKEN_ID]);
 
     return (
         <>
@@ -61,8 +79,8 @@ const LandingPage = () => {
                     Enjoy lifetime access to closed betas, early access, and premium features.
                 </p>
                 <div className="mb-8">
-                    <p className="text-xl font-semibold mb-4">Remaining NFTs</p>
-                    <p className="text-8xl font-bold text-[#0159E0]">{remainingSupply}</p>
+                    <p className="text-xl font-semibold mb-4">Available NFTs</p>
+                    <p className="text-8xl font-bold text-[#0159E0]">{nftCount}</p>
                 </div>
                 {account && (
                     <Button 

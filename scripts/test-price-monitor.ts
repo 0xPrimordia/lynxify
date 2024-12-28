@@ -37,9 +37,9 @@ async function validateTestEnvironment() {
   try {
     console.log('Checking required environment variables...');
     const requiredEnvVars = [
-      'OPERATOR_ID',
+      'NEXT_PUBLIC_OPERATOR_ID',
       'OPERATOR_KEY',
-      'OPERATOR_EVM_ID',
+      'NEXT_PUBLIC_OPERATOR_EVM_ID',
       'TEST_TOKEN_A',
       'TEST_TOKEN_B',
       'TEST_POOL_ID',
@@ -56,11 +56,11 @@ async function validateTestEnvironment() {
 
     const client = Client.forTestnet();
     client.setOperator(
-      AccountId.fromString(process.env.OPERATOR_ID!),
+      AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
       PrivateKey.fromStringED25519(process.env.OPERATOR_KEY!)
     );
 
-    const operatorId = AccountId.fromString(process.env.OPERATOR_ID!);
+    const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
     const operatorKey = PrivateKey.fromString(process.env.OPERATOR_KEY!);
     const contractId = ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!);
     const tokenA = TokenId.fromString(process.env.TEST_TOKEN_A!);

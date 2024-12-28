@@ -42,7 +42,7 @@ async function updateEnvFile(contractId: string, evmAddress: string) {
 
 async function main() {
     // Get environment variables
-    const operatorId = process.env.OPERATOR_ID;
+    const operatorId = process.env.NEXT_PUBLIC_OPERATOR_ID;
     const operatorKey = process.env.OPERATOR_KEY;
     const tokenId = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
 

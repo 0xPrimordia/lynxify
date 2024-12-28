@@ -13,7 +13,7 @@ dotenv.config({ path: '.env.local' });
 
 // Use your existing client setup
 const NFT_SALE_CONTRACT = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
-const OPERATOR_ID = process.env.OPERATOR_ID;
+const OPERATOR_ID = process.env.NEXT_PUBLIC_OPERATOR_ID;
 const OPERATOR_KEY = process.env.OPERATOR_KEY;
 
 async function resetContract() {
