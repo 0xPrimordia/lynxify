@@ -61,7 +61,7 @@ const FeedbackForm = () => {
               ) : (
                 <>
                   <div className="mb-4 text-sm text-gray-600">
-                    This form is for reporting bugs only. Messages won't receive direct responses.
+                    This form is for reporting bugs only. Messages won&apos;t receive direct responses.
                     For questions and support, please join our <a href="https://discord.gg/GM5BfpPe2Y" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Discord community</a>.
                   </div>
                   <Textarea
