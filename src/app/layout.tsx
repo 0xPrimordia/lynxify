@@ -15,6 +15,21 @@ export const metadata: Metadata = {
   title: "Lynxify | Advanced DEX Trading Platform",
   description: "Access advanced DEX trading features with Lynxify's lifetime membership NFT. Set automated trades, stop losses, and enjoy premium features on the Hedera network.",
   keywords: "Hedera, DEX, Trading, NFT, Cryptocurrency, DeFi, Automated Trading",
+  icons: {
+    icon: [
+      {
+        url: "/favicon.png",
+        type: "image/png",
+      }
+    ],
+    shortcut: ["/favicon.png"],
+    apple: [
+      {
+        url: "/favicon.png",
+        type: "image/png",
+      }
+    ],
+  },
   openGraph: {
     title: "Lynxify | Advanced DEX Trading Platform",
     description: "Access advanced DEX trading features with Lynxify's lifetime membership NFT",
@@ -22,7 +37,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/images/lxy.png", // Make sure this image exists in your public folder
+        url: "/images/lxy.png",
         width: 1200,
         height: 630,
         alt: "Lynxify Logo",
@@ -33,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Lynxify | Advanced DEX Trading Platform",
     description: "Access advanced DEX trading features with Lynxify's lifetime membership NFT",
-    images: ["/images/lxy.png"], // Make sure this image exists in your public folder
+    images: ["/images/lxy.png"],
   },
 };
 
