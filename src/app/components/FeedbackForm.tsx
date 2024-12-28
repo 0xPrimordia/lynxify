@@ -52,21 +52,27 @@ const FeedbackForm = () => {
       <Modal isOpen={isOpen} onClose={handleClose}>
         <ModalContent>
           <form onSubmit={onSubmit}>
-            <ModalHeader>Submit Feedback</ModalHeader>
+            <ModalHeader>Submit Bug Report</ModalHeader>
             <ModalBody>
               {showSuccess ? (
                 <div className="text-green-500 text-center py-4">
-                  Thank you for your feedback!
+                  Thank you for your bug report! Testnet users can earn up to 50 XP for valid bug reports.
                 </div>
               ) : (
-                <Textarea
-                  name="message"
-                  placeholder="Tell us what's on your mind..."
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  minRows={3}
-                  required
-                />
+                <>
+                  <div className="mb-4 text-sm text-gray-600">
+                    This form is for reporting bugs only. Messages won't receive direct responses.
+                    For questions and support, please join our <a href="https://discord.gg/GM5BfpPe2Y" className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">Discord community</a>.
+                  </div>
+                  <Textarea
+                    name="message"
+                    placeholder="Please describe the bug you encountered..."
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    minRows={3}
+                    required
+                  />
+                </>
               )}
               {state.errors && (
                 <div className="text-red-500 text-sm mt-2">
