@@ -98,6 +98,9 @@ const LandingPage = () => {
                         {hasAccess ? "Enter DEX" : "Purchase Access NFT"}
                     </Button>
                 )}
+                {!account && (
+                    <p className="text-sm text-gray-500">Connect your wallet to purchase an NFT</p>
+                )}
             </div>
 
             <Modal 
