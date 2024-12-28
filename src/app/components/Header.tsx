@@ -49,7 +49,7 @@ const Header = () => {
             <Navbar maxWidth="full">
                 <NavbarBrand>
                     <span className="box">
-                        <h1 style={{fontSize: "2.5rem", color: "#0159E0"}} className={vt323.className+" font-bold"}>
+                        <h1 style={{fontSize: "2.5rem", color: "#0159E0", fontWeight:"bold"}} className={vt323.className}>
                             Lynxify
                         </h1>
                     </span>
