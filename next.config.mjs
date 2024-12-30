@@ -22,6 +22,11 @@ const nextConfig = {
         process: 'process/browser',
       };
       
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@lit/react': '@lit/react/development.js',
+      };
+      
       config.plugins.push(
         new webpack.ProvidePlugin({
           Buffer: ['buffer', 'Buffer'],

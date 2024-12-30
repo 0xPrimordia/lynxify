@@ -67,7 +67,7 @@ const Header = () => {
                                         color: "black",
                                         borderColor: "black"
                                     }}
-                                    onClick={() => handleConnect()}
+                                    onPress={() => handleConnect()}
                                 >
                                     Connect Wallet
                                 </Button>
@@ -82,7 +82,7 @@ const Header = () => {
                                             borderColor: "#0159E0",
                                             color: "#0159E0"
                                         }}
-                                        onClick={handleAccessDenied}
+                                        onPress={handleAccessDenied}
                                     >
                                         Get Access
                                     </Button>
@@ -100,7 +100,7 @@ const Header = () => {
                                         </Button>
                                     </DropdownTrigger>
                                     <DropdownMenu aria-label="Account Actions">
-                                        <DropdownItem key="logout" className="text-danger" color="danger" onClick={() => handleDisconnectSessions()}>
+                                        <DropdownItem key="logout" className="text-danger" color="danger" onPress={() => handleDisconnectSessions()}>
                                             Sign Out
                                         </DropdownItem>
                                     </DropdownMenu>

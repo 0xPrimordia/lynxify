@@ -44,7 +44,7 @@ const FeedbackForm = () => {
         className="fixed bottom-4 right-4 z-50 feedback-button"
         color="primary"
         isIconOnly
-        onClick={() => setIsOpen(true)}
+        onPress={() => setIsOpen(true)}
       >
         <ExclamationCircleIcon className="w-6 h-6" />
       </Button>
@@ -81,7 +81,7 @@ const FeedbackForm = () => {
               )}
             </ModalBody>
             <ModalFooter>
-              <Button color="danger" variant="light" onClick={handleClose}>
+              <Button color="danger" variant="light" onPress={handleClose}>
                 Cancel
               </Button>
               {!showSuccess && (

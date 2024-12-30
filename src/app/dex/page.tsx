@@ -638,7 +638,7 @@ export default function DexPage() {
                                 key={value}
                                 size="sm"
                                 variant={slippageTolerance === value ? "solid" : "light"}
-                                onClick={() => handleSlippageChange(value)}
+                                onPress={() => handleSlippageChange(value)}
                             >
                                 {value}%
                             </Button>
@@ -648,7 +648,7 @@ export default function DexPage() {
                         <Button
                             size="sm"
                             variant={showCustomSlippage ? "solid" : "light"}
-                            onClick={() => setShowCustomSlippage(true)}
+                            onPress={() => setShowCustomSlippage(true)}
                         >
                             Custom
                         </Button>
@@ -718,7 +718,7 @@ export default function DexPage() {
                                     key={value}
                                     size="sm"
                                     variant={slippage === value ? "solid" : "light"}
-                                    onClick={() => setSlippage(value)}
+                                    onPress={() => setSlippage(value)}
                                 >
                                     {value}%
                                 </Button>
@@ -781,7 +781,7 @@ export default function DexPage() {
                                                     <TableCell>${threshold.price}</TableCell>
                                                     <TableCell>{threshold.cap}</TableCell>
                                                     <TableCell>
-                                                        <Button onClick={() => deleteThreshold(threshold.id)}>Delete</Button>
+                                                        <Button onPress={() => deleteThreshold(threshold.id)}>Delete</Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
@@ -845,7 +845,7 @@ export default function DexPage() {
                                             )}
                                         </Select>
                                     ):(
-                                        <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onClick={() => setCurrentPool(null)}>Clear</Button></p>
+                                        <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onPress={() => setCurrentPool(null)}>Clear</Button></p>
                                     )}
                                     
                                 </div>
@@ -910,7 +910,7 @@ export default function DexPage() {
                             />
                             <Button 
                                 isDisabled={currentPool ? false : true} 
-                                onClick={handleQuote} 
+                                onPress={handleQuote} 
                                 className="w-full" 
                                 endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
                             >
@@ -964,21 +964,21 @@ export default function DexPage() {
                                     <Button 
                                         size="sm" 
                                         variant="flat" 
-                                        onClick={() => adjustStopLossPrice(0.01)}
+                                        onPress={() => adjustStopLossPrice(0.01)}
                                     >
                                         -1%
                                     </Button>
                                     <Button 
                                         size="sm" 
                                         variant="flat" 
-                                        onClick={() => adjustStopLossPrice(0.05)}
+                                        onPress={() => adjustStopLossPrice(0.05)}
                                     >
                                         -5%
                                     </Button>
                                     <Button 
                                         size="sm" 
                                         variant="flat" 
-                                        onClick={() => adjustStopLossPrice(0.10)}
+                                        onPress={() => adjustStopLossPrice(0.10)}
                                     >
                                         -10%
                                     </Button>
@@ -1007,7 +1007,7 @@ export default function DexPage() {
                                 />
                                 <Button 
                                     className="mb-2" 
-                                    onClick={() => saveThresholds('stopLoss')}
+                                    onPress={() => saveThresholds('stopLoss')}
                                     isLoading={isSubmitting}
                                     isDisabled={isSubmitting}
                                 >
@@ -1079,7 +1079,7 @@ export default function DexPage() {
                             {buyOrder && (
                                 <Button 
                                     className="mb-2" 
-                                    onClick={() => saveThresholds('buyOrder')}
+                                    onPress={() => saveThresholds('buyOrder')}
                                     isLoading={isSubmitting}
                                     isDisabled={isSubmitting}
                                 >
@@ -1132,21 +1132,21 @@ export default function DexPage() {
                                     <Button 
                                         size="sm" 
                                         variant="flat" 
-                                        onClick={() => adjustSellOrderPrice(0.01)}
+                                        onPress={() => adjustSellOrderPrice(0.01)}
                                     >
                                         +1%
                                     </Button>
                                     <Button 
                                         size="sm" 
                                         variant="flat" 
-                                        onClick={() => adjustSellOrderPrice(0.05)}
+                                        onPress={() => adjustSellOrderPrice(0.05)}
                                     >
                                         +5%
                                     </Button>
                                     <Button 
                                         size="sm" 
                                         variant="flat" 
-                                        onClick={() => adjustSellOrderPrice(0.10)}
+                                        onPress={() => adjustSellOrderPrice(0.10)}
                                     >
                                         +10%
                                     </Button>
@@ -1175,7 +1175,7 @@ export default function DexPage() {
                                 />
                                 <Button 
                                     className="mb-2" 
-                                    onClick={() => saveThresholds('sellOrder')}
+                                    onPress={() => saveThresholds('sellOrder')}
                                     isLoading={isSubmitting}
                                     isDisabled={isSubmitting}
                                 >

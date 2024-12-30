@@ -50,7 +50,7 @@ const StakeTokens: FunctionComponent<StakeTokensProps> = ({stakeTokens}) => {
                  <Divider/>
                  <CardFooter>
                      <Button
-                         onClick={() => stakeTokens(amount)}
+                         onPress={() => stakeTokens(amount)}
                          className="p-2 rounded w-full"
                      >
                          Stake
