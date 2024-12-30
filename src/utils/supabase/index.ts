@@ -1,76 +1,49 @@
-import { createBrowserClient } from "@supabase/ssr";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { cookies } from "next/headers";
+import { createClient } from '@supabase/supabase-js';
+import type { CookieOptions } from '@supabase/ssr';
 
-/**
- * CLIENT-SIDE SINGLETON
- * Use for client-side components only
- * Uses anon key for public operations
- * Maintains client-side session state
- */
-export const browserClient = createBrowserClient(
+// Single browser client instance - safe for client components
+export const browserClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  }
 );
 
-/**
- * SERVER-SIDE SESSION CLIENT
- * Use for API routes that need user session
- * Uses anon key with cookie handling
- * @example
- * // In API route:
- * const supabase = await createServerSessionClient();
- * const { data: { user } } = await supabase.auth.getUser();
- */
-export const createServerSessionClient = async () => {
-  const cookieStore = cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
-    }
-  );
-};
+// Export a default client for browser usage
+export const supabase = browserClient;
 
-/**
- * SERVICE ROLE CLIENT
- * Use for admin operations only (user creation, forced auth)
- * Uses service role key - BE CAREFUL!
- * @example
- * // In wallet-connect route:
- * const adminClient = createServiceRoleClient();
- * await adminClient.auth.admin.createUser({ ... });
- */
-export const createServiceRoleClient = (options = {}) => {
-  return createSupabaseClient(
+// Server-side client creator - only use in server components/actions
+export const createServerSupabase = (cookieStore: any, useServiceRole: boolean = false) => {
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY! : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      },
-      ...options
+        persistSession: true,
+        autoRefreshToken: true,
+        storage: {
+          getItem: (key: string) => cookieStore.get(key)?.value,
+          setItem: (key: string, value: string) => {
+            cookieStore.set(key, value, { 
+              path: '/',
+              maxAge: 60 * 60 * 24 * 365,
+              sameSite: 'lax'
+            });
+          },
+          removeItem: (key: string) => {
+            cookieStore.set(key, '', { 
+              path: '/',
+              maxAge: 0,
+              sameSite: 'lax'
+            });
+          }
+        }
+      }
     }
   );
-};
-
-// Maintain backward compatibility
-/** @deprecated Use specific client types instead */
-export const createClient = createServerSessionClient;
-
-// Export direct client creation for special cases
-/** @deprecated Use specific client types unless absolutely necessary */
-export { createSupabaseClient as createDirectClient }; 
+}; 

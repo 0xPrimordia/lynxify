@@ -86,9 +86,8 @@ const LandingPage = () => {
                     <Button 
                         size="lg" 
                         color="primary"
-                        onClick={(e) => {
+                        onPress={(e) => {
                             if (!hasAccess) {
-                                e.preventDefault();
                                 handleAccessDenied();
                             }
                         }}

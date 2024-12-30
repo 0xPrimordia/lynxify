@@ -159,7 +159,7 @@ export function HederaProvider({ children }: HederaProviderProps) {
             <CardBody className="text-center p-10">
                 
                 {!newAccountId?.num.low ? (
-                    <p><Button onClick={createAccount}>Create Account</Button></p>
+                    <p><Button onPress={createAccount}>Create Account</Button></p>
                 ):(
                     <p>{newAccountBalance} tinybar</p>
                 )}
@@ -173,7 +173,7 @@ export function HederaProvider({ children }: HederaProviderProps) {
                 {isConnected && hashPairingData?.accountIds ? (
                     <p>Connected to: {hashPairingData?.accountIds[0]}</p>
                 ):(
-                    <p><Button onClick={connectWallet}>Connect Wallet</Button></p>
+                    <p><Button onPress={connectWallet}>Connect Wallet</Button></p>
                 )}
                 
                 </CardBody>

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, Hbar, HbarUnit } from "@hashgraph/sdk";
-import { createClient } from '@/utils/supabase/server';
+import { createServerSupabase } from '@/utils/supabase';
 import { executeThresholdTrade } from '@/app/lib/threshold';
+import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
   let thresholdId: string | null = null;
+  const cookieStore = cookies();
   
   try {
     // Verify API key
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get threshold data from Supabase
-    const supabase = await createClient();
+    const supabase = createServerSupabase(cookieStore, true);
     const { data: threshold, error: fetchError } = await supabase
       .from('Thresholds')
       .select('*')
@@ -129,7 +131,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     // Update threshold status to failed if we have a thresholdId
     if (thresholdId) {
-      const supabase = await createClient();
+      const supabase = createServerSupabase(cookieStore, true);
       await supabase
         .from('Thresholds')
         .update({ 

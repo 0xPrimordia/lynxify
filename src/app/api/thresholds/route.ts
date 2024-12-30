@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '../../../utils/supabase/server';
+import { createServerSupabase } from '@/utils/supabase';
+import { cookies } from 'next/headers';
 
 export async function GET(req: NextRequest) {
     try {
@@ -16,7 +17,9 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        const supabase = await createClient();
+        const cookieStore = cookies();
+        const supabase = createServerSupabase(cookieStore);
+        
         const { data, error } = await supabase
             .from('Thresholds')
             .select('*')

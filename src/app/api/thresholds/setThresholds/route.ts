@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/utils/supabase';
+import { createServerSupabase } from '@/utils/supabase';
 import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
+import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
   try {
+    const cookieStore = cookies();
     // Get the request body first
     const body = await req.json();
     const { hederaAccountId, slippageBasisPoints } = body;
@@ -13,7 +15,7 @@ export async function POST(req: NextRequest) {
     console.log('Looking for user with Hedera ID:', hederaAccountId);
 
     // Use service client directly to find user by Hedera ID
-    const serviceClient = createServiceRoleClient();
+    const serviceClient = createServerSupabase(cookieStore, true);
     
     // Find user by Hedera account ID first
     const { data: dbUser, error: userError } = await serviceClient

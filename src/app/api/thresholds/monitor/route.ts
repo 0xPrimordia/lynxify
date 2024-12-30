@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createServerSupabase } from '@/utils/supabase';
+import { cookies } from 'next/headers';
 
 interface ThresholdStats {
   totalActive: number;
@@ -66,7 +67,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const cookieStore = cookies();
+    const supabase = createServerSupabase(cookieStore, true); // Using service role for monitoring
     
     // Get query parameters
     const { searchParams } = new URL(req.url);

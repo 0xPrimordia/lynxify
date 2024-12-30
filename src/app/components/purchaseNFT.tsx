@@ -355,7 +355,7 @@ function PurchaseNFT({
                 <Button 
                     color="primary"
                     className="w-full"
-                    onClick={handlePurchase}
+                    onPress={handlePurchase}
                     style={{
                         backgroundColor: "#0159E0"
                     }}
