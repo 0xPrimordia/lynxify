@@ -190,7 +190,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       console.error("Initialization failed:", error);
       clearStoredSession();
     }
-  }, [isInitialized, dAppConnector, appMetadata]);
+  }, [isInitialized, dAppConnector]);
 
   const restoreSession = useCallback(async (storedSession: SessionState) => {
     try {
