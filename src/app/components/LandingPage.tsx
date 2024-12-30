@@ -36,27 +36,26 @@ const LandingPage = () => {
     useEffect(() => {
         const fetchNFTCount = async () => {
             try {
-                console.log('Fetching NFTs for:', {
-                    tokenId: NFT_TOKEN_ID,
-                    operatorId: process.env.NEXT_PUBLIC_OPERATOR_ID
-                });
-
-                // Get the first serial number in the collection
-                const initialResponse = await fetch(
-                    `https://testnet.mirrornode.hedera.com/api/v1/tokens/${NFT_TOKEN_ID}/nfts?account.id=${process.env.NEXT_PUBLIC_OPERATOR_ID}&order=desc&limit=1`
+                // Get NFTs held by the treasury/operator with total count
+                const response = await fetch(
+                    `https://testnet.mirrornode.hedera.com/api/v1/tokens/${NFT_TOKEN_ID}/balances?account.id=${process.env.NEXT_PUBLIC_OPERATOR_ID}`
                 );
                 
-                if (!initialResponse.ok) {
-                    throw new Error(`HTTP error! status: ${initialResponse.status}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                const initialData = await initialResponse.json();
-                console.log('Initial NFT Response:', initialData);
+                const data = await response.json();
                 
-                if (initialData.nfts && initialData.nfts.length > 0) {
-                    // The highest serial number will be the total count since they're sequential
-                    const highestSerial = initialData.nfts[0].serial_number;
-                    setNftCount(highestSerial);
+                // Check if data exists and has balances array
+                if (data.balances && data.balances.length > 0) {
+                    // Get the balance for our token
+                    const tokenBalance = data.balances[0]; // Should be the only balance since we filtered by token
+                    if (tokenBalance) {
+                        setNftCount(tokenBalance.balance);
+                    } else {
+                        setNftCount(0);
+                    }
                 } else {
                     setNftCount(0);
                 }
