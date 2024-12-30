@@ -1,5 +1,5 @@
 "use client";
-import { ReactNode, createContext, useContext, useState, useEffect } from "react";
+import { ReactNode, createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Client, LedgerId } from "@hashgraph/sdk";
 import {
   HederaSessionEvent,
@@ -122,56 +122,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     }
   };
 
-  useEffect(() => {
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', { event, session });
-      
-      // Only handle auth state changes after initialization
-      if (!isInitialized || !dAppConnector) {
-        console.log('Skipping auth state change - not initialized yet');
-        return;
-      }
-      
-      switch (event) {
-        case 'SIGNED_OUT':
-          console.log('User signed out, clearing session');
-          setUserId(null);
-          setAccount("");
-          clearStoredSession();
-          break;
-          
-        case 'INITIAL_SESSION':
-        case 'SIGNED_IN': {
-          console.log('Session event:', event, session);
-          if (session?.user) {
-            setUserId(session.user.id);
-            
-            // Only attempt session restoration if DAppConnector is initialized
-            if (isInitialized && dAppConnector) {
-              const storedSession = getStoredSession();
-              if (storedSession?.wallet.session) {
-                try {
-                  await restoreSession(storedSession);
-                } catch (error) {
-                  console.error('Failed to restore wallet session:', error);
-                  clearStoredSession();
-                }
-              }
-            }
-          }
-          break;
-        }
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [isInitialized]);
-
-  const init = async () => {
+  const init = useCallback(async () => {
     if (isInitialized) return;
     
     try {
@@ -239,9 +190,9 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       console.error("Initialization failed:", error);
       clearStoredSession();
     }
-  };
+  }, [isInitialized, dAppConnector, appMetadata]);
 
-  const restoreSession = async (storedSession: SessionState) => {
+  const restoreSession = useCallback(async (storedSession: SessionState) => {
     try {
       if (!dAppConnector) return;
       
@@ -298,7 +249,45 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       });
       return false;
     }
-  };
+  }, [dAppConnector]);
+
+  useEffect(() => {
+    init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      switch (event) {
+        case 'SIGNED_OUT':
+          setUserId(null);
+          setAccount("");
+          clearStoredSession();
+          break;
+          
+        case 'INITIAL_SESSION':
+        case 'SIGNED_IN': {
+          if (session?.user) {
+            setUserId(session.user.id);
+            
+            if (isInitialized && dAppConnector) {
+              const storedSession = getStoredSession();
+              if (storedSession?.wallet.session) {
+                try {
+                  await restoreSession(storedSession);
+                } catch (error) {
+                  console.error('Failed to restore wallet session:', error);
+                  clearStoredSession();
+                }
+              }
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isInitialized, dAppConnector, init, restoreSession]);
 
   const handleConnect = async (extensionId?: string) => {
     console.log('handleConnect called');
