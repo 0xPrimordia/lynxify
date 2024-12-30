@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { TESTNET_REWARDS } from '@/config/rewards';
 import { UserAchievement } from '@/app/types';
 
+const supabase = createClientComponentClient();
+
 export function useRewards(userId: string | undefined, hederaAccountId: string | undefined) {
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClientComponentClient();
 
   useEffect(() => {
     async function fetchAchievements() {
@@ -30,7 +31,7 @@ export function useRewards(userId: string | undefined, hederaAccountId: string |
     fetchAchievements();
   }, [userId, hederaAccountId]);
 
-  const awardXP = async (taskId: keyof typeof TESTNET_REWARDS.TASKS) => {
+  const awardXP = useCallback(async (taskId: keyof typeof TESTNET_REWARDS.TASKS) => {
     if (!userId || !hederaAccountId) return;
 
     try {
@@ -65,7 +66,7 @@ export function useRewards(userId: string | undefined, hederaAccountId: string |
       console.error(`Error awarding XP for task ${taskId}:`, error);
       throw error;
     }
-  };
+  }, [userId, hederaAccountId, achievements]);
 
   return { achievements, isLoading, awardXP };
 } 

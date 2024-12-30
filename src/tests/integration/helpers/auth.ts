@@ -6,7 +6,7 @@ export async function authenticateWallet(operatorId: AccountId, operatorKey: Pri
     const signatureHex = Buffer.from(signature).toString('hex');
 
     console.log('\nAuthenticating with wallet...');
-    const authResponse = await fetch('http://localhost:3000/api/auth/wallet-connect', {
+    const authResponse = await fetch('https://localhost:3000/api/auth/wallet-connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
