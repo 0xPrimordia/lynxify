@@ -128,6 +128,12 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', { event, session });
       
+      // Only handle auth state changes after initialization
+      if (!isInitialized || !dAppConnector) {
+        console.log('Skipping auth state change - not initialized yet');
+        return;
+      }
+      
       switch (event) {
         case 'SIGNED_OUT':
           console.log('User signed out, clearing session');
@@ -142,17 +148,16 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
           if (session?.user) {
             setUserId(session.user.id);
             
-            // Get stored session to restore wallet connection
-            const storedSession = getStoredSession();
-            if (storedSession?.wallet.session) {
-              try {
-                await initializeDAppConnector(storedSession.wallet.session);
-                if (storedSession.wallet.accountId) {
-                  setAccount(storedSession.wallet.accountId);
+            // Only attempt session restoration if DAppConnector is initialized
+            if (isInitialized && dAppConnector) {
+              const storedSession = getStoredSession();
+              if (storedSession?.wallet.session) {
+                try {
+                  await restoreSession(storedSession);
+                } catch (error) {
+                  console.error('Failed to restore wallet session:', error);
+                  clearStoredSession();
                 }
-              } catch (error) {
-                console.error('Failed to restore wallet session:', error);
-                clearStoredSession();
               }
             }
           }
@@ -164,22 +169,16 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isInitialized]);
 
   const init = async () => {
     if (isInitialized) return;
     
     try {
-      console.log("Initializing wallet and checking for existing session...");
-      
-      // Check stored session first
       const storedSession = getStoredSession();
-      console.log('Retrieved stored session:', storedSession);
-
+      
       if (!dAppConnector) {
-        console.log('Creating new DAppConnector instance');
-        
-        const dAppConnector = new DAppConnector(
+        const newDAppConnector = new DAppConnector(
           appMetadata,
           LedgerId.TESTNET,
           process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
@@ -188,15 +187,53 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
           [HederaChainId.Testnet]
         );
 
-        await dAppConnector.init();
-        setDAppConnector(dAppConnector);
-        setSigners(dAppConnector.signers);
+        await newDAppConnector.init();
+        
+        setDAppConnector(newDAppConnector);
+        setSigners(newDAppConnector.signers);
         setIsInitialized(true);
-      }
 
-      // Continue with session restoration if needed
-      if (storedSession?.wallet.session && storedSession?.auth.session) {
-        await restoreSession(storedSession);
+        if (storedSession?.wallet.session && storedSession?.auth.session) {
+          try {
+            const walletSessions = newDAppConnector.walletConnectClient?.session.getAll();
+            const matchingSession = walletSessions?.find(ws => 
+                ws.topic === storedSession.wallet.session?.topic
+            );
+            
+            if (matchingSession) {
+              setSessions([matchingSession]);
+              setAccount(storedSession.wallet.accountId || "");
+              
+              if (storedSession.auth.session) {
+                const { data, error } = await supabase.auth.setSession({
+                  access_token: storedSession.auth.session.access_token,
+                  refresh_token: storedSession.auth.session.refresh_token
+                });
+                
+                if (!error && data.session) {
+                  setUserId(storedSession.auth.userId || null);
+                  setSessionState({
+                    wallet: {
+                      isConnected: true,
+                      accountId: storedSession.wallet.accountId,
+                      session: matchingSession
+                    },
+                    auth: {
+                      isAuthenticated: true,
+                      userId: storedSession.auth.userId,
+                      session: data.session
+                    }
+                  });
+                }
+              }
+            } else {
+              clearStoredSession();
+            }
+          } catch (error) {
+            console.error('Session restoration failed:', error);
+            clearStoredSession();
+          }
+        }
       }
     } catch (error) {
       console.error("Initialization failed:", error);
@@ -204,49 +241,62 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     }
   };
 
-  // New helper function to handle session restoration
   const restoreSession = async (storedSession: SessionState) => {
     try {
-        if (!dAppConnector) return;
+      if (!dAppConnector) return;
+      
+      if (storedSession.wallet.session) {
+        const walletSessions = dAppConnector.walletConnectClient?.session.getAll();
+        const matchingSession = walletSessions?.find(ws => 
+            ws.topic === storedSession.wallet.session?.topic
+        );
         
-        // First restore wallet session
-        if (storedSession.wallet.session) {
-            const walletSessions = dAppConnector.walletConnectClient?.session.getAll();
-            const matchingSession = walletSessions?.find(ws => 
-                ws.topic === storedSession.wallet.session?.topic
-            );
-            
-            if (matchingSession) {
-                console.log("Restoring wallet session...");
-                setSessions([matchingSession]);
-                setAccount(storedSession.wallet.accountId || "");
-            } else {
-                console.log("No matching wallet session found");
-                throw new Error("No matching wallet session found");
+        if (matchingSession) {
+          setSessions([matchingSession]);
+          setAccount(storedSession.wallet.accountId || "");
+          
+          setSessionState(prevState => ({
+            ...prevState,
+            wallet: {
+              isConnected: true,
+              accountId: storedSession.wallet.accountId,
+              session: matchingSession
             }
+          }));
+        } else {
+          throw new Error("No matching wallet session found");
         }
+      }
 
-        // Then restore auth session
-        if (storedSession.auth.session) {
-            console.log("Restoring auth session...");
-            const { error } = await supabase.auth.setSession({
-                access_token: storedSession.auth.session.access_token,
-                refresh_token: storedSession.auth.session.refresh_token
-            });
-            
-            if (error) {
-                console.error("Auth session restoration failed:", error);
-                throw error;
-            }
-            
-            setUserId(storedSession.auth.userId || null);
-        }
+      if (storedSession.auth.session) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: storedSession.auth.session.access_token,
+          refresh_token: storedSession.auth.session.refresh_token
+        });
+        
+        if (error) throw error;
+        
+        setUserId(storedSession.auth.userId || null);
+        
+        setSessionState(prevState => ({
+          ...prevState,
+          auth: {
+            isAuthenticated: true,
+            userId: storedSession.auth.userId,
+            session: data.session
+          }
+        }));
+      }
 
-        return true;
+      return true;
     } catch (error) {
-        console.error("Session restoration failed:", error);
-        clearStoredSession();
-        return false;
+      console.error("Session restoration failed:", error);
+      clearStoredSession();
+      setSessionState({
+        wallet: { isConnected: false, accountId: null, session: null },
+        auth: { isAuthenticated: false, userId: null, session: null }
+      });
+      return false;
     }
   };
 

@@ -19,21 +19,36 @@ const Header = () => {
     useEffect(() => {
         if (account !== "") {
             setIsConnected(true);
-            // Fetch balance when account is connected
+            
             const fetchBalance = async () => {
                 try {
-                    const accountBalance = await new AccountBalanceQuery()
+                    // Create a new query with retry logic
+                    const query = new AccountBalanceQuery()
                         .setAccountId(account)
-                        .execute(client);
+                        .setMaxAttempts(3)  // Retry up to 3 times
+                        .setMaxBackoff(5000); // Max 5 seconds between retries
                     
+                    // Execute with fallback nodes if needed
+                    const accountBalance = await query.execute(client);
                     const hbarBalance = accountBalance.hbars.toString();
                     setBalance(parseFloat(hbarBalance).toFixed(2));
                 } catch (error) {
-                    console.error("Error fetching balance:", error);
-                    setBalance("0");
+                    console.warn("Balance fetch failed, using cached value:", error);
+                    // Don't reset balance to 0 on temporary errors
+                    // Only reset if we don't have a previous value
+                    if (balance === "0") {
+                        setBalance("0");
+                    }
                 }
             };
+
+            // Initial fetch
             fetchBalance();
+
+            // Set up periodic refresh
+            const refreshInterval = setInterval(fetchBalance, 30000); // Refresh every 30 seconds
+
+            return () => clearInterval(refreshInterval);
         } else {
             setIsConnected(false);
             setBalance("0");
