@@ -1,6 +1,7 @@
 # TODO List
 
 ## Trading/Backend
+
 - [✓] Implement Token to Token trading (manual and thresholds)
 - [✓] Implement Token to HBAR trading (manual and thresholds)
 - [ ] Apply slippage tolerance to threshold execution
@@ -13,6 +14,7 @@
   - [✓] Test threshold triggers
 
 ## Frontend Tasks
+
 - [✓] Add configurable slippage tolerance to DEX
   - [✓] Add slippage settings UI (typical range 0.1% - 5%)
   - [✓] Implement slippage calculations in trade execution
@@ -35,14 +37,15 @@
 - [✓] fix bug on threshold tab: Error: Cell count must match column count. Found 1 cells and 8 columns.
 
 ## Documentation
+
 - [✓] Document wallet setup process
 - [✓] Add technical documentation for developers
 - [ ] Update README with new features
 
-
 ## =========> Pre-Launch Tasks (Closed Alpha)
 
 ## Critical Path
+
 - [ ] Migrate to mainnet
   - [ ] Deploy threshold contract to mainnet
   - [ ] Deploy NFT contract to mainnet
@@ -52,21 +55,25 @@
 - [ ] deploy json rpc to heroku (if/where needed)
 
 ## Admin Tasks
+
 - [ ] move hosting to Jason as owner for client and worker service
 - [ ] Get SAFE (or other) agreement in place and signed for Kevin
 
 ## NFT Related
+
 - [ ] Enhance NFT visual styling
 - [ ] Fix/remove NFT purchase button on LP page
 - [ ] Update LP counter to reflect NFTs in operator wallet
 
 ## User Testing
+
 - [✓] test auth/register
 - [✓] Test NFT purchase flow
 - [✓] Test manual trading flow
 - [ ] Test auto-trading flow 
 
 ## Possible bugs (need testing from new users)
+
 - [ ] Possible bug: signature request should not trigger for existing users in DB
 - [ ] possible QOL improvement: Add automatic token association when setting thresholds
     - [ ] Check token associations before setting thresholds
@@ -74,21 +81,23 @@
     - [ ] Handle association fees
 
 ## NFT tier based reward system
+
 - [ ] Define tiers that would unlock features / free membership length
 - [ ] Define rewards for testing / social / referral tasks
 - [ ] updated image designs to match the tiered system
 - [ ] updated NFT contract logic to support the tiered system
 
-
 ## =========> Etc.
 
 ## Future Roadmap
+
 - [ ] Token rollout for tokenized index and governance
 - [ ] Research and evaluate custom bridge solution
 - [ ] Alternative: get hashport working
 - [ ] LP staking for single token with auto pair matching
 
 ## Production Readiness Tasks
+
 - [✓] Make fee calculations fully dynamic
   - [✓] Update getQuoteExactInput to use dynamic decimals
   - [ ] Add fee validation checks
@@ -140,6 +149,7 @@
 - [ ] add trade direction switch option
 
 ### Add Quote Support for Token->HBAR Swaps
+
 - [ ] Add Quoter contract address to environment variables
 - [ ] Implement quote functionality similar to SaucerSwap UI
 - [ ] Use quote to calculate minimum output with slippage
