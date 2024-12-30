@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import TestnetAlert from "./TestnetAlert";
 import PurchaseNFT from "./purchaseNFT";
 import { useSearchParams } from 'next/navigation';
+import { useRewards } from "../hooks/useRewards";
 
 const inriaSerif = Inria_Serif({ 
     weight: ["300", "400", "700"],
@@ -18,7 +19,8 @@ const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 const LandingPage = () => {
     const [nftCount, setNftCount] = useState<number>(0);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-    const { account, client } = useWalletContext();
+    const { account, client, userId } = useWalletContext();
+    const { awardXP } = useRewards(userId || undefined, account || undefined);
     const { hasAccess } = useNFTGate(account);
     const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
     const searchParams = useSearchParams();
@@ -28,6 +30,12 @@ const LandingPage = () => {
             setShowPurchaseModal(true);
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        if (account) {
+            awardXP('CONNECT_WALLET');
+        }
+    }, [account, awardXP]);
 
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);

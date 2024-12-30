@@ -3,6 +3,7 @@ import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunc
 import { createServerSupabase } from '@/utils/supabase';
 import { executeThresholdTrade } from '@/app/lib/threshold';
 import { cookies } from 'next/headers';
+import { awardThresholdExecutionXP } from '@/app/lib/rewards';
 
 export async function POST(req: NextRequest) {
   let thresholdId: string | null = null;
@@ -119,6 +120,9 @@ export async function POST(req: NextRequest) {
         txHash: txResponse.transactionId.toString()
       })
       .eq('id', thresholdId);
+
+    // Award XP after successful execution
+    await awardThresholdExecutionXP(threshold.user_id, threshold.hederaAccountId);
 
     return new NextResponse(
       JSON.stringify({

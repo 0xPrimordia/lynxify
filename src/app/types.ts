@@ -1,3 +1,4 @@
+import { TESTNET_REWARDS } from '@/config/rewards';
 import { Session } from '@supabase/supabase-js';
 import { SessionTypes } from '@walletconnect/types';
 
@@ -94,4 +95,20 @@ export interface AuthState {
 export interface SessionState {
     wallet: WalletState;
     auth: AuthState;
+}
+  
+
+  export type CompletedTask = {
+    completed_at: string;
+    xp_awarded: number;
+  }
+
+  export type UserAchievement = {
+    id?: string;
+    user_id: string;
+    hedera_account_id: string;
+    task_id: keyof typeof TESTNET_REWARDS.TASKS;
+    xp_awarded: number;
+    completed_at?: string;
+    created_at?: string;
 }

@@ -29,13 +29,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { accountId, signature, message } = body;
-    
-    console.log('Received wallet connect request:', { accountId, signature, message });
 
     const email = `${accountId.replace(/\./g, '-')}@hedera.example.com`;
     
     // Try to sign in first
-    console.log('Attempting initial sign in for:', email);
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password: createPasswordHash(signature)
@@ -49,24 +46,11 @@ export async function POST(req: NextRequest) {
 
     // If sign in succeeds, check/create DB record
     if (!signInError && signInData.session) {
-      console.log('Successfully signed in existing user:', {
-        userId: signInData.user.id,
-        email: signInData.user.email,
-        metadata: signInData.user.user_metadata
-      });
-      
-      // Check if user exists in DB
-      console.log('Checking for existing DB record');
+
       const { data: existingUsers, error: fetchError } = await supabase
         .from('Users')
         .select<'*', User>('*')
         .eq('hederaAccountId', accountId);
-
-      console.log('DB lookup result:', {
-        usersFound: existingUsers?.length,
-        users: existingUsers,
-        error: fetchError
-      });
 
       if (fetchError) {
         console.error('Error checking for existing user:', fetchError);
@@ -101,19 +85,15 @@ export async function POST(req: NextRequest) {
       }
 
       // Return session regardless of DB operation result
-      return new NextResponse(
-        JSON.stringify({ session: signInData.session }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      return NextResponse.json(
+        { session: signInData.session },
+        { status: 200 }
       );
     }
 
     // Handle new user creation
     if (signInError?.message?.includes('Invalid login credentials')) {
-      console.log('Attempting user creation after failed sign in:', {
-        originalError: signInError,
-        accountId,
-        email
-      });
+
       
       const { data: createUserData, error: createUserError } = await supabase.auth.admin.createUser({
         email,
@@ -129,11 +109,26 @@ export async function POST(req: NextRequest) {
       if (createUserError) {
         // If user exists but creation failed, try updating password and signing in again
         if (createUserError.message.includes('already been registered')) {
-          console.log('User exists, attempting to update password and sign in again');
+
           
-          // Update password for existing user
+          // Find existing user by email first
+          const { data: existingUser, error: userLookupError } = await supabase.auth.admin
+            .listUsers();
+
+          if (userLookupError) {
+            console.error('Failed to look up existing users:', userLookupError);
+            throw new Error('Failed to look up user');
+          }
+
+          const user = existingUser.users.find(u => u.email === email);
+          if (!user) {
+            console.error('User not found after creation attempt');
+            throw new Error('User not found');
+          }
+
+          // Update password for the found user
           const { error: updateError } = await supabase.auth.admin.updateUserById(
-            'ac596f94-84ae-4595-9d47-576874ce7ee8', // The known user ID
+            user.id,
             { password: createPasswordHash(signature) }
           );
 
@@ -153,9 +148,9 @@ export async function POST(req: NextRequest) {
             throw new Error('Authentication failed after password update');
           }
 
-          return new NextResponse(
-            JSON.stringify({ session: retrySignInData.session }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          return NextResponse.json(
+              { session: retrySignInData.session },
+              { status: 200 }
           );
         }
         
@@ -195,9 +190,11 @@ export async function POST(req: NextRequest) {
         throw new Error('Failed to sign in new user');
       }
 
-      return new NextResponse(
-        JSON.stringify({ session: newSignInData.session }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      console.log('Successfully signed in new user');
+      
+      return NextResponse.json(
+        { session: newSignInData.session },
+        { status: 200 }
       );
     }
 
@@ -206,12 +203,12 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('Error in wallet-connect:', error);
-    return new NextResponse(
-      JSON.stringify({ 
+    return NextResponse.json(
+      { 
         error: error.message || 'Internal server error',
         details: error.details || 'No additional details available'
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      },
+      { status: 500 }
     );
   }
 }

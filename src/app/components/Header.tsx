@@ -3,6 +3,7 @@ import { VT323 } from "next/font/google";
 import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
+import { useRewards } from "../hooks/useRewards";
 import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
 import { AccountBalanceQuery } from "@hashgraph/sdk";
@@ -10,11 +11,15 @@ import { AccountBalanceQuery } from "@hashgraph/sdk";
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, handleDisconnectSessions, account, client } = useWalletContext();
+    const { handleConnect, handleDisconnectSessions, account, client, userId } = useWalletContext();
     const { hasAccess, isLoading } = useNFTGate(account);
+    const { achievements } = useRewards(userId || undefined, account || undefined);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [balance, setBalance] = useState<string>("0");
+
+    // Calculate total XP
+    const totalXP = achievements?.reduce((sum, achievement) => sum + achievement.xp_awarded, 0) || 0;
 
     useEffect(() => {
         if (account !== "") {
@@ -63,30 +68,30 @@ const Header = () => {
         <>
             <Navbar maxWidth="full">
                 <NavbarBrand>
-                    <span className="box">
-                        <h1 style={{fontSize: "2.5rem", color: "#0159E0", fontWeight:"bold"}} className={vt323.className}>
-                            Lynxify
-                        </h1>
-                    </span>
+                    <Link href="/" className="cursor-pointer">
+                        <span className="box">
+                            <h1 style={{fontSize: "2.5rem", color: "#0159E0", fontWeight:"bold"}} className={vt323.className}>
+                                Lynxify
+                            </h1>
+                        </span>
+                    </Link>
                 </NavbarBrand>
                 
                 <NavbarContent justify="end">
                     <NavbarItem className="hidden lg:flex items-center">
                         {!isConnected ? (
-                            <>
-                                <Button 
-                                    className="mt-0" 
-                                    variant="bordered"
-                                    style={{
-                                        backgroundColor: "white",
-                                        color: "black",
-                                        borderColor: "black"
-                                    }}
-                                    onPress={() => handleConnect()}
-                                >
-                                    Connect Wallet
-                                </Button>
-                            </>
+                            <Button 
+                                className="mt-0" 
+                                variant="bordered"
+                                style={{
+                                    backgroundColor: "white",
+                                    color: "black",
+                                    borderColor: "black"
+                                }}
+                                onPress={() => handleConnect()}
+                            >
+                                Connect Wallet
+                            </Button>
                         ) : (
                             <>
                                 {(!hasAccess && !isLoading) && (
@@ -97,11 +102,14 @@ const Header = () => {
                                             borderColor: "#0159E0",
                                             color: "#0159E0"
                                         }}
-                                        onPress={handleAccessDenied}
+                                        onPress={() => setShowPurchaseModal(true)}
                                     >
                                         Get Access
                                     </Button>
                                 )}
+                                <div className="mr-4 px-4 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center">
+                                    <span className="text-[#0159E0] font-bold">{totalXP} XP</span>
+                                </div>
                                 <Dropdown>
                                     <DropdownTrigger>
                                         <Button variant="light" className="text-sm">

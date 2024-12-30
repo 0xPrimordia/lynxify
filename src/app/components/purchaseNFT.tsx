@@ -10,6 +10,7 @@ import {
 import { ethers } from 'ethers';
 import NFTSaleAbi from '../contracts/NFTSale.json';
 import { checkTokenAssociation } from '../lib/utils/tokens';
+import { useRewards } from "../hooks/useRewards";
 
 // Helper function from SaucerSwap
 function hexToUint8Array(hex: string): Uint8Array {
@@ -110,8 +111,10 @@ function PurchaseNFT({
     tokenId: string, 
     client: Client
 }) {
-    const { account, signAndExecuteTransaction, dAppConnector } = useWalletContext();
+    const { account, signAndExecuteTransaction, dAppConnector, userId } = useWalletContext();
+    const { awardXP } = useRewards(userId || undefined, account || undefined);
     const [status, setStatus] = useState("");
+    const [isAwarding, setIsAwarding] = useState(false);
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;
     const nftTokenId = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
     
@@ -234,7 +237,7 @@ function PurchaseNFT({
             if (receipt.status.toString() === "SUCCESS") {
                 setStatus("Purchase recorded, transferring NFT...");
                 
-                // Call API to transfer NFT - let backend determine the serial number
+                // Call API to transfer NFT
                 const transferResponse = await fetch('/api/nft', {
                     method: 'POST',
                     headers: {
@@ -249,13 +252,13 @@ function PurchaseNFT({
 
                 if (!transferResponse.ok) {
                     const error = await transferResponse.json();
-                    console.error("NFT transfer failed:", error);
                     throw new Error(`NFT transfer failed: ${error.error}`);
                 }
 
-                const result = await transferResponse.json();
-                console.log("NFT Transfer result:", result);
-                setStatus(`NFT transferred successfully!`);
+                // Award XP for successful purchase
+                setStatus("Awarding XP for purchase...");
+                await awardXP('PURCHASE_NFT');
+                setStatus("NFT transferred successfully! XP awarded!");
             } else {
                 throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
             }
@@ -371,6 +374,7 @@ function PurchaseNFT({
                     "text-gray-600"
                 }`}>
                     {status}
+                    {isAwarding && <span className="ml-2">⌛</span>}
                 </p>
             )}
         </div>

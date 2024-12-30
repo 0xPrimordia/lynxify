@@ -10,7 +10,8 @@
     "test:monitor": "ts-node scripts/test-price-monitor.ts",
     "test": "hardhat test",
     "test:verbose": "hardhat test --verbose",
-    "deploy:local": "hardhat run scripts/deploy.ts --network local"
+    "deploy:local": "hardhat run scripts/deploy.ts --network local",
+    "test:xp": "ts-node src/tests/integration/xp-rewards.test.ts"
   },
   "overrides": {
     "simple-crypto-js": {
