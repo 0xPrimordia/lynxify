@@ -289,7 +289,7 @@ export default function DexPage() {
 
                 if (result.type === "swap") {
                     try {
-                        await awardXP('first_trade');
+                        await awardXP('FIRST_TRADE');
                     } catch (error) {
                         console.error('Failed to award XP for first trade:', error);
                     }
@@ -373,7 +373,7 @@ export default function DexPage() {
             setThresholds(refreshedData);
 
             try {
-                await awardXP('set_threshold');
+                await awardXP('SET_THRESHOLD');
             } catch (error) {
                 console.error('Failed to award XP for setting threshold:', error);
             }

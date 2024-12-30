@@ -24,13 +24,14 @@ export const TESTNET_REWARDS = {
       id: 'execute_threshold',
       xp: 300,
       description: 'Have a threshold successfully execute'
+    },
+    REPORT_BUG: {
+      id: 'report_bug',
+      xp: 50,
+      description: 'Report a verified bug'
     }
   },
-  LEVELS: {
-    1: 0,
-    2: 200,
-    3: 500,
-    4: 1000,
-    5: 2000
-  }
+  NFT_COST: 1600,
+  NETWORK_MAX_XP: 800, // Maximum XP earnable per network (testnet/mainnet)
+  // Remove levels since we're using direct XP tracking
 }; 

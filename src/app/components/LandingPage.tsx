@@ -33,9 +33,9 @@ const LandingPage = () => {
 
     useEffect(() => {
         if (account) {
-          awardXP('connect_wallet');
+            awardXP('CONNECT_WALLET');
         }
-      }, [account]);
+    }, [account]);
 
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);

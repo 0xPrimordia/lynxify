@@ -237,7 +237,7 @@ function PurchaseNFT({
             if (receipt.status.toString() === "SUCCESS") {
                 setStatus("Purchase recorded, transferring NFT...");
                 
-                // Call API to transfer NFT - let backend determine the serial number
+                // Call API to transfer NFT
                 const transferResponse = await fetch('/api/nft', {
                     method: 'POST',
                     headers: {
@@ -252,25 +252,13 @@ function PurchaseNFT({
 
                 if (!transferResponse.ok) {
                     const error = await transferResponse.json();
-                    console.error("NFT transfer failed:", error);
                     throw new Error(`NFT transfer failed: ${error.error}`);
                 }
 
-                const result = await transferResponse.json();
-                console.log("NFT Transfer result:", result);
-                
-                // Add loading state for XP award
+                // Award XP for successful purchase
                 setStatus("Awarding XP for purchase...");
-                setIsAwarding(true);
-                try {
-                    await awardXP('purchase_nft');
-                    setStatus(`NFT transferred successfully! XP awarded!`);
-                } catch (error) {
-                    console.error('Failed to award XP:', error);
-                    setStatus(`NFT transferred successfully! (XP award failed)`);
-                } finally {
-                    setIsAwarding(false);
-                }
+                await awardXP('PURCHASE_NFT');
+                setStatus("NFT transferred successfully! XP awarded!");
             } else {
                 throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
             }
