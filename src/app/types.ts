@@ -95,7 +95,7 @@ export interface SessionState {
     wallet: WalletState;
     auth: AuthState;
 }
-  }
+  
 
   export type CompletedTask = {
     completed_at: string;

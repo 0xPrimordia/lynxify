@@ -2,6 +2,9 @@ import { Client, AccountId, PrivateKey } from "@hashgraph/sdk";
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
+// Load environment variables first
+dotenv.config({ path: '.env.local' });
+
 export function validateTestEnvironment() {
     const requiredEnvVars = [
         'NEXT_PUBLIC_OPERATOR_ID',
@@ -25,6 +28,9 @@ export function setupTestClient() {
     
     return { client, operatorId, operatorKey };
 }
+
+// Only create Supabase client after validating environment variables
+validateTestEnvironment();
 
 export const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

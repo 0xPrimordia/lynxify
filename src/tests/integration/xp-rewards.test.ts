@@ -3,8 +3,6 @@ import { validateTestEnvironment, setupTestClient, supabase } from './helpers/se
 import { authenticateWallet } from './helpers/auth';
 import { TESTNET_REWARDS } from '../../config/rewards';
 
-dotenv.config({ path: '.env.local' });
-
 async function main() {
     await validateTestEnvironment();
     const { client, operatorId, operatorKey } = setupTestClient();
