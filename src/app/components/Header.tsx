@@ -7,11 +7,12 @@ import { useRewards } from "../hooks/useRewards";
 import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
 import { AccountBalanceQuery } from "@hashgraph/sdk";
+import { handleDisconnectSessions } from '@/utils/supabase/session';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, handleDisconnectSessions, account, client, userId } = useWalletContext();
+    const { handleConnect, dAppConnector, sessions, account, client, userId } = useWalletContext();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { achievements, isLoading: rewardsLoading, isInitializing } = useRewards(userId || undefined, account || undefined);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -121,7 +122,12 @@ const Header = () => {
                                         </Button>
                                     </DropdownTrigger>
                                     <DropdownMenu aria-label="Account Actions">
-                                        <DropdownItem key="logout" className="text-danger" color="danger" onPress={() => handleDisconnectSessions()}>
+                                        <DropdownItem 
+                                            key="logout" 
+                                            className="text-danger" 
+                                            color="danger" 
+                                            onPress={() => handleDisconnectSessions(dAppConnector, sessions || [])}
+                                        >
                                             Sign Out
                                         </DropdownItem>
                                     </DropdownMenu>
