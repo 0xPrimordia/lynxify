@@ -1,8 +1,11 @@
 import { Session } from '@supabase/supabase-js';
 import { SessionTypes } from '@walletconnect/types';
 import { SessionState } from '@/app/types';
+import { supabase } from '@/utils/supabase';
 
 const SESSION_STORAGE_KEY = 'lynxify_session';
+
+let isClearing = false;
 
 export const persistSession = (walletSession: SessionTypes.Struct | null, authSession: Session | null) => {
     try {
@@ -36,11 +39,47 @@ export const getStoredSession = (): SessionState | null => {
     }
 };
 
-export const clearStoredSession = () => {
+export const clearStoredSession = async () => {
+    if (isClearing) return; // Prevent multiple simultaneous clear attempts
+    
     try {
+        isClearing = true;
+        
+        // Clear local storage first
         localStorage.removeItem(SESSION_STORAGE_KEY);
-        console.log('Session storage cleared');
+        
+        // Perform Supabase signout
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            throw error;
+        }
+        
+        console.log('Session storage and auth cleared');
     } catch (error) {
-        console.error('Error clearing session storage:', error);
+        console.error('Error clearing session:', error);
+        throw error;
+    } finally {
+        isClearing = false;
+    }
+};
+
+export const handleDisconnectSessions = async (dAppConnector: any, sessions: any[]) => {
+    try {
+        // First disconnect WalletConnect sessions
+        if (dAppConnector && sessions?.length > 0) {
+            for (const session of sessions) {
+                await dAppConnector.disconnect(session.topic);
+            }
+        }
+
+        // Clear both stored session and Supabase auth
+        await clearStoredSession();
+        
+        return true;
+    } catch (error) {
+        console.error('Error in handleDisconnectSessions:', error);
+        // Still attempt to clear stored session on error
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        throw error;
     }
 }; 
