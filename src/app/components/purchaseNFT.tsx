@@ -1,3 +1,4 @@
+"use client"
 import { ContractExecuteTransaction, Hbar, ContractId, TransactionId, Client, HbarUnit, TokenAssociateTransaction, TokenId, AccountId, AccountBalanceQuery, ContractFunctionParameters, ContractCallQuery, TransactionReceiptQuery } from "@hashgraph/sdk";
 import { Button } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
@@ -11,6 +12,7 @@ import { ethers } from 'ethers';
 import NFTSaleAbi from '../contracts/NFTSale.json';
 import { checkTokenAssociation } from '../lib/utils/tokens';
 import { useRewards } from "../hooks/useRewards";
+import { useRouter } from 'next/navigation';
 
 // Helper function from SaucerSwap
 function hexToUint8Array(hex: string): Uint8Array {
@@ -122,6 +124,29 @@ function PurchaseNFT({
 
     const [hasPurchased, setHasPurchased] = useState(false);
     const [isChecking, setIsChecking] = useState(true);
+    const [purchaseStep, setPurchaseStep] = useState<'idle' | 'processing' | 'complete'>('idle');
+    const [isClient, setIsClient] = useState(false);
+    const [isNFTReceived, setIsNFTReceived] = useState(false);
+    
+    // Check if we're on the client side
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    // Always call useRouter (it's a hook, so it must be unconditional)
+    const router = useRouter();
+    
+    // Use useEffect for the actual navigation
+    useEffect(() => {
+        if (purchaseStep === 'complete') {
+            const timer = setTimeout(() => {
+                router.push('/dex');
+                router.refresh();
+            }, 3000);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [purchaseStep, router]);
 
     // Add useEffect to check purchase status on load
     useEffect(() => {
@@ -138,9 +163,86 @@ function PurchaseNFT({
         checkPurchaseStatus();
     }, [account, contractAddress]);
 
+    // Add function to check NFT status with logging
+    const checkNFTStatus = async (accountId: string) => {
+        if (!nftTokenId) {
+            console.error('NFT Token ID not configured');
+            return false;
+        }
+
+        try {
+            console.log('Checking NFT status:', {
+                accountId,
+                nftTokenId,
+                timestamp: new Date().toISOString()
+            });
+
+            const isAssociated = await verifyTokenAssociation(accountId, nftTokenId, client);
+            console.log('Token association status:', { isAssociated });
+
+            if (isAssociated) {
+                const query = new AccountBalanceQuery()
+                    .setAccountId(AccountId.fromString(accountId));
+                const balance = await query.execute(client);
+                const nftBalance = balance.tokens?.get(TokenId.fromString(nftTokenId));
+                
+                console.log('NFT Balance check:', {
+                    nftBalance,
+                    hasNFT: nftBalance > 0,
+                    timestamp: new Date().toISOString()
+                });
+
+                return nftBalance > 0;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking NFT status:', error);
+            return false;
+        }
+    };
+
+    const pollForNFT = async (account: string) => {
+        let attempts = 0;
+        const maxAttempts = 30;
+        
+        const pollInterval = setInterval(async () => {
+            attempts++;
+            console.log(`Polling attempt ${attempts}/${maxAttempts}`);
+            
+            const hasNFT = await checkNFTStatus(account);
+            console.log('Poll result:', { hasNFT, attempt: attempts });
+            
+            if (hasNFT) {
+                console.log('NFT detected! Completing purchase flow');
+                clearInterval(pollInterval);
+                
+                // Force a synchronous state update
+                setIsNFTReceived(true);
+                setPurchaseStep('complete');
+                setStatus("NFT received! Redirecting to DEX...");
+                
+                // Wait for state to update before redirect
+                setTimeout(() => {
+                    console.log('Redirecting to DEX');
+                    router.push('/dex');
+                    router.refresh();
+                }, 2000);
+            } else if (attempts >= maxAttempts) {
+                clearInterval(pollInterval);
+                throw new Error("NFT delivery timeout. Please contact support.");
+            }
+        }, 1000);
+    };
+
     const handlePurchase = async () => {
-        setStatus("Checking purchase status...");
-        let accountBalance: any;
+        if (!nftTokenId) {
+            setStatus("Error: NFT Token ID not configured");
+            return;
+        }
+
+        setPurchaseStep('processing');
+        setStatus("Initiating purchase process...");
+        
         try {
             if (!account || !contractAddress || !nftTokenId || !dAppConnector) {
                 throw new Error("Wallet not connected or contract not configured");
@@ -177,6 +279,7 @@ function PurchaseNFT({
 
             // Continue with balance check and purchase
             setStatus("Checking balance...");
+            let accountBalance;
             let retries = 3;
             
             while (retries > 0) {
@@ -195,7 +298,7 @@ function PurchaseNFT({
             const requiredBalance = new Hbar(51); // 50 HBAR + 1 for fees
             
             // Convert to numbers for simple comparison
-            const balanceInHbar = Number(accountBalance.hbars.toString().replace(' ℏ', ''));
+            const balanceInHbar = Number(accountBalance?.hbars.toString().replace(' ℏ', ''));
             const requiredInHbar = Number(requiredBalance.toString().replace(' ℏ', ''));
             
             console.log("Balance check:", {
@@ -235,7 +338,7 @@ function PurchaseNFT({
                 .execute(client);
 
             if (receipt.status.toString() === "SUCCESS") {
-                setStatus("Purchase recorded, transferring NFT...");
+                setStatus("Purchase confirmed! Your NFT will arrive shortly...");
                 
                 // Call API to transfer NFT
                 const transferResponse = await fetch('/api/nft', {
@@ -251,34 +354,19 @@ function PurchaseNFT({
                 });
 
                 if (!transferResponse.ok) {
-                    const error = await transferResponse.json();
-                    throw new Error(`NFT transfer failed: ${error.error}`);
+                    throw new Error(`NFT transfer failed`);
                 }
 
-                // Award XP for successful purchase
-                setStatus("Awarding XP for purchase...");
-                await awardXP('PURCHASE_NFT');
-                setStatus("NFT transferred successfully! XP awarded!");
+                // Start polling in a separate function
+                await pollForNFT(account);
             } else {
                 throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
             }
 
         } catch (error: any) {
-            console.error("Purchase failed:", error);
-            const errorMessage = error?.message || "Purchase failed. Please try again.";
-            
-            // Safer error message checking
-            if (typeof errorMessage === 'string') {
-                if (errorMessage.includes("INSUFFICIENT_PAYER_BALANCE")) {
-                    setStatus("Insufficient balance. Please ensure you have at least 65 HBAR (50 HBAR + fees)");
-                } else if (errorMessage.includes("CONTRACT_REVERT_EXECUTED")) {
-                    setStatus("Purchase failed. You may have already purchased or the sale might be sold out.");
-                } else {
-                    setStatus(errorMessage);
-                }
-            } else {
-                setStatus("Purchase failed. Please try again.");
-            }
+            console.error('Purchase process error:', error);
+            setPurchaseStep('idle');
+            setStatus(error.message || "Purchase failed. Please try again.");
         }
     };
 
@@ -313,6 +401,14 @@ function PurchaseNFT({
             return false;
         }
     }
+
+    // Add effect to watch for NFT received state
+    useEffect(() => {
+        if (isNFTReceived) {
+            console.log('NFT received state detected, updating UI');
+            setPurchaseStep('complete');
+        }
+    }, [isNFTReceived]);
 
     return (
         <div className="flex flex-col items-center gap-6 py-4">
@@ -354,7 +450,26 @@ function PurchaseNFT({
                 </p>
             )}
 
-            {account && !isChecking && !hasPurchased && (
+            {purchaseStep === 'processing' && (
+                <div className="text-center">
+                    <div className="mb-4">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    </div>
+                    <p className="text-gray-600">{status}</p>
+                </div>
+            )}
+
+            {purchaseStep === 'complete' && (
+                <div className="text-center">
+                    <div className="mb-4">
+                        <div className="text-green-500 text-4xl">✓</div>
+                    </div>
+                    <p className="text-green-500 font-semibold">NFT Received!</p>
+                    <p className="text-gray-600 mt-2">Redirecting to DEX...</p>
+                </div>
+            )}
+
+            {purchaseStep === 'idle' && account && !isChecking && !hasPurchased && (
                 <Button 
                     color="primary"
                     className="w-full"
@@ -365,17 +480,6 @@ function PurchaseNFT({
                 >
                     Purchase NFT
                 </Button>
-            )}
-            
-            {status && (
-                <p className={`text-center ${
-                    status.includes("Error") ? "text-red-500" : 
-                    status.includes("success") ? "text-green-500" : 
-                    "text-gray-600"
-                }`}>
-                    {status}
-                    {isAwarding && <span className="ml-2">⌛</span>}
-                </p>
             )}
         </div>
     );
