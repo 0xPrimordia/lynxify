@@ -1,38 +1,47 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { TESTNET_REWARDS } from '@/config/rewards';
 import { UserAchievement } from '@/app/types';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-const supabase = createClientComponentClient();
-
-export function useRewards(userId: string | undefined, hederaAccountId: string | undefined) {
+export const useRewards = (userId?: string, account?: string) => {
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
+  const supabase = createClientComponentClient();
 
-  useEffect(() => {
-    async function fetchAchievements() {
-      if (!userId || !hederaAccountId) return;
+  const isInitializing = isLoading && !hasAttemptedLoad;
 
+  const fetchAchievements = useCallback(async () => {
+    if (!userId || !account) return;
+
+    setIsLoading(true);
+
+    try {
       const { data, error } = await supabase
         .from('userachievements')
         .select('*')
         .eq('user_id', userId)
-        .eq('hedera_account_id', hederaAccountId);
+        .eq('hedera_account_id', account);
 
-      if (error) {
-        console.error('Error fetching achievements:', error);
-        return;
-      }
+      if (error) throw error;
 
       setAchievements(data || []);
+      setHasAttemptedLoad(true);
+    } catch (error) {
+      console.error('Error in fetchAchievements:', error);
+      setAchievements([]);
+      setHasAttemptedLoad(true);
+    } finally {
       setIsLoading(false);
     }
+  }, [userId, account, supabase]);
 
+  useEffect(() => {
     fetchAchievements();
-  }, [userId, hederaAccountId]);
+  }, [fetchAchievements]);
 
   const awardXP = useCallback(async (taskId: keyof typeof TESTNET_REWARDS.TASKS) => {
-    if (!userId || !hederaAccountId) return;
+    if (!userId || !account) return;
 
     try {
       const task = TESTNET_REWARDS.TASKS[taskId];
@@ -45,7 +54,7 @@ export function useRewards(userId: string | undefined, hederaAccountId: string |
         .from('userachievements')
         .insert({
           user_id: userId,
-          hedera_account_id: hederaAccountId,
+          hedera_account_id: account,
           task_id: taskId,
           xp_awarded: task.xp
         })
@@ -53,20 +62,26 @@ export function useRewards(userId: string | undefined, hederaAccountId: string |
         .single();
 
       if (error) {
-        if (error.code === '23505') { // Unique violation
+        if (error.code === '23505') {
           console.log(`Achievement ${taskId} already earned`);
           return;
         }
         throw error;
       }
 
-      setAchievements([...achievements, data]);
+      setAchievements(prev => [...prev, data]);
       return data;
     } catch (error) {
       console.error(`Error awarding XP for task ${taskId}:`, error);
       throw error;
     }
-  }, [userId, hederaAccountId, achievements]);
+  }, [userId, account, supabase]);
 
-  return { achievements, isLoading, awardXP };
-} 
+  return { 
+    achievements, 
+    isLoading, 
+    awardXP,
+    hasAttemptedLoad,
+    isInitializing 
+  };
+}; 

@@ -12,14 +12,13 @@ const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
     const { handleConnect, handleDisconnectSessions, account, client, userId } = useWalletContext();
-    const { hasAccess, isLoading } = useNFTGate(account);
-    const { achievements } = useRewards(userId || undefined, account || undefined);
+    const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
+    const { achievements, isLoading: rewardsLoading, isInitializing } = useRewards(userId || undefined, account || undefined);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [balance, setBalance] = useState<string>("0");
 
-    // Calculate total XP
-    const totalXP = achievements?.reduce((sum, achievement) => sum + achievement.xp_awarded, 0) || 0;
+    const totalXP = achievements?.reduce((sum, achievement) => sum + achievement.xp_awarded, 0) ?? 0;
 
     useEffect(() => {
         if (account !== "") {
@@ -27,32 +26,23 @@ const Header = () => {
             
             const fetchBalance = async () => {
                 try {
-                    // Create a new query with retry logic
                     const query = new AccountBalanceQuery()
                         .setAccountId(account)
-                        .setMaxAttempts(3)  // Retry up to 3 times
-                        .setMaxBackoff(5000); // Max 5 seconds between retries
+                        .setMaxAttempts(3)
+                        .setMaxBackoff(5000);
                     
-                    // Execute with fallback nodes if needed
                     const accountBalance = await query.execute(client);
                     const hbarBalance = accountBalance.hbars.toString();
                     setBalance(parseFloat(hbarBalance).toFixed(2));
                 } catch (error) {
-                    console.warn("Balance fetch failed, using cached value:", error);
-                    // Don't reset balance to 0 on temporary errors
-                    // Only reset if we don't have a previous value
                     if (balance === "0") {
                         setBalance("0");
                     }
                 }
             };
 
-            // Initial fetch
             fetchBalance();
-
-            // Set up periodic refresh
-            const refreshInterval = setInterval(fetchBalance, 30000); // Refresh every 30 seconds
-
+            const refreshInterval = setInterval(fetchBalance, 30000);
             return () => clearInterval(refreshInterval);
         } else {
             setIsConnected(false);
@@ -94,7 +84,7 @@ const Header = () => {
                             </Button>
                         ) : (
                             <>
-                                {(!hasAccess && !isLoading) && (
+                                {(!hasAccess && !nftLoading) && (
                                     <Button 
                                         className="mr-4"
                                         variant="bordered"
@@ -108,7 +98,15 @@ const Header = () => {
                                     </Button>
                                 )}
                                 <div className="mr-4 px-4 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center">
-                                    <span className="text-[#0159E0] font-bold">{totalXP} XP</span>
+                                    <span className="text-[#0159E0] font-bold">
+                                        {!isConnected ? (
+                                            "Connect Wallet"
+                                        ) : rewardsLoading ? (
+                                            "Loading XP..."
+                                        ) : (
+                                            `${totalXP} XP`
+                                        )}
+                                    </span>
                                 </div>
                                 <Dropdown>
                                     <DropdownTrigger>
