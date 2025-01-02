@@ -1,4 +1,4 @@
 # Lynxify: The Premier Hedera-Based DeFi Platform
-## Simplifying Portfolio Management with Tokenized Indexes
+## smart Trading, Smarter Gains
 
 ![Lynxify Logo](path/to/logo.png) 
