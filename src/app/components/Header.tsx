@@ -8,6 +8,7 @@ import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
 import { AccountBalanceQuery } from "@hashgraph/sdk";
 import { handleDisconnectSessions } from '@/utils/supabase/session';
+import { CreateWalletModal } from './CreateWalletModal';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
@@ -18,6 +19,7 @@ const Header = () => {
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [balance, setBalance] = useState<string>("0");
+    const [showCreateWalletModal, setShowCreateWalletModal] = useState(false);
 
     const totalXP = achievements?.reduce((sum, achievement) => sum + achievement.xp_awarded, 0) ?? 0;
 
@@ -71,18 +73,30 @@ const Header = () => {
                 <NavbarContent justify="end">
                     <NavbarItem className="hidden lg:flex items-center">
                         {!isConnected ? (
-                            <Button 
-                                className="mt-0" 
-                                variant="bordered"
-                                style={{
-                                    backgroundColor: "white",
-                                    color: "black",
-                                    borderColor: "black"
-                                }}
-                                onPress={() => handleConnect()}
-                            >
-                                Connect Wallet
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="bordered"
+                                    style={{
+                                        backgroundColor: "white",
+                                        color: "black",
+                                        borderColor: "black"
+                                    }}
+                                    onPress={() => setShowCreateWalletModal(true)}
+                                >
+                                    Create Wallet
+                                </Button>
+                                <Button 
+                                    variant="bordered"
+                                    style={{
+                                        backgroundColor: "white",
+                                        color: "black",
+                                        borderColor: "black"
+                                    }}
+                                    onPress={() => handleConnect()}
+                                >
+                                    Connect Wallet
+                                </Button>
+                            </div>
                         ) : (
                             <>
                                 {(!hasAccess && !nftLoading) && (
@@ -158,6 +172,11 @@ const Header = () => {
                     </ModalBody>
                 </ModalContent>
             </Modal>
+
+            <CreateWalletModal 
+                isOpen={showCreateWalletModal}
+                onClose={() => setShowCreateWalletModal(false)}
+            />
         </>
     );
 };

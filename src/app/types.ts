@@ -112,3 +112,26 @@ export interface SessionState {
     completed_at?: string;
     created_at?: string;
 }
+
+export interface UserWallet {
+    id: string;
+    user_id: string;
+    encrypted_wallet: string;
+    public_key: string;
+    account_id: string;
+    created_at: string;
+    last_accessed: string;
+    version: number;
+}
+
+export interface Database {
+    public: {
+        Tables: {
+            user_wallets: {
+                Row: UserWallet;
+                Insert: Omit<UserWallet, 'id' | 'created_at' | 'last_accessed'>;
+                Update: Partial<Omit<UserWallet, 'id'>>;
+            };
+        };
+    };
+}
