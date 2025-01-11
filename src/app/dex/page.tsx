@@ -8,11 +8,8 @@ import dynamic from 'next/dynamic'
 import { useRouter } from "next/navigation";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
-import { SignAndExecuteTransactionParams, SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
 import { Threshold } from "../types";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
-import { QuestionMarkCircleIcon } from "@heroicons/react/16/solid";
-import { Tooltip } from "@nextui-org/react";
 import { 
     getSwapType, 
     swapHbarToToken, 
@@ -22,9 +19,6 @@ import {
     type SwapResponse 
 } from '../lib/saucerswap';
 import { ethers } from 'ethers';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
-import { Link } from "@nextui-org/react";
 import TestnetAlert from "../components/TestnetAlert";
 import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 import { Button } from '@nextui-org/react';
@@ -43,7 +37,6 @@ const ApexChart = dynamic(
 
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
-import { Menubar, MenubarMenu } from '@/components/ui/menubar';
 import { usePoolContext } from "../hooks/usePools";
 import { useRewards } from "../hooks/useRewards";
   
@@ -88,12 +81,10 @@ export default function DexPage() {
     const [stopLossPrice, setStopLossPrice] = useState(currentToken.priceUsd.toString());
     const { data, loading, error } = useTokenPriceHistory(currentToken.id, from, to, interval);
     const prevPoolsRef = useRef<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [receiveAmount, setReceiveAmount] = useState("0.0");
     const [sellOrder, setSellOrder] = useState(false);
     const [sellOrderPrice, setSellOrderPrice] = useState(currentToken.priceUsd.toString());
     const [sellOrderCap, setSellOrderCap] = useState("0.0");
-    const supabase = createClientComponentClient()
     const [alertState, setAlertState] = useState<{
         isVisible: boolean;
         message: string;
@@ -120,11 +111,11 @@ export default function DexPage() {
     }, [currentToken]);
 
     useEffect(() => {
-        if (isLoading || nftGateLoading) return; // Don't redirect while loading
+        if (nftGateLoading) return; // Only check nftGateLoading
         if (!account || !hasAccess) {
             router.push('/');
         }
-    }, [account, hasAccess, isLoading, nftGateLoading, router]);
+    }, [account, hasAccess, nftGateLoading, router]);
 
     useEffect(() => {
         if(!pools || !currentToken) return;
@@ -136,36 +127,23 @@ export default function DexPage() {
     }, [pools, currentToken]);
 
     useEffect(() => {
-        console.log('Wallet Context:', {
-            account,
-            userId,
-        });
         const fetchThresholds = async () => {
-            if (!userId) {
-                setIsLoading(false);
-                return;
-            }
             try {
-                setIsLoading(true);
                 const response = await fetch(`/api/thresholds?userId=${userId}`);
-                console.log('Response status:', response.status);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const data = await response.json();
-                console.log('Fetched thresholds data:', data);
-                
-                setThresholds(Array.isArray(data) ? data : []);
+                if (response.ok) {
+                    setThresholds(data);
+                } else {
+                    console.error('Error fetching thresholds:', data.error);
+                }
             } catch (error) {
                 console.error('Error fetching thresholds:', error);
-            } finally {
-                setIsLoading(false);
             }
         };
 
-        fetchThresholds();
+        if (userId) {
+            fetchThresholds();
+        }
     }, [userId]);
 
     useEffect(() => {
@@ -178,28 +156,12 @@ export default function DexPage() {
         }
     }, [tokens]); // Only run when tokens are loaded/updated
 
-    const formatPrice = (price: number) => {
-        // Handle invalid values
-        if (!price || !isFinite(price)) {
-            console.warn('Invalid price detected:', price);
-            return '$0.00';
+    // Helper function to validate and format price
+    const formatPrice = (price: number | string | undefined): string => {
+        if (!price || isNaN(Number(price)) || Number(price) === 0) {
+            return "0.00";  // or return a dash "-" if you prefer
         }
-
-        // Handle HBARX edge case (or any token with clearly invalid price)
-        if (price > 1e10 || price.toString().includes('e+')) {
-            console.warn('Invalid price data detected:', {
-                token: currentToken.symbol,
-                price: price
-            });
-            return 'Price Unavailable';
-        }
-
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 8
-        }).format(price);
+        return Number(price).toFixed(8);
     };
 
     useEffect(() => {
@@ -439,9 +401,8 @@ export default function DexPage() {
                 body: JSON.stringify({ id })
             });
 
-            const data = await response.json();
-
             if (!response.ok) {
+                const data = await response.json();
                 throw new Error(data.error || 'Failed to delete threshold');
             }
 
@@ -457,7 +418,6 @@ export default function DexPage() {
             });
 
         } catch (error) {
-            console.error('Error deleting threshold:', error);
             setAlertState({
                 isVisible: true,
                 message: error instanceof Error ? error.message : 'Failed to delete threshold',
@@ -768,6 +728,7 @@ export default function DexPage() {
                             key={option.key} 
                             value={option.key}
                             description={option.description}
+                            textValue={option.label}
                         >
                             {option.label}
                         </SelectItem>
@@ -936,7 +897,7 @@ export default function DexPage() {
                             onChange={(e) => setSellOrderPrice(e.target.value)} 
                             step="0.000001" 
                             type="number" 
-                            value={sellOrderPrice.toString()}
+                            value={formatPrice(sellOrderPrice)}
                         />
                         <div className="flex gap-2 mt-2">
                             <Button 
@@ -1000,7 +961,7 @@ export default function DexPage() {
         );
     };
 
-    if (isLoading || nftGateLoading) {
+    if (nftGateLoading) {
         return <div>Loading...</div>;
     }
 
@@ -1066,7 +1027,12 @@ export default function DexPage() {
                                                         <TableCell>${threshold.price}</TableCell>
                                                         <TableCell>{threshold.cap}</TableCell>
                                                         <TableCell>
-                                                            <Button onPress={() => deleteThreshold(threshold.id)}>Delete</Button>
+                                                            <Button 
+                                                                onPress={() => deleteThreshold(threshold.id)}
+                                                                aria-label={`Delete threshold ${threshold.id}`}
+                                                            >
+                                                                Delete
+                                                            </Button>
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -1093,7 +1059,7 @@ export default function DexPage() {
                         </div>
                         <div className="pl-1">
                             <span className="text-xl text-green-500">
-                                {formatPrice(currentToken.priceUsd)}
+                                {formatPrice(currentToken?.priceUsd)}
                             </span>
                         </div>
                         <Dropdown placement="bottom-start">
@@ -1130,11 +1096,16 @@ export default function DexPage() {
                                         placeholder="Select Pool"
                                     >
                                         {(pool:any) => (
-                                            <SelectItem key={pool.id.toString()}>{pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%</SelectItem>
+                                            <SelectItem 
+                                                key={pool.id.toString()} 
+                                                textValue={`${pool.tokenA?.symbol} - ${pool.tokenB?.symbol} pool with ${pool.fee / 10_000.0}% fee`}
+                                            >
+                                                {pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%
+                                            </SelectItem>
                                         )}
                                     </Select>
                                 ):(
-                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onPress={() => setCurrentPool(null)}>Clear</Button></p>
+                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onPress={() => setCurrentPool(null)} aria-label="Clear pool selection">Clear</Button></p>
                                 )}
                                 
                             </div>
@@ -1168,7 +1139,15 @@ export default function DexPage() {
                                 </div>
                             }
                             endContent={
-                                <Chip onClick={handleMaxClick} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
+                                <Button 
+                                    onClick={handleMaxClick} 
+                                    aria-label="Set maximum amount"
+                                    className="cursor-pointer" 
+                                    radius="sm" 
+                                    size="sm"
+                                >
+                                    MAX
+                                </Button>
                             }
                             step="0.000001"
                         />

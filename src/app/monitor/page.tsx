@@ -1,14 +1,10 @@
 'use client';
 import { Threshold } from '@/app/types';
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/utils/supabase';
 
 export default function MonitorPage() {
   const [thresholds, setThresholds] = useState<Threshold[]>([]);
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   useEffect(() => {
     const fetchThresholds = async () => {

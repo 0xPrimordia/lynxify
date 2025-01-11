@@ -15,21 +15,6 @@ export async function DELETE(request: Request) {
             );
         }
 
-        // First check if the threshold exists
-        const { data: threshold, error: fetchError } = await supabase
-            .from('Thresholds')
-            .select('*')
-            .eq('id', id)
-            .single();
-
-        if (fetchError || !threshold) {
-            return NextResponse.json(
-                { error: 'Threshold not found', details: fetchError?.message },
-                { status: 404 }
-            );
-        }
-
-        // Delete the threshold
         const { error: deleteError } = await supabase
             .from('Thresholds')
             .delete()

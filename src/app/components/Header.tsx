@@ -12,7 +12,7 @@ import { handleDisconnectSessions } from '@/utils/supabase/session';
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, dAppConnector, sessions, account, client, userId } = useWalletContext();
+    const { handleConnect, dAppConnector, sessions, account, client, userId, handleDisconnect } = useWalletContext();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { achievements, isLoading: rewardsLoading, isInitializing } = useRewards(userId || undefined, account || undefined);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -126,7 +126,7 @@ const Header = () => {
                                             key="logout" 
                                             className="text-danger" 
                                             color="danger" 
-                                            onPress={() => handleDisconnectSessions(dAppConnector, sessions || [])}
+                                            onPress={handleDisconnect}
                                         >
                                             Sign Out
                                         </DropdownItem>
