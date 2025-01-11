@@ -13,6 +13,7 @@ import { SessionTypes } from '@walletconnect/types';
 import { supabase } from '@/utils/supabase';
 import { SessionState } from '@/app/types';
 import { persistSession, getStoredSession, clearStoredSession } from '@/utils/supabase/session';
+import { handleDisconnectSessions } from '@/utils/supabase/session';
 
 declare global {
   interface Window {
@@ -42,6 +43,7 @@ interface WalletContextType {
     isConnecting: boolean;
     error: string | null;
     sessionState: SessionState;
+    handleDisconnect: () => Promise<void>;
 }
 
 export const WalletContext = createContext<WalletContextType>({
@@ -69,7 +71,8 @@ export const WalletContext = createContext<WalletContextType>({
             userId: null,
             session: null
         }
-    }
+    },
+    handleDisconnect: async () => {}
 });
 
 interface WalletProviderProps {
@@ -566,6 +569,40 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     return result;
   };
 
+  const handleDisconnect = useCallback(async () => {
+    try {
+        if (dAppConnector && sessions) {
+            // Disconnect WalletConnect sessions
+            for (const session of sessions) {
+                await dAppConnector.disconnect(session.topic);
+            }
+        }
+        
+        // Clear stored session and Supabase auth
+        await clearStoredSession();
+        
+        // Reset local state
+        setAccount('');
+        setUserId(null);
+        setSessions([]);
+        setSessionState({
+            wallet: {
+                isConnected: false,
+                accountId: null,
+                session: null
+            },
+            auth: {
+                isAuthenticated: false,
+                userId: null,
+                session: null
+            }
+        });
+    } catch (error) {
+        console.error('Error disconnecting:', error);
+        setError(error instanceof Error ? error.message : 'Failed to disconnect');
+    }
+  }, [dAppConnector, sessions]);
+
   return (
     <WalletContext.Provider
       value={{
@@ -582,7 +619,8 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         userId,
         isConnecting,
         error,
-        sessionState
+        sessionState,
+        handleDisconnect
       }}
     >
       {children}

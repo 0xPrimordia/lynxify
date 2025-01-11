@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TESTNET_REWARDS } from '@/config/rewards';
 import { UserAchievement } from '@/app/types';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '@/utils/supabase';
 
 export const useRewards = (userId?: string, account?: string) => {
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
-  const supabase = createClientComponentClient();
 
   const isInitializing = isLoading && !hasAttemptedLoad;
 
@@ -44,38 +43,36 @@ export const useRewards = (userId?: string, account?: string) => {
     if (!userId || !account) return;
 
     try {
-      const task = TESTNET_REWARDS.TASKS[taskId];
-      if (!task) {
-        console.error(`Invalid task ID: ${taskId}`);
-        return;
-      }
+        // First check if achievement already exists
+        const { data: existingAchievement } = await supabase
+            .from('userachievements')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('task_id', taskId)
+            .single();
 
-      const { data, error } = await supabase
-        .from('userachievements')
-        .insert({
-          user_id: userId,
-          hedera_account_id: account,
-          task_id: taskId,
-          xp_awarded: task.xp
-        })
-        .select()
-        .single();
-
-      if (error) {
-        if (error.code === '23505') {
-          console.log(`Achievement ${taskId} already earned`);
-          return;
+        if (existingAchievement) {
+            console.debug(`Achievement ${taskId} already earned`); // Changed to debug level
+            return;
         }
-        throw error;
-      }
 
-      setAchievements(prev => [...prev, data]);
-      return data;
+        const { error } = await supabase
+            .from('userachievements')
+            .insert({
+                user_id: userId,
+                hedera_account_id: account,
+                task_id: taskId,
+                xp_awarded: TESTNET_REWARDS.TASKS[taskId].xp
+            });
+
+        if (error) throw error;
+
+        // Refresh achievements after successful insert
+        await fetchAchievements();
     } catch (error) {
-      console.error(`Error awarding XP for task ${taskId}:`, error);
-      throw error;
+        console.error('Error awarding XP:', error);
     }
-  }, [userId, account, supabase]);
+  }, [userId, account, fetchAchievements]);
 
   return { 
     achievements, 
