@@ -193,7 +193,8 @@ export default function DexPage() {
                         currentPool.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints
+                        slippageBasisPoints,
+                        tradeToken.decimals
                     );
                     console.log('HBAR to Token swap result:', result);
                     break;
@@ -219,7 +220,8 @@ export default function DexPage() {
                         account,
                         Math.floor(Date.now() / 1000) + 60,
                         slippageBasisPoints,
-                        currentToken.decimals
+                        currentToken.decimals,
+                        tradeToken.decimals
                     );
                     break;
             }
@@ -239,7 +241,8 @@ export default function DexPage() {
                         currentPool.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints
+                        slippageBasisPoints,
+                        tradeToken.decimals
                     );
                     
                     if (result.tx) {
