@@ -5,6 +5,7 @@ import { WHBAR_ID, SWAP_ROUTER_ADDRESS } from '../constants';
 import { hexToUint8Array } from '../utils/format';
 import { checkTokenAssociation, associateToken } from '../utils/tokens';
 import SwapRouterAbi from '../abis/SwapRouter.json';
+import { getQuoteExactInput } from '../quoter';
 
 const swapRouterAbi = new ethers.Interface(SwapRouterAbi);
 
@@ -14,7 +15,8 @@ export const swapHbarToToken = async (
   fee: number,
   recipientAddress: string,
   deadline: number,
-  slippageBasisPoints: number
+  slippageBasisPoints: number,
+  outputTokenDecimals: number
 ) => {
   try {
     // Check output token association first
@@ -26,13 +28,24 @@ export const swapHbarToToken = async (
     // Parse amount to tinybars
     const amountInSmallestUnit = Hbar.from(amountIn, HbarUnit.Hbar).toTinybars().toString();
     
-    // Calculate minimum output using provided slippage (basis points to percentage)
-    const slippagePercent = slippageBasisPoints / 10000;
-    const outputMinInTokens = (Number(amountInSmallestUnit) * (1 - slippagePercent)).toString();
+    // First get the quote
+    const quoteAmount = await getQuoteExactInput(
+      WHBAR_ID,
+      8, // WHBAR decimals
+      outputToken,
+      amountIn,
+      fee,
+      outputTokenDecimals
+    );
+
+    // Calculate minimum output using slippage on the quoted amount
+    const slippagePercent = slippageBasisPoints / 10000; // Convert basis points to decimal (e.g., 50 -> 0.005)
+    const outputMinInTokens = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
     console.log('Swap Parameters:', {
       amountIn,
       amountInSmallestUnit,
+      quoteAmount: quoteAmount.toString(),
       slippageBasisPoints,
       slippagePercent,
       outputMinInTokens

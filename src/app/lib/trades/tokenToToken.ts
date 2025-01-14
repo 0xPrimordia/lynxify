@@ -5,6 +5,7 @@ import { SWAP_ROUTER_ADDRESS } from '../constants';
 import { hexToUint8Array } from '../utils/format';
 import { checkTokenAllowance, approveTokenForSwap, checkTokenAssociation, associateToken } from '../utils/tokens';
 import SwapRouterAbi from '../abis/SwapRouter.json';
+import { getQuoteExactInput } from '../saucerswap';
 
 const swapRouterAbi = new ethers.Interface(SwapRouterAbi);
 
@@ -16,30 +17,10 @@ export const swapTokenToToken = async (
   recipientAddress: string,
   deadline: number,
   slippageBasisPoints: number,
-  inputTokenDecimals: number
+  inputTokenDecimals: number,
+  outputTokenDecimals: number
 ) => {
   try {
-    // Parse amount with proper decimals
-    const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
-    
-    // Calculate minimum output using provided slippage (basis points to percentage)
-    const slippagePercent = slippageBasisPoints / 10000;
-    const outputMinInTokens = (Number(amountInSmallestUnit) * (1 - slippagePercent)).toString();
-
-    console.log('Swap Parameters:', {
-      amountIn,
-      amountInSmallestUnit,
-      slippageBasisPoints,
-      slippagePercent,
-      outputMinInTokens
-    });
-
-    // Check token association first
-    const isAssociated = await checkTokenAssociation(recipientAddress, outputToken);
-    if (!isAssociated) {
-      return { type: 'associate' as const, tx: await associateToken(recipientAddress, outputToken) };
-    }
-
     // Check if input token is approved
     const isApproved = await checkTokenAllowance(
       inputToken,
@@ -59,6 +40,37 @@ export const swapTokenToToken = async (
           inputTokenDecimals
         )
       };
+    }
+
+    const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
+
+    // First get the quote
+    const quoteAmount = await getQuoteExactInput(
+      inputToken,
+      inputTokenDecimals,
+      outputToken,
+      amountIn,
+      fee,
+      outputTokenDecimals
+    );
+
+    // Calculate minimum output using slippage on the quoted amount
+    const slippagePercent = slippageBasisPoints / 10000;
+    const outputMinInTokens = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
+
+    console.log('Swap Parameters:', {
+      amountIn,
+      amountInSmallestUnit,
+      quoteAmount: quoteAmount.toString(),
+      slippageBasisPoints,
+      slippagePercent,
+      outputMinInTokens
+    });
+
+    // Check token association first
+    const isAssociated = await checkTokenAssociation(recipientAddress, outputToken);
+    if (!isAssociated) {
+      return { type: 'associate' as const, tx: await associateToken(recipientAddress, outputToken) };
     }
 
     // Construct path
