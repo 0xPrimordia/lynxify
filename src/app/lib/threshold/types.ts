@@ -11,6 +11,8 @@ export interface ThresholdInputParams {
   hederaAccountId: string;
   tokenA: string;
   tokenB: string;
+  tokenADecimals: number;
+  tokenBDecimals: number;
   fee: number;
   isActive: boolean;
   slippageBasisPoints?: number;
@@ -36,6 +38,6 @@ export const processThresholdParams = (params: ThresholdInputParams): ThresholdC
     basisPoints: Math.floor(params.price * 10000),
     accountId: params.hederaAccountId,
     tokenAddress: params.tokenA,
-    amount: ethers.parseUnits(params.cap.toString(), 6).toString(),
+    amount: ethers.parseUnits(params.cap.toString(), params.tokenADecimals).toString(),
   };
 }; 

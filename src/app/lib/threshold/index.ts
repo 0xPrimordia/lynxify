@@ -36,7 +36,8 @@ import {
         params.hederaAccountId,
         Math.floor(Date.now() / 1000) + 60,
         slippageBasisPoints,
-        6
+        params.tokenADecimals,
+        params.tokenBDecimals
       );
     }
     
@@ -48,7 +49,8 @@ import {
         params.fee,
         params.hederaAccountId,
         Math.floor(Date.now() / 1000) + 60,
-        slippageBasisPoints
+        slippageBasisPoints,
+        params.tokenBDecimals
       );
     }
     
@@ -61,7 +63,7 @@ import {
         params.hederaAccountId,
         Math.floor(Date.now() / 1000) + 60,
         slippageBasisPoints,
-        6
+        params.tokenADecimals
       );
     }
   
