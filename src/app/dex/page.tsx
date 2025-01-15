@@ -23,6 +23,7 @@ import TestnetAlert from "../components/TestnetAlert";
 import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 import { Button } from '@nextui-org/react';
 import { WHBAR_ID } from "../lib/constants";
+import { ThresholdSection } from '../components/ThresholdSection';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -162,6 +163,17 @@ export default function DexPage() {
             return "0.00";  // or return a dash "-" if you prefer
         }
         return Number(price).toFixed(8);
+    };
+
+    const calculateMaxAmount = (balance: string, decimals: number, isHbar: boolean = false) => {
+        const rawBalance = Number(balance);
+        if (isHbar) {
+            // For HBAR, reserve 0.1 HBAR for gas
+            const gasReserve = 0.1 * Math.pow(10, decimals);
+            return Math.max(0, (rawBalance - gasReserve) / Math.pow(10, decimals)).toString();
+        }
+        // For tokens, return full balance as gas is paid in HBAR
+        return (rawBalance / Math.pow(10, decimals)).toString();
     };
 
     useEffect(() => {
@@ -463,18 +475,18 @@ export default function DexPage() {
         if (!currentToken) return;
         
         const balance = await getTokenBalance(currentToken.id);
-        // Convert from smallest unit to decimal representation based on token decimals
-        const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
+        const isHbar = currentToken.id === "0.0.15058";
+        const formattedBalance = calculateMaxAmount(balance, currentToken.decimals, isHbar);
         setTradeAmount(formattedBalance);
         calculateTradeAmount(formattedBalance);
     };
 
-    const hanndleMaxClickStopLoss = async () => {
+    const handleMaxClickStopLoss = async () => {
         if (!currentToken) return;
         
         const balance = await getTokenBalance(currentToken.id);
-        // Convert from smallest unit to decimal representation based on token decimals
-        const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
+        const isHbar = currentToken.id === "0.0.15058";
+        const formattedBalance = calculateMaxAmount(balance, currentToken.decimals, isHbar);
         setStopLossCap(formattedBalance);
     };
 
@@ -547,7 +559,8 @@ export default function DexPage() {
         if (!currentToken) return;
         
         const balance = await getTokenBalance(currentToken.id);
-        const formattedBalance = (Number(balance) / Math.pow(10, currentToken.decimals)).toString();
+        const isHbar = currentToken.id === "0.0.15058";
+        const formattedBalance = calculateMaxAmount(balance, currentToken.decimals, isHbar);
         setSellOrderCap(formattedBalance);
     };
 
@@ -707,261 +720,6 @@ export default function DexPage() {
     const getTokenIcon = (tokenId: string) => {
         const token = tokens.find((t: Token) => t.id === tokenId);
         return token?.icon || '';
-    };
-
-    const ThresholdSection = () => {
-        const thresholdOptions = [
-            { key: 'stopLoss', label: 'Stop Loss', description: 'Sells tokens when the price < threshold' },
-            { key: 'buyOrder', label: 'Buy Order', description: 'Buys tokens when the price < threshold' },
-            { key: 'sellOrder', label: 'Sell Order', description: 'Sells tokens when the price > threshold' }
-        ];
-
-        return (
-            <div className="w-full flex flex-col gap-4 pb-8">
-                <Select
-                    label="Select Threshold Type"
-                    placeholder="Select a threshold type"
-                    className="max-w-xs"
-                    onChange={(e) => setSelectedThresholdType(e.target.value as 'stopLoss' | 'buyOrder' | 'sellOrder' | null)}
-                    selectedKeys={selectedThresholdType ? [selectedThresholdType] : []}
-                    isDisabled={!currentPool}
-                >
-                    {thresholdOptions.map((option) => (
-                        <SelectItem 
-                            key={option.key} 
-                            value={option.key}
-                            description={option.description}
-                            textValue={option.label}
-                        >
-                            {option.label}
-                        </SelectItem>
-                    ))}
-                </Select>
-
-                {selectedThresholdType === 'stopLoss' && (
-                    <div className="w-full my-4 flex flex-col gap-4">
-                        <p>Sell Price (usd)</p>
-                        <Input
-                            onFocus={handleInputFocus}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
-                                </div>
-                            }
-                            maxLength={12} 
-                            onChange={(e) => setStopLossPrice(e.target.value)} 
-                            step="0.000001" 
-                            type="number" 
-                            value={stopLossPrice.toString()}
-                        />
-                        <div className="flex gap-2 mt-2">
-                            <Button 
-                                size="sm" 
-                                variant="flat" 
-                                onPress={() => adjustStopLossPrice(0.01)}
-                            >
-                                -1%
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                variant="flat" 
-                                onPress={() => adjustStopLossPrice(0.05)}
-                            >
-                                -5%
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                variant="flat" 
-                                onPress={() => adjustStopLossPrice(0.10)}
-                            >
-                                -10%
-                            </Button>
-                        </div>
-                        <p>Sell Cap (qty of tokens to sell)</p>
-                        <Input
-                            onFocus={handleInputFocus}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            maxLength={12} 
-                            onChange={(e) => setStopLossCap(e.target.value)} 
-                            step="0.000001" 
-                            type="number" 
-                            value={stopLossCap.toString()}
-                            endContent={
-                                <Chip onClick={hanndleMaxClickStopLoss} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
-                            }
-                        />
-                        <ThresholdSlippageSelector 
-                            slippage={stopLossSlippage} 
-                            setSlippage={setStopLossSlippage}
-                        />
-                        <Button 
-                            className="mb-2" 
-                            onPress={() => {
-                                saveThresholds('stopLoss');
-                                resetThresholdForm();
-                            }}
-                            isLoading={isSubmitting}
-                            isDisabled={isSubmitting}
-                        >
-                            Set Stop-Loss
-                        </Button>
-                    </div>
-                )}
-
-                {selectedThresholdType === 'buyOrder' && (
-                    <div className="w-full my-4 flex flex-col gap-4">
-                        <p>Buy Price (usd)</p>
-                        <Input 
-                            onFocus={handleInputFocus}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            maxLength={12} 
-                            onChange={(e) => setBuyOrderPrice(e.target.value)} 
-                            step="0.000001" 
-                            type="number" 
-                            value={buyOrderPrice.toString()} 
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
-                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                </div>
-                            }
-                        />
-                        <p>Buy Cap (qty of tokens to buy)</p>
-                        <Input 
-                            onFocus={handleInputFocus}
-                            maxLength={12} 
-                            onChange={(e) => setBuyOrderCap(e.target.value)} 
-                            step="0.000001" 
-                            type="number" 
-                            value={buyOrderCap.toString()} 
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                        />
-                        <ThresholdSlippageSelector 
-                            slippage={buyOrderSlippage} 
-                            setSlippage={setBuyOrderSlippage}
-                        />
-                        <Button 
-                            className="mb-2" 
-                            onPress={() => {
-                                saveThresholds('buyOrder');
-                                resetThresholdForm();
-                            }}
-                            isLoading={isSubmitting}
-                            isDisabled={isSubmitting}
-                        >
-                            Set Buy Order
-                        </Button>
-                    </div>
-                )}
-
-                {selectedThresholdType === 'sellOrder' && (
-                    <div className="w-full my-4 flex flex-col gap-4">
-                        <p>Sell Price (usd)</p>
-                        <Input
-                            onFocus={handleInputFocus}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
-                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
-                                </div>
-                            }
-                            maxLength={12} 
-                            onChange={(e) => setSellOrderPrice(e.target.value)} 
-                            step="0.000001" 
-                            type="number" 
-                            value={formatPrice(sellOrderPrice)}
-                        />
-                        <div className="flex gap-2 mt-2">
-                            <Button 
-                                size="sm" 
-                                variant="flat" 
-                                onPress={() => adjustSellOrderPrice(0.01)}
-                            >
-                                +1%
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                variant="flat" 
-                                onPress={() => adjustSellOrderPrice(0.05)}
-                            >
-                                +5%
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                variant="flat" 
-                                onPress={() => adjustSellOrderPrice(0.10)}
-                            >
-                                +10%
-                            </Button>
-                        </div>
-                        <p>Sell Cap (qty of tokens to sell)</p>
-                        <Input
-                            onFocus={handleInputFocus}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            maxLength={12} 
-                            onChange={(e) => setSellOrderCap(e.target.value)} 
-                            step="0.000001" 
-                            type="number" 
-                            value={sellOrderCap.toString()}
-                            endContent={
-                                <Chip onClick={handleMaxClickSellOrder} className="cursor-pointer" radius="sm" size="sm">MAX</Chip>
-                            }
-                        />
-                        <ThresholdSlippageSelector 
-                            slippage={sellOrderSlippage} 
-                            setSlippage={setSellOrderSlippage}
-                        />
-                        <Button 
-                            className="mb-2" 
-                            onPress={() => {
-                                saveThresholds('sellOrder');
-                                resetThresholdForm();
-                            }}
-                            isLoading={isSubmitting}
-                            isDisabled={isSubmitting}
-                        >
-                            Set Sell Order
-                        </Button>
-                    </div>
-                )}
-            </div>
-        );
     };
 
     if (nftGateLoading) {
@@ -1188,7 +946,39 @@ export default function DexPage() {
                             Trade
                         </Button>
                     </div>
-                    <ThresholdSection />
+                    <ThresholdSection
+                        selectedThresholdType={selectedThresholdType}
+                        setSelectedThresholdType={setSelectedThresholdType}
+                        currentPool={currentPool}
+                        currentToken={currentToken}
+                        tradeToken={tradeToken}
+                        stopLossPrice={stopLossPrice}
+                        stopLossCap={stopLossCap}
+                        buyOrderPrice={buyOrderPrice}
+                        buyOrderCap={buyOrderCap}
+                        sellOrderPrice={sellOrderPrice}
+                        sellOrderCap={sellOrderCap}
+                        stopLossSlippage={stopLossSlippage}
+                        buyOrderSlippage={buyOrderSlippage}
+                        sellOrderSlippage={sellOrderSlippage}
+                        isSubmitting={isSubmitting}
+                        setStopLossPrice={setStopLossPrice}
+                        setStopLossCap={setStopLossCap}
+                        setBuyOrderPrice={setBuyOrderPrice}
+                        setBuyOrderCap={setBuyOrderCap}
+                        setSellOrderPrice={setSellOrderPrice}
+                        setSellOrderCap={setSellOrderCap}
+                        setStopLossSlippage={setStopLossSlippage}
+                        setBuyOrderSlippage={setBuyOrderSlippage}
+                        setSellOrderSlippage={setSellOrderSlippage}
+                        handleInputFocus={handleInputFocus}
+                        adjustStopLossPrice={adjustStopLossPrice}
+                        adjustSellOrderPrice={adjustSellOrderPrice}
+                        hanndleMaxClickStopLoss={handleMaxClickStopLoss}
+                        handleMaxClickSellOrder={handleMaxClickSellOrder}
+                        saveThresholds={saveThresholds}
+                        resetThresholdForm={resetThresholdForm}
+                    />
                 </div>
             </div>
             
