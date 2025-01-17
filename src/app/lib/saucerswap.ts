@@ -9,6 +9,13 @@ export { WHBAR_ID, SWAP_ROUTER_ADDRESS, QUOTER_V2_ADDRESS } from './constants';
 // Define and export the SwapType type
 export type SwapType = 'hbarToToken' | 'tokenToHbar' | 'tokenToToken';
 
+// Add new type for routing strategy
+export type RoutingStrategy = {
+  useWhbarPath: boolean;
+  intermediateToken?: string;
+  intermediateTokenDecimals?: number;
+};
+
 export type SwapResponse = {
   type: 'approval' | 'associate' | 'swap';
   tx?: string;
@@ -18,9 +25,33 @@ export type SwapResponse = {
   tx: string;
 };
 
-// Export the function directly
-export const getSwapType = (inputToken: string, outputToken: string): SwapType => {
-  if (inputToken === WHBAR_ID) return 'hbarToToken';
-  if (outputToken === WHBAR_ID) return 'tokenToHbar';
-  return 'tokenToToken';
+// Export the function with routing strategy support
+export const getSwapType = (
+  inputToken: string, 
+  outputToken: string,
+  routing?: RoutingStrategy
+): { type: SwapType; routing: RoutingStrategy } => {
+  // Default routing strategy
+  const defaultRouting: RoutingStrategy = {
+    useWhbarPath: false
+  };
+
+  if (inputToken === WHBAR_ID) {
+    return { 
+      type: 'hbarToToken',
+      routing: defaultRouting 
+    };
+  }
+  
+  if (outputToken === WHBAR_ID) {
+    return { 
+      type: 'tokenToHbar',
+      routing: routing || defaultRouting 
+    };
+  }
+
+  return { 
+    type: 'tokenToToken',
+    routing: routing || defaultRouting 
+  };
 }; 

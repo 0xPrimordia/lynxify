@@ -112,3 +112,17 @@ export interface SessionState {
     completed_at?: string;
     created_at?: string;
 }
+
+export interface Token {
+    id: string;
+    symbol: string;
+    icon: string;
+}
+
+export interface Pool {
+    tokenA: Token;
+    tokenB: Token;
+    id: string;
+    fee?: number;
+    liquidity?: number;
+}

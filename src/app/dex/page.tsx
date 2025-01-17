@@ -24,6 +24,7 @@ import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 import { Button } from '@nextui-org/react';
 import { WHBAR_ID } from "../lib/constants";
 import { ThresholdSection } from '../components/ThresholdSection';
+import { TokenSwapSelector } from '../components/TokenSwapSelector';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -53,8 +54,14 @@ export default function DexPage() {
     const { pools } = usePoolContext();
     const [selectedSection, setSelectedSection] = useState("chart")
     const [currentPools, setCurrentPools] = useState<any[]>([]);
-    const [from, setFrom] = useState(Math.floor(pastDate.getTime() / 1000));
-    const [to, setTo] = useState(Math.floor(currentDate.getTime() / 1000));
+    const [from, setFrom] = useState(() => {
+        const pastDate = new Date();
+        pastDate.setDate(pastDate.getDate() - 7);
+        return Math.floor(pastDate.getTime() / 1000);
+    });
+    const [to, setTo] = useState(() => {
+        return Math.floor(Date.now() / 1000);
+    });
     const [interval, setInterval] = useState('HOUR');
     const [tradeToken, setTradeToken] = useState<Token|null>(null);
     const [tradeAmount, setTradeAmount] = useState("0.0");
@@ -103,6 +110,10 @@ export default function DexPage() {
     const [buyOrderSlippage, setBuyOrderSlippage] = useState<number>(0.5);
     const [sellOrderSlippage, setSellOrderSlippage] = useState<number>(0.5);
     const [selectedThresholdType, setSelectedThresholdType] = useState<'stopLoss' | 'buyOrder' | 'sellOrder' | null>(null);
+    const [chartToken, setChartToken] = useState<Token | null>(null);
+    const [chartError, setChartError] = useState<string | null>(null);
+    const [chartData, setChartData] = useState<any[]>([]);
+    const [chartLoading, setChartLoading] = useState(false);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -184,17 +195,19 @@ export default function DexPage() {
     }, [slippageTolerance]);
 
     const handleQuote = async () => {
-        if (!currentPool || !currentToken || !tradeToken || !account) return;
+        if (!currentToken || !tradeToken || !account) return;
 
         try {
             let result: any = { tx: null, type: null };
             const slippageBasisPoints = Math.floor(slippageTolerance * 100);
+            const useWhbarPath = !currentPool; // Use WHBAR routing if no direct pool
 
             console.log('Trade execution parameters:', {
                 tradeAmount,
                 slippageTolerance,
                 slippageBasisPoints,
-                tradeType: getTradeType()
+                tradeType: getTradeType(),
+                useWhbarPath
             });
 
             switch (getTradeType()) {
@@ -202,24 +215,25 @@ export default function DexPage() {
                     result = await swapHbarToToken(
                         tradeAmount.toString(),
                         tradeToken.id,
-                        currentPool.fee || 3000,
+                        currentPool?.fee || 3000, // Default to 0.3% fee if no pool
                         account,
                         Math.floor(Date.now() / 1000) + 60,
                         slippageBasisPoints,
-                        tradeToken.decimals
+                        tradeToken.decimals,
+                        useWhbarPath
                     );
-                    console.log('HBAR to Token swap result:', result);
                     break;
 
                 case 'tokenToHbar':
                     result = await swapTokenToHbar(
                         tradeAmount.toString(),
                         currentToken.id,
-                        currentPool.fee || 3000,
+                        currentPool?.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
                         slippageBasisPoints,
-                        currentToken.decimals
+                        currentToken.decimals,
+                        useWhbarPath
                     );
                     break;
 
@@ -228,12 +242,13 @@ export default function DexPage() {
                         tradeAmount.toString(),
                         currentToken.id,
                         tradeToken.id,
-                        currentPool.fee || 3000,
+                        currentPool?.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
                         slippageBasisPoints,
                         currentToken.decimals,
-                        tradeToken.decimals
+                        tradeToken.decimals,
+                        useWhbarPath
                     );
                     break;
             }
@@ -287,14 +302,18 @@ export default function DexPage() {
         }
     };
 
-    const selectCurrentToken = async (tokenId:string) => {
-        const token = tokens.find((token:Token) => token.id === tokenId);
-        if (token) {
-            setCurrentToken(token);
-            setCurrentPool(null);
-            console.log("Current token", token);
-        }
-    }
+    const handleTokenAChange = (token: Token) => {
+        setCurrentToken(token);
+        setCurrentPool(null);
+    };
+
+    const handleTokenBChange = (token: Token) => {
+        setTradeToken(token);
+    };
+
+    const handlePoolChange = (pool: any) => {
+        setCurrentPool(pool);
+    };
 
     const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
         if (!account || !userId || !currentPool) {
@@ -383,27 +402,6 @@ export default function DexPage() {
             resetThresholdForm(); // Move reset here to ensure it happens regardless of success/failure
         }
     };
-
-    const handleCurrentPool = (poolId: string | Set<string>) => {
-        
-        // Check if poolId is a Set (which is what NextUI's Select component returns)
-        if (poolId instanceof Set) {
-            poolId = Array.from(poolId)[0]; // Get the first (and only) item from the Set
-        }
-
-        // Ensure poolId is a string before parsing
-        if (typeof poolId === 'string') {
-            let poolIdNum = parseInt(poolId);
-            const pool = currentPools.find((pool:any) => pool.id === poolIdNum);
-
-            if (pool) {
-                setCurrentPool(pool);
-                setTradeToken(pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA);
-            }
-        } else {
-            console.error('Invalid pool ID type:', typeof poolId);
-        }
-    }
 
     const deleteThreshold = async (id: number) => {
         try {
@@ -501,51 +499,39 @@ export default function DexPage() {
     }, [currentPool]);
 
     const calculateTradeAmount = async (amount: string) => {
-        if (!currentPool || !tradeToken || !currentToken || !amount || Number(amount) <= 0) {
+        if (!tradeToken || !currentToken || !amount || Number(amount) <= 0) {
             setReceiveAmount("0.0");
             return;
         }
 
         try {
-            // Ensure we're working with a clean number
-            const cleanAmount = amount.replace(/[^0-9.]/g, '');
-            
-            console.log('Trade amount calculation:', {
-                input: {
-                    amount: cleanAmount,
-                    token: currentToken.symbol,
-                    decimals: currentToken.decimals,
-                    expectedRawAmount: (Number(cleanAmount) * Math.pow(10, currentToken.decimals)).toString()
-                },
-                output: {
-                    token: tradeToken.symbol,
-                    decimals: tradeToken.decimals
-                }
-            });
+            const useWhbarPath = !currentPool;
+            const fee = currentPool?.fee || 3000;
 
             const quoteAmount = await getQuoteExactInput(
                 currentToken.id,
                 currentToken.decimals,
                 tradeToken.id,
-                cleanAmount,
-                currentPool.fee,
-                tradeToken.decimals
+                amount,
+                fee,
+                tradeToken.decimals,
+                useWhbarPath
             );
+
+            // Convert quote to display amount
+            const displayAmount = (Number(quoteAmount) / Math.pow(10, tradeToken.decimals)).toString();
+            setReceiveAmount(displayAmount);
             
-            const formattedAmount = ethers.formatUnits(quoteAmount, tradeToken.decimals);
-            
-            console.log('Quote result:', {
-                rawQuote: quoteAmount.toString(),
-                outputDecimals: tradeToken.decimals,
-                formattedAmount: formattedAmount
-            });
-            
-            setReceiveAmount(formattedAmount);
         } catch (error) {
             console.error('Error calculating trade amount:', error);
             setReceiveAmount("0.0");
         }
     };
+
+    // Add useEffect to recalculate when relevant values change
+    useEffect(() => {
+        calculateTradeAmount(tradeAmount);
+    }, [tradeAmount, currentToken, tradeToken, currentPool]);
 
     const adjustSellOrderPrice = (percentageChange: number) => {
         const currentPrice = parseFloat(sellOrderPrice);
@@ -722,6 +708,59 @@ export default function DexPage() {
         return token?.icon || '';
     };
 
+    const fetchChartData = async (tokenId: string) => {
+        try {
+            setChartLoading(true);
+            setChartError(null);
+            
+            const currentFrom = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+            const currentTo = Math.floor(Date.now() / 1000);
+            
+            const response = await fetch(
+                `/api/saucerswap/tokens/prices/${tokenId}?from=${currentFrom}&to=${currentTo}&interval=${interval}`
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            setChartData(data);
+        } catch (error) {
+            console.error('Error fetching chart data:', error);
+            setChartError('Failed to load chart data');
+        } finally {
+            setChartLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!chartToken && currentToken) {
+            setChartToken(currentToken);
+            fetchChartData(currentToken.id);
+        }
+    }, [currentToken]); // Only run when currentToken changes
+
+    useEffect(() => {
+        if (chartToken?.id) {
+            fetchChartData(chartToken.id);
+        }
+    }, [chartToken, from, to, interval]); // Add dependencies
+
+    useEffect(() => {
+        console.log('Timestamps:', {
+            from: new Date(from * 1000).toISOString(),
+            to: new Date(to * 1000).toISOString()
+        });
+    }, [from, to]);
+
+    const isSwapDisabled = !account || 
+        !currentToken || 
+        !tradeToken || 
+        !tradeAmount || 
+        Number(tradeAmount) <= 0 || 
+        isSubmitting;
+
     if (nftGateLoading) {
         return <div>Loading...</div>;
     }
@@ -740,13 +779,86 @@ export default function DexPage() {
                         onSelectionChange={(key) => setSelectedSection(key.toString())}
                     >
                         <Tab key="chart" title='Price Chart'>
-                            <div className="w-full h-[calc(100vh-120px)]">
-                                {error ? (
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex gap-8">
+                                    {/* Token A Price */}
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                            <Image 
+                                                src={`https://www.saucerswap.finance/${currentToken.icon}`}
+                                                alt={currentToken.symbol}
+                                                width={24}
+                                                height={24}
+                                            />
+                                            <span className="text-sm text-default-500">{currentToken.symbol} Price:</span>
+                                        </div>
+                                        <span className="text-xl text-green-500">
+                                            {formatPrice(currentToken?.priceUsd)}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Token B Price */}
+                                    {tradeToken && (
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <Image 
+                                                    src={`https://www.saucerswap.finance/${tradeToken.icon}`}
+                                                    alt={tradeToken.symbol}
+                                                    width={24}
+                                                    height={24}
+                                                />
+                                                <span className="text-sm text-default-500">{tradeToken.symbol} Price:</span>
+                                            </div>
+                                            <span className="text-xl text-green-500">
+                                                {formatPrice(tradeToken?.priceUsd)}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Add chart token selector */}
+                                <Select
+                                    label="Chart View"
+                                    className="w-48"
+                                    selectedKeys={[chartToken?.id || currentToken.id]}
+                                    onChange={(e) => {
+                                        const token = e.target.value === currentToken.id ? currentToken : tradeToken;
+                                        setChartToken(token);
+                                        if (token?.id) {
+                                            fetchChartData(token.id);
+                                        }
+                                    }}
+                                >
+                                    <SelectItem 
+                                        key={currentToken.id} 
+                                        value={currentToken.id}
+                                        textValue={`${currentToken.symbol} Price`}
+                                    >
+                                        {currentToken.symbol} Price
+                                    </SelectItem>
+                                    {tradeToken && (
+                                        <SelectItem 
+                                            key={tradeToken.id} 
+                                            value={tradeToken.id}
+                                            textValue={`${tradeToken.symbol} Price`}
+                                        >
+                                            {tradeToken.symbol} Price
+                                        </SelectItem>
+                                    )}
+                                </Select>
+                            </div>
+
+                            <div className="w-full h-[calc(100vh-180px)]">
+                                {chartLoading ? (
                                     <div className="flex justify-center items-center h-full">
-                                        <p>Error loading chart data</p>
+                                        <p>Loading chart data...</p>
+                                    </div>
+                                ) : chartError ? (
+                                    <div className="flex justify-center items-center h-full">
+                                        <p>{chartError}</p>
                                     </div>
                                 ) : (
-                                    <ApexChart data={data || []} />
+                                    <ApexChart data={chartData || []} />
                                 )}
                             </div>
                         </Tab>
@@ -810,76 +922,21 @@ export default function DexPage() {
 
                 {/* Right side - Trading UI */}
                 <div className="w-[30%] overflow-y-auto pr-6 pb-24">
-                    <div className="w-full flex">
-                        {currentToken && currentToken.icon && (
-                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} />
-                        )}
-                        <div className="px-3">
-                            <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
-                            <p>{currentToken.name}</p>
-                        </div>
-                        <div className="pl-1">
-                            <span className="text-xl text-green-500">
-                                {formatPrice(currentToken?.priceUsd)}
-                            </span>
-                        </div>
-                        <Dropdown placement="bottom-start">
-                            <DropdownTrigger>
-                                <div className="w-5 pt-1 pl-1 cursor-pointer">
-                                    <ChevronDownIcon />
-                                </div>
-                            </DropdownTrigger>
-                            <DropdownMenu 
-                                onAction={(key) => (selectCurrentToken(key as string) )} 
-                                className="max-h-72 overflow-scroll w-full" 
-                                aria-label="Token Selection" 
-                                items={Array.isArray(tokens) ? tokens : []} 
-                                variant="flat"
-                            >
-                                {(token:Token) => (
-                                    <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
-                                            <p>{token.name}</p>
-                                    </DropdownItem>
-                                )}
-                            </DropdownMenu>
-                        </Dropdown>
-                    </div>
+                    <TokenSwapSelector 
+                        tokens={tokens}
+                        pools={pools}
+                        tokenA={currentToken}
+                        tokenB={tradeToken}
+                        onTokenAChange={handleTokenAChange}
+                        onTokenBChange={handleTokenBChange}
+                        onPoolChange={handlePoolChange}
+                    />
+
                     <div className="w-full pt-8 pb-8">
-                        {Array.isArray(currentPools) && currentPools.length > 0 && (
-                            <div className="mb-8">
-                                {!currentPool ? (
-                                    <Select 
-                                        items={currentPools}
-                                        label="Select Pool"
-                                        isDisabled={account ? false : true}
-                                        onSelectionChange={(key) => handleCurrentPool(key as string)}
-                                        selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
-                                        placeholder="Select Pool"
-                                    >
-                                        {(pool:any) => (
-                                            <SelectItem 
-                                                key={pool.id.toString()} 
-                                                textValue={`${pool.tokenA?.symbol} - ${pool.tokenB?.symbol} pool with ${pool.fee / 10_000.0}% fee`}
-                                            >
-                                                {pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%
-                                            </SelectItem>
-                                        )}
-                                    </Select>
-                                ):(
-                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onPress={() => setCurrentPool(null)} aria-label="Clear pool selection">Clear</Button></p>
-                                )}
-                                
-                            </div>
-                        
-                        )}
-                        {!Array.isArray(currentPools) || currentPools.length === 0 && (
-                            <p className="pb-8">No pools found for {currentToken.symbol}</p>
-                        )}
-                        <p className="mb-4">Trade Amount</p>
+                        <p>Trade Amount</p>
                         <Input
                             type="number"
                             value={String(tradeAmount)}
-                            description="  "
                             onChange={(e) => {
                                 setTradeAmount(e.target.value);
                                 calculateTradeAmount(e.target.value);
@@ -938,7 +995,7 @@ export default function DexPage() {
                             label="Trade Slippage"
                         />
                         <Button 
-                            isDisabled={currentPool ? false : true} 
+                            isDisabled={isSwapDisabled} 
                             onPress={handleQuote} 
                             className="w-full" 
                             endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
