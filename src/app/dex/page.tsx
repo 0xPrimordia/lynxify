@@ -122,7 +122,9 @@ export default function DexPage() {
 
     useEffect(() => {
         if(!pools || !currentToken) return;
-        const pairs = pools.filter((pool:any) => pool.tokenA.id === currentToken.id || pool.tokenB.id === currentToken.id);
+        const pairs = pools.filter((pool: Pool) => 
+            (pool.tokenA?.id === currentToken.id) || (pool.tokenB?.id === currentToken.id)
+        );
         if (JSON.stringify(pairs) !== JSON.stringify(prevPoolsRef.current)) {
             setCurrentPools(pairs);
             prevPoolsRef.current = pairs;

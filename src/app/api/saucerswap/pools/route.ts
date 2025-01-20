@@ -1,3 +1,5 @@
+import { Pool } from "@/app/types";
+
 export async function GET() {
     const response = await fetch(`${process.env.NEXT_PUBLIC_SAUCERSWAP_API}/v2/pools`, {
         method: 'GET',
@@ -7,5 +9,11 @@ export async function GET() {
     });
     const data = await response.json();
     
-    return Response.json(data)
+    // Filter pools to only include those where both tokens have completed due diligence
+    const filteredData = data.filter((pool: Pool) => 
+        pool.tokenA?.dueDiligenceComplete === true && 
+        pool.tokenB?.dueDiligenceComplete === true
+    );
+    
+    return Response.json(filteredData)
 }
