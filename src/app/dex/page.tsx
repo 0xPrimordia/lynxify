@@ -820,7 +820,7 @@ export default function DexPage() {
                         </div>
                         <div className="pl-1">
                             <span className="text-xl text-green-500">
-                                {formatPrice(currentToken?.priceUsd)}
+                                ${formatPrice(currentToken?.priceUsd)}
                             </span>
                         </div>
                         <Dropdown placement="bottom-start">
