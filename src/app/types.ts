@@ -112,3 +112,13 @@ export interface SessionState {
     completed_at?: string;
     created_at?: string;
 }
+
+export type Pool = {
+    id: string;
+    tokenA: ApiToken | null;
+    tokenB: ApiToken | null;
+    fee: number;
+    sqrtRatioX96: string;
+    tickCurrent: number;
+    liquidity: string;
+}
