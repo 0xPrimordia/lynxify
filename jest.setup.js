@@ -1,2 +1,7 @@
 require('dotenv').config({ path: '.env.local' })
-global.fetch = require('node-fetch') 
+const nodeFetch = require('node-fetch')
+global.fetch = nodeFetch 
+
+// Add ethers and other test utilities
+const { ethers } = require('ethers')
+global.ethers = ethers 

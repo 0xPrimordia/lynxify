@@ -4,6 +4,7 @@ import axios from 'axios';
 import QuoterV2Abi from './abis/QuoterV2.json';
 import { QUOTER_V2_ADDRESS, WHBAR_ID } from './constants';
 import { hexToUint8Array, decimalToPaddedHex } from './utils/format';
+import { RouteInfo } from './routing/types';
 
 const quoterInterface = new ethers.Interface(QuoterV2Abi);
 
@@ -35,57 +36,34 @@ export const getQuoteExactInput = async (
     amountIn: string,
     fee: number,
     outputTokenDecimals: number,
-    useWhbarPath: boolean = false
+    route?: RouteInfo
 ) => {
     try {
-        const isHbarToToken = inputToken === WHBAR_ID;
-        const isTokenToHbar = outputToken === WHBAR_ID;
-        
-        const amountInSmallestUnit = isHbarToToken
-            ? (Number(amountIn) * 1e8).toString()
-            : (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
+        const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
 
-        // Log the raw values before path construction
-        console.log('Raw values:', {
-            inputToken,
-            outputToken,
-            WHBAR_ID,
-            fee,
-            amountInSmallestUnit
-        });
-
-        const pathData = useWhbarPath || isHbarToToken || isTokenToHbar ? [
-            Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
-            Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-            Buffer.from(ContractId.fromString(WHBAR_ID).toSolidityAddress().replace('0x', ''), 'hex'),
-            Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-            Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
-        ] : [
+        // Construct path based on route or fallback to direct path
+        const pathData = route ? route.path.map((token, index) => {
+            const buffers: Buffer[] = [];
+            // Add token address
+            buffers.push(Buffer.from(ContractId.fromString(token).toSolidityAddress().replace('0x', ''), 'hex'));
+            // Add fee if not the last token
+            if (index < route.path.length - 1) {
+                buffers.push(Buffer.from(route.fees[index].toString(16).padStart(6, '0'), 'hex'));
+            }
+            return buffers;
+        }).flat() : [
             Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
             Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
             Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
         ];
 
         const path = Buffer.concat(pathData);
-        
-        // Log the encoded function data
+        debugPath(path);
+
         const encodedFunction = quoterInterface.encodeFunctionData('quoteExactInput', [
             path,
             amountInSmallestUnit
         ]);
-        console.log('Encoded function data:', encodedFunction);
-
-        // Debug the path
-        debugPath(path);
-
-        // Log the actual hex values being used
-        console.log('Path details:', {
-            inputToken: ContractId.fromString(inputToken).toSolidityAddress(),
-            whbar: ContractId.fromString(WHBAR_ID).toSolidityAddress(),
-            outputToken: ContractId.fromString(outputToken).toSolidityAddress(),
-            fee: fee.toString(16).padStart(6, '0'),
-            useWhbarPath
-        });
 
         const url = `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/contracts/call`;
         const data = {

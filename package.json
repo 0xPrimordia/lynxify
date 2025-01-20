@@ -81,7 +81,7 @@
     "ethers": "^6.13.4",
     "hardhat": "^2.22.17",
     "hardhat-gas-reporter": "^1.0.10",
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^2.6.7",
     "openapi-typescript": "^7.0.4",
     "postcss": "^8",
     "solidity-coverage": "^0.8.14",

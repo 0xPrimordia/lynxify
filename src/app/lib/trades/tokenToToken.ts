@@ -1,11 +1,12 @@
-import { ContractId, ContractExecuteTransaction, TransactionId, Hbar, AccountId } from '@hashgraph/sdk';
+import { ContractId, ContractExecuteTransaction, TransactionId, AccountId } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
-import { SWAP_ROUTER_ADDRESS, WHBAR_ID } from '../constants';
+import { SWAP_ROUTER_ADDRESS } from '../constants';
 import { hexToUint8Array } from '../utils/format';
 import { checkTokenAllowance, approveTokenForSwap, checkTokenAssociation, associateToken } from '../utils/tokens';
 import SwapRouterAbi from '../abis/SwapRouter.json';
 import { getQuoteExactInput } from '../quoter';
+import { RouteInfo } from '../routing/types';
 
 const swapRouterAbi = new ethers.Interface(SwapRouterAbi);
 
@@ -19,7 +20,7 @@ export const swapTokenToToken = async (
     slippageBasisPoints: number,
     inputTokenDecimals: number,
     outputTokenDecimals: number,
-    useWhbarPath: boolean = false
+    route?: RouteInfo
 ) => {
     try {
         // Check input token approval
@@ -56,7 +57,7 @@ export const swapTokenToToken = async (
 
         const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
 
-        // Get quote with WHBAR path
+        // Get quote using route if available
         const quoteAmount = await getQuoteExactInput(
             inputToken,
             inputTokenDecimals,
@@ -64,33 +65,24 @@ export const swapTokenToToken = async (
             amountIn,
             fee,
             outputTokenDecimals,
-            useWhbarPath
+            route
         );
 
         // Calculate minimum output using slippage
         const slippagePercent = slippageBasisPoints / 10000;
         const outputMinInTokens = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
-        console.log('Swap Parameters:', {
-            amountIn,
-            amountInSmallestUnit,
-            quoteAmount: quoteAmount.toString(),
-            slippageBasisPoints,
-            slippagePercent,
-            outputMinInTokens,
-            useWhbarPath
-        });
-
-        // Construct path based on routing type
-        const pathData = useWhbarPath ? [
-            // Token -> WHBAR -> Token path
-            Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
-            Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-            Buffer.from(ContractId.fromString(WHBAR_ID).toSolidityAddress().replace('0x', ''), 'hex'),
-            Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-            Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
-        ] : [
-            // Direct token -> token path
+        // Construct path based on route or fallback to direct path
+        const pathData = route ? route.path.reduce((acc: Buffer[], token, index) => {
+            if (index === route.path.length - 1) return acc;
+            return [
+                ...acc,
+                Buffer.from(ContractId.fromString(token).toSolidityAddress().replace('0x', ''), 'hex'),
+                Buffer.from(route.fees[index].toString(16).padStart(6, '0'), 'hex')
+            ];
+        }, []).concat([
+            Buffer.from(ContractId.fromString(route.path[route.path.length - 1]).toSolidityAddress().replace('0x', ''), 'hex')
+        ]) : [
             Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
             Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
             Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
@@ -110,19 +102,11 @@ export const swapTokenToToken = async (
         // Encode the swap function call
         const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
 
-        let encodedData;
-        if (useWhbarPath) {
-            const multiCallParam = [swapEncoded];
-            encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
-        } else {
-            encodedData = swapEncoded;
-        }
-
         // Create and return the transaction
         const tx = await new ContractExecuteTransaction()
             .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
-            .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
-            .setGas(useWhbarPath ? 3_000_000 : 1_000_000)  // Increase gas for WHBAR path
+            .setFunctionParameters(hexToUint8Array(swapEncoded.slice(2)))
+            .setGas(1_000_000)
             .setTransactionId(TransactionId.generate(AccountId.fromString(recipientAddress)))
             .freeze();
 

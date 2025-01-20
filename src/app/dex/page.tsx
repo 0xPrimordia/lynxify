@@ -16,6 +16,7 @@ import {
     swapTokenToHbar, 
     swapTokenToToken, 
     getQuoteExactInput,
+    findBestRoute,
     type SwapResponse 
 } from '../lib/saucerswap';
 import { ethers } from 'ethers';
@@ -200,14 +201,21 @@ export default function DexPage() {
         try {
             let result: any = { tx: null, type: null };
             const slippageBasisPoints = Math.floor(slippageTolerance * 100);
-            const useWhbarPath = !currentPool; // Use WHBAR routing if no direct pool
+
+            // Try to find the best route first
+            const bestRoute = await findBestRoute(
+                currentToken.id,
+                currentToken.decimals,
+                tradeToken.id,
+                tradeAmount.toString()
+            );
 
             console.log('Trade execution parameters:', {
-                tradeAmount,
+                tradeAmount: tradeAmount.toString(),
                 slippageTolerance,
                 slippageBasisPoints,
                 tradeType: getTradeType(),
-                useWhbarPath
+                bestRoute: bestRoute?.path
             });
 
             switch (getTradeType()) {
@@ -215,12 +223,12 @@ export default function DexPage() {
                     result = await swapHbarToToken(
                         tradeAmount.toString(),
                         tradeToken.id,
-                        currentPool?.fee || 3000, // Default to 0.3% fee if no pool
+                        currentPool?.fee || 3000,
                         account,
                         Math.floor(Date.now() / 1000) + 60,
                         slippageBasisPoints,
                         tradeToken.decimals,
-                        useWhbarPath
+                        bestRoute || undefined
                     );
                     break;
 
@@ -233,7 +241,7 @@ export default function DexPage() {
                         Math.floor(Date.now() / 1000) + 60,
                         slippageBasisPoints,
                         currentToken.decimals,
-                        useWhbarPath
+                        bestRoute || undefined
                     );
                     break;
 
@@ -248,7 +256,7 @@ export default function DexPage() {
                         slippageBasisPoints,
                         currentToken.decimals,
                         tradeToken.decimals,
-                        useWhbarPath
+                        bestRoute || undefined
                     );
                     break;
             }
@@ -259,26 +267,6 @@ export default function DexPage() {
                     transactionList: result.tx,
                     signerAccountId: account
                 });
-
-                // If it was an association, execute the swap after
-                if (result.type === "associate") {
-                    result = await swapHbarToToken(
-                        tradeAmount.toString(),
-                        tradeToken.id,
-                        currentPool.fee || 3000,
-                        account,
-                        Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints,
-                        tradeToken.decimals
-                    );
-                    
-                    if (result.tx) {
-                        await signAndExecuteTransaction({
-                            transactionList: result.tx,
-                            signerAccountId: account
-                        });
-                    }
-                }
 
                 if (result.type === "swap") {
                     try {
@@ -291,6 +279,7 @@ export default function DexPage() {
 
         } catch (error) {
             console.error('Error in handleQuote:', error);
+            throw error;
         }
     };
 
@@ -505,17 +494,32 @@ export default function DexPage() {
         }
 
         try {
-            const useWhbarPath = !currentPool;
-            const fee = currentPool?.fee || 3000;
+            // Convert input amount to token units
+            const inputAmount = (Number(amount) * Math.pow(10, currentToken.decimals)).toString();
+            
+            // Find best route
+            const route = await findBestRoute(
+                currentToken.id,
+                currentToken.decimals,
+                tradeToken.id,
+                inputAmount
+            );
 
+            if (!route) {
+                console.error('No valid route found');
+                setReceiveAmount("0.0");
+                return;
+            }
+
+            // Get quote using the route
             const quoteAmount = await getQuoteExactInput(
                 currentToken.id,
                 currentToken.decimals,
                 tradeToken.id,
-                amount,
-                fee,
+                inputAmount,
+                currentPool?.fee || 3000,
                 tradeToken.decimals,
-                useWhbarPath
+                route
             );
 
             // Convert quote to display amount
