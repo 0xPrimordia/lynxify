@@ -7,5 +7,8 @@ export async function GET() {
     });
     const data = await response.json();
     
-    return Response.json(data)
+    // Filter out tokens that haven't completed due diligence
+    const filteredData = data.filter((token: any) => token.dueDiligenceComplete === true);
+    
+    return Response.json(filteredData)
 }
