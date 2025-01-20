@@ -398,11 +398,36 @@ export default function DexPage() {
         }
     };
 
-    const handleCurrentPool = (poolId: string) => {
-        if (!currentPools || !Array.isArray(currentPools)) return;
+    const handleCurrentPool = (poolId: any) => {
+        if (!currentPools || !Array.isArray(currentPools)) {
+            console.log('No current pools available');
+            return;
+        }
         
-        const pool = currentPools.find((p: Pool) => p.id.toString() === poolId);
-        if (!pool) return;
+        // Extract the actual ID from the Set
+        const selectedId = Array.from(poolId)[0];
+        
+        console.log('Selecting pool:', {
+            rawPoolId: poolId,
+            selectedId,
+            availablePools: currentPools.map(p => ({
+                id: p.id,
+                tokenA: p.tokenA?.symbol,
+                tokenB: p.tokenB?.symbol
+            }))
+        });
+        
+        const pool = currentPools.find((p: Pool) => p.id.toString() === selectedId);
+        if (!pool) {
+            console.log('Pool not found:', selectedId);
+            return;
+        }
+        
+        console.log('Found pool:', {
+            id: pool.id,
+            tokenA: pool.tokenA?.symbol,
+            tokenB: pool.tokenB?.symbol
+        });
         
         setCurrentPool(pool);
         
@@ -860,7 +885,7 @@ export default function DexPage() {
                                         items={currentPools}
                                         label="Select Pool"
                                         isDisabled={account ? false : true}
-                                        onSelectionChange={(key) => handleCurrentPool(key as string)}
+                                        onSelectionChange={(key) => handleCurrentPool(key as any)}
                                         selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
                                         placeholder="Select Pool"
                                     >
