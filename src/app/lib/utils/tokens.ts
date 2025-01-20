@@ -102,4 +102,26 @@ export const associateToken = async (accountId: string, tokenId: string) => {
     console.error('Error creating token association transaction:', error);
     throw error;
   }
+};
+
+export const getTokenImageUrl = (iconPath: string) => {
+    if (!iconPath) return '';
+    
+    // If it's a cloudfront URL, use it directly
+    if (iconPath.includes('cloudfront.net')) {
+        return iconPath;
+    }
+    
+    // If it's a relative path, append it to the base URL
+    if (iconPath.startsWith('/')) {
+        return `https://www.saucerswap.finance${iconPath}`;
+    }
+    
+    // If it's already a full URL, return as is
+    if (iconPath.startsWith('http')) {
+        return iconPath;
+    }
+    
+    // Default case, assume it's a relative path
+    return `https://www.saucerswap.finance/${iconPath}`;
 }; 

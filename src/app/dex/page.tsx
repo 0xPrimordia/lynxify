@@ -24,6 +24,7 @@ import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 import { Button } from '@nextui-org/react';
 import { WHBAR_ID } from "../lib/constants";
 import { ThresholdSection } from '../components/ThresholdSection';
+import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -770,7 +771,7 @@ export default function DexPage() {
                                                         <TableCell>{threshold.type}</TableCell>
                                                         <TableCell>
                                                             <Image 
-                                                                src={`https://www.saucerswap.finance/${getTokenIcon(threshold.tokenA)}`}
+                                                                src={getTokenImageUrl(getTokenIcon(threshold.tokenA))}
                                                                 alt="Token A"
                                                                 width={30}
                                                                 height={30}
@@ -778,7 +779,7 @@ export default function DexPage() {
                                                         </TableCell>
                                                         <TableCell>
                                                             <Image 
-                                                                src={`https://www.saucerswap.finance/${getTokenIcon(threshold.tokenB)}`}
+                                                                src={getTokenImageUrl(getTokenIcon(threshold.tokenB))}
                                                                 alt="Token B"
                                                                 width={30}
                                                                 height={30}
@@ -812,7 +813,7 @@ export default function DexPage() {
                 <div className="w-[30%] overflow-y-auto pr-6 pb-24">
                     <div className="w-full flex">
                         {currentToken && currentToken.icon && (
-                            <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} />
+                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} />
                         )}
                         <div className="px-3">
                             <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
@@ -894,9 +895,9 @@ export default function DexPage() {
                             }}
                             startContent={
                                 <div className="flex items-center mr-2">
-                                    <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                    <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} /> 
                                     <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
                                 </div>
                             }
                             endContent={
@@ -928,7 +929,7 @@ export default function DexPage() {
                             isDisabled={tradeToken ? false : true}
                             startContent={
                                 <div className="flex items-center mr-2">
-                                    {tradeToken && <Image className="mt-1" width={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                    {tradeToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
                                 </div>
                             }
                         />

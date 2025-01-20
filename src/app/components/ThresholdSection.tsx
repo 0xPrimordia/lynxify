@@ -4,6 +4,7 @@ import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import Image from 'next/image';
 import { Token } from "../hooks/useTokens";
 import { ThresholdSlippageSelector } from './ThresholdSlippageSelector';
+import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 
 const thresholdOptions = [
     { key: 'stopLoss', label: 'Stop Loss', description: 'Sells tokens when the price < threshold' },
@@ -121,10 +122,18 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                                     width={30} 
                                     height={30}
                                     alt="icon" 
-                                    src={`https://www.saucerswap.finance/${currentToken.icon}`} 
+                                    src={getTokenImageUrl(currentToken.icon)} 
                                 /> 
                                 <ArrowRightIcon className="w-12 h-4 mt-1 mr-2 ml-2" />
-                                {tradeToken && <Image className="mt-1" width={30} height={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                {tradeToken && 
+                                    <Image 
+                                        className="mt-1" 
+                                        width={30} 
+                                        height={30} 
+                                        alt="icon" 
+                                        src={getTokenImageUrl(tradeToken.icon)} 
+                                    />
+                                }
                             </div>
                         }
                         maxLength={12} 
@@ -207,9 +216,23 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         step="0.000001" 
                         startContent={
                             <div className="flex items-center mr-2">
-                                {tradeToken && <Image className="mt-1" width={30} height={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                {tradeToken && 
+                                    <Image 
+                                        className="mt-1" 
+                                        width={30} 
+                                        height={30} 
+                                        alt="icon" 
+                                        src={getTokenImageUrl(tradeToken.icon)} 
+                                    />
+                                }
                                 <ArrowRightIcon className="w-12 h-4 mt-1 mr-2 ml-2" />
-                                <Image className="mt-1" width={30} height={30} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                <Image 
+                                    className="mt-1" 
+                                    width={30} 
+                                    height={30} 
+                                    alt="icon" 
+                                    src={getTokenImageUrl(currentToken.icon)} 
+                                /> 
                             </div>
                         }
                     />
@@ -262,9 +285,23 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         }}
                         startContent={
                             <div className="flex items-center mr-2">
-                                <Image className="mt-1" width={30} height={30} alt="icon" src={`https://www.saucerswap.finance/${currentToken.icon}`} /> 
+                                <Image 
+                                    className="mt-1" 
+                                    width={30} 
+                                    height={30} 
+                                    alt="icon" 
+                                    src={getTokenImageUrl(currentToken.icon)} 
+                                /> 
                                 <ArrowRightIcon className="w-12 h-4 mt-1 mr-2 ml-2" />
-                                {tradeToken && <Image className="mt-1" width={30} height={30} alt="icon" src={`https://www.saucerswap.finance/${tradeToken.icon}`} />}
+                                {tradeToken && 
+                                    <Image 
+                                        className="mt-1" 
+                                        width={30} 
+                                        height={30} 
+                                        alt="icon" 
+                                        src={getTokenImageUrl(tradeToken.icon)} 
+                                    />
+                                }
                             </div>
                         }
                         maxLength={12} 
