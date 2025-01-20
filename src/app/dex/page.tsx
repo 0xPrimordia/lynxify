@@ -25,6 +25,7 @@ import { Button } from '@nextui-org/react';
 import { WHBAR_ID } from "../lib/constants";
 import { ThresholdSection } from '../components/ThresholdSection';
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
+import { Pool, ApiToken } from '@/app/types';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
@@ -288,14 +289,24 @@ export default function DexPage() {
         }
     };
 
-    const selectCurrentToken = async (tokenId:string) => {
-        const token = tokens.find((token:Token) => token.id === tokenId);
-        if (token) {
-            setCurrentToken(token);
-            setCurrentPool(null);
-            console.log("Current token", token);
-        }
-    }
+    const selectCurrentToken = (tokenId: string) => {
+        if (!tokens || !Array.isArray(tokens)) return;
+        
+        const token = tokens.find((t: ApiToken) => t.id === tokenId);
+        if (!token) return;
+        
+        setCurrentToken(token);
+        
+        // Only try to get pools if we have a valid token
+        const filteredPools = Array.isArray(pools) 
+            ? pools.filter((pool: Pool) => 
+                pool.tokenA?.id === token.id || pool.tokenB?.id === token.id)
+            : [];
+        
+        setCurrentPools(filteredPools);
+        setCurrentPool(null); // Reset pool selection when token changes
+        setTradeToken(null);  // Reset trade token when token changes
+    };
 
     const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
         if (!account || !userId || !currentPool) {
@@ -385,26 +396,20 @@ export default function DexPage() {
         }
     };
 
-    const handleCurrentPool = (poolId: string | Set<string>) => {
+    const handleCurrentPool = (poolId: string) => {
+        if (!currentPools || !Array.isArray(currentPools)) return;
         
-        // Check if poolId is a Set (which is what NextUI's Select component returns)
-        if (poolId instanceof Set) {
-            poolId = Array.from(poolId)[0]; // Get the first (and only) item from the Set
+        const pool = currentPools.find((p: Pool) => p.id.toString() === poolId);
+        if (!pool) return;
+        
+        setCurrentPool(pool);
+        
+        // Set trade token based on current token
+        if (currentToken && pool.tokenA && pool.tokenB) {
+            const tradeToken = pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA;
+            setTradeToken(tradeToken);
         }
-
-        // Ensure poolId is a string before parsing
-        if (typeof poolId === 'string') {
-            let poolIdNum = parseInt(poolId);
-            const pool = currentPools.find((pool:any) => pool.id === poolIdNum);
-
-            if (pool) {
-                setCurrentPool(pool);
-                setTradeToken(pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA);
-            }
-        } else {
-            console.error('Invalid pool ID type:', typeof poolId);
-        }
-    }
+    };
 
     const deleteThreshold = async (id: number) => {
         try {
