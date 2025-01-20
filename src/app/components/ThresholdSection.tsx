@@ -40,6 +40,7 @@ interface ThresholdSectionProps {
     handleInputFocus: (event: React.FocusEvent) => void;
     adjustStopLossPrice: (percent: number) => void;
     adjustSellOrderPrice: (percent: number) => void;
+    adjustBuyOrderPrice: (percent: number) => void;
     hanndleMaxClickStopLoss: () => void;
     handleMaxClickSellOrder: () => void;
     saveThresholds: (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => void;
@@ -74,6 +75,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     handleInputFocus,
     adjustStopLossPrice,
     adjustSellOrderPrice,
+    adjustBuyOrderPrice,
     hanndleMaxClickStopLoss,
     handleMaxClickSellOrder,
     saveThresholds,
@@ -236,6 +238,29 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                             </div>
                         }
                     />
+                    <div className="flex gap-2 mt-2">
+                        <Button 
+                            size="sm" 
+                            variant="flat" 
+                            onPress={() => adjustBuyOrderPrice(0.01)}
+                        >
+                            -1%
+                        </Button>
+                        <Button 
+                            size="sm" 
+                            variant="flat" 
+                            onPress={() => adjustBuyOrderPrice(0.05)}
+                        >
+                            -5%
+                        </Button>
+                        <Button 
+                            size="sm" 
+                            variant="flat" 
+                            onPress={() => adjustBuyOrderPrice(0.10)}
+                        >
+                            -10%
+                        </Button>
+                    </div>
                     <p>Buy Cap (qty of tokens to buy)</p>
                     <Input 
                         type="number"

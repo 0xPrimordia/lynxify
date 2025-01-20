@@ -755,6 +755,26 @@ export default function DexPage() {
         return token?.icon || '';
     };
 
+    const adjustBuyOrderPrice = (percentageChange: number) => {
+        const currentPrice = parseFloat(buyOrderPrice || currentToken?.priceUsd?.toString() || "0");
+        if (!isNaN(currentPrice)) {
+            const newPrice = currentPrice * (1 - percentageChange);
+            setBuyOrderPrice(newPrice.toFixed(8)); // Using 8 decimal places for precision
+        }
+    };
+
+    useEffect(() => {
+        if (currentToken && currentToken.priceUsd) {
+            if (selectedThresholdType === 'stopLoss') {
+                setStopLossPrice(currentToken.priceUsd.toString());
+            } else if (selectedThresholdType === 'buyOrder') {
+                setBuyOrderPrice(currentToken.priceUsd.toString());
+            } else if (selectedThresholdType === 'sellOrder') {
+                setSellOrderPrice(currentToken.priceUsd.toString());
+            }
+        }
+    }, [selectedThresholdType, currentToken]);
+
     if (nftGateLoading) {
         return <div>Loading...</div>;
     }
@@ -1011,6 +1031,7 @@ export default function DexPage() {
                         handleMaxClickSellOrder={handleMaxClickSellOrder}
                         saveThresholds={saveThresholds}
                         resetThresholdForm={resetThresholdForm}
+                        adjustBuyOrderPrice={adjustBuyOrderPrice}
                     />
                 </div>
             </div>
