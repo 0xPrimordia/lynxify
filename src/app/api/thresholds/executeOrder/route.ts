@@ -60,19 +60,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!threshold.path) {
-      console.error('[executeOrder] Missing path in threshold data:', { thresholdId });
+    if (!threshold.tokenA || !threshold.tokenB || !threshold.fee) {
+      console.error('[executeOrder] Missing required swap parameters:', { 
+        thresholdId,
+        hasTokenA: !!threshold.tokenA,
+        hasTokenB: !!threshold.tokenB,
+        hasFee: !!threshold.fee
+      });
       return new NextResponse(
-        JSON.stringify({ error: 'Invalid threshold configuration: missing path' }),
+        JSON.stringify({ error: 'Invalid threshold configuration: missing required swap parameters' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
-
-    console.log('[executeOrder] Trade path validation:', {
-      thresholdId,
-      hasPath: !!threshold.path,
-      pathLength: threshold.path?.length
-    });
 
     // Initialize Hedera client
     console.log('[executeOrder] Initializing Hedera client');
@@ -113,25 +112,15 @@ export async function POST(req: NextRequest) {
       tradeAmount
     });
 
-    // Execute trade with stored slippage
+    // Execute the trade using direct swap parameters
     let tradeResult;
     try {
-      if (!threshold.path) {
-        throw new Error('Missing path in threshold configuration');
-      }
-
-      const tradePath = Buffer.from(threshold.path, 'hex');
-      if (!tradePath.length) {
-        throw new Error('Invalid trade path format');
-      }
-
       tradeResult = await executeThresholdTrade(
         orderType,
         {
           ...threshold,
           slippageBasisPoints: threshold.slippageBasisPoints || 50
-        },
-        tradePath
+        }
       );
       console.log('[executeOrder] Trade execution result:', { thresholdId, tradeResult });
     } catch (error: any) {
@@ -151,7 +140,6 @@ export async function POST(req: NextRequest) {
 
     // Create and execute contract transaction
     try {
-      const tradePath = Buffer.from(threshold.path, 'hex');
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
         .setGas(3000000)
@@ -160,7 +148,6 @@ export async function POST(req: NextRequest) {
           new ContractFunctionParameters()
             .addString(threshold.hederaAccountId)
             .addString(orderType)
-            .addBytes(tradePath)
         )
         .setPayableAmount(Hbar.from(tradeAmount, HbarUnit.Hbar));
 
