@@ -17,55 +17,78 @@ import {
     path: Buffer,
     slippageBasisPoints: number = 50 // Default to 0.5%
   ) => {
-    // For buy orders, we swap the tokens (trading B for A)
-    const [effectiveTokenA, effectiveTokenB] = type === 'buyOrder' 
-      ? [params.tokenB, params.tokenA]  // Swap tokens for buy orders
-      : [params.tokenA, params.tokenB];  // Keep original order for sell/stop loss
+    console.log('Starting executeThresholdTrade:', {
+      type,
+      params: {
+        ...params,
+        // Exclude sensitive data
+        hederaAccountId: params.hederaAccountId?.substring(0, 4) + '...'
+      },
+      pathLength: path.length,
+      slippageBasisPoints
+    });
   
-    // Determine trade type based on token pairs
-    const isFromHbar = effectiveTokenA === WHBAR_ID;
-    const isToHbar = effectiveTokenB === WHBAR_ID;
-  
-    // Token to Token
-    if (!isFromHbar && !isToHbar) {
-      return swapTokenToToken(
-        params.cap.toString(),
-        effectiveTokenA,
-        effectiveTokenB,
-        params.fee,
-        params.hederaAccountId,
-        Math.floor(Date.now() / 1000) + 60,
-        slippageBasisPoints,
-        params.tokenADecimals,
-        params.tokenBDecimals
-      );
-    }
+    try {
+      // For buy orders, we swap the tokens (trading B for A)
+      const [effectiveTokenA, effectiveTokenB] = type === 'buyOrder' 
+        ? [params.tokenB, params.tokenA]  // Swap tokens for buy orders
+        : [params.tokenA, params.tokenB];  // Keep original order for sell/stop loss
     
-    // HBAR to Token
-    if (isFromHbar) {
-      return swapHbarToToken(
-        params.cap.toString(),
-        effectiveTokenB,
-        params.fee,
-        params.hederaAccountId,
-        Math.floor(Date.now() / 1000) + 60,
-        slippageBasisPoints,
-        params.tokenBDecimals
-      );
-    }
-    
-    // Token to HBAR
-    if (isToHbar) {
-      return swapTokenToHbar(
-        params.cap.toString(),
-        effectiveTokenA,
-        params.fee,
-        params.hederaAccountId,
-        Math.floor(Date.now() / 1000) + 60,
-        slippageBasisPoints,
-        params.tokenADecimals
-      );
-    }
+      // Determine trade type based on token pairs
+      const isFromHbar = effectiveTokenA === WHBAR_ID;
+      const isToHbar = effectiveTokenB === WHBAR_ID;
   
-    throw new Error('Invalid token pair configuration');
+      console.log('Trade configuration:', {
+        isFromHbar,
+        isToHbar,
+        effectiveTokenA,
+        effectiveTokenB
+      });
+  
+      // Token to Token
+      if (!isFromHbar && !isToHbar) {
+        return swapTokenToToken(
+          params.cap.toString(),
+          effectiveTokenA,
+          effectiveTokenB,
+          params.fee,
+          params.hederaAccountId,
+          Math.floor(Date.now() / 1000) + 60,
+          slippageBasisPoints,
+          params.tokenADecimals,
+          params.tokenBDecimals
+        );
+      }
+      
+      // HBAR to Token
+      if (isFromHbar) {
+        return swapHbarToToken(
+          params.cap.toString(),
+          effectiveTokenB,
+          params.fee,
+          params.hederaAccountId,
+          Math.floor(Date.now() / 1000) + 60,
+          slippageBasisPoints,
+          params.tokenBDecimals
+        );
+      }
+      
+      // Token to HBAR
+      if (isToHbar) {
+        return swapTokenToHbar(
+          params.cap.toString(),
+          effectiveTokenA,
+          params.fee,
+          params.hederaAccountId,
+          Math.floor(Date.now() / 1000) + 60,
+          slippageBasisPoints,
+          params.tokenADecimals
+        );
+      }
+  
+      throw new Error('Invalid token pair configuration');
+    } catch (error) {
+      console.error('Error executing threshold trade:', error);
+      throw error;
+    }
   };
