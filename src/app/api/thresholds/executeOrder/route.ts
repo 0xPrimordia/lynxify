@@ -112,6 +112,23 @@ export async function POST(req: NextRequest) {
       tradeAmount
     });
 
+    // After determining trade amount
+    if (isNaN(tradeAmount) || !tradeAmount) {
+      console.error('[executeOrder] Invalid trade amount:', {
+        thresholdId,
+        orderType,
+        cap: threshold.cap,
+        tradeAmount
+      });
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid trade amount' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Convert to string to ensure proper number handling
+    const tradeAmountString = tradeAmount.toString();
+
     // Execute the trade using direct swap parameters
     let tradeResult;
     try {
@@ -148,8 +165,13 @@ export async function POST(req: NextRequest) {
           new ContractFunctionParameters()
             .addString(threshold.hederaAccountId)
             .addString(orderType)
+            .addBytes(new Uint8Array([
+              // Encode tokenA and tokenB as bytes
+              ...Buffer.from(threshold.tokenA.replace('0.0.', ''), 'hex'),
+              ...Buffer.from(threshold.tokenB.replace('0.0.', ''), 'hex')
+            ]))
         )
-        .setPayableAmount(Hbar.from(tradeAmount, HbarUnit.Hbar));
+        .setPayableAmount(new Hbar(tradeAmountString));
 
       console.log('Executing contract transaction:', {
         thresholdId,
