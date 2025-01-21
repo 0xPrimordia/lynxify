@@ -102,13 +102,15 @@ export async function POST(req: NextRequest) {
       tradeAmount = threshold.cap;
     }
 
-    // Validate trade amount
-    if (!tradeAmount || isNaN(Number(tradeAmount))) {
+    // Validate and parse trade amount
+    const parsedTradeAmount = Number(tradeAmount);
+    if (isNaN(parsedTradeAmount) || parsedTradeAmount <= 0) {
       console.error('[executeOrder] Invalid trade amount:', {
         thresholdId,
         orderType,
         cap: threshold.cap,
-        tradeAmount
+        tradeAmount,
+        parsedAmount: parsedTradeAmount
       });
       return new NextResponse(
         JSON.stringify({ error: 'Invalid trade amount' }),
@@ -134,125 +136,86 @@ export async function POST(req: NextRequest) {
       orderType,
       fromToken,
       toToken,
-      tradeAmount
+      tradeAmount: parsedTradeAmount
     });
 
-    // Execute the trade using direct swap parameters
-    let tradeResult;
-    try {
-      tradeResult = await executeThresholdTrade(
-        orderType,
-        {
-          ...threshold,
-          slippageBasisPoints: threshold.slippageBasisPoints || 50
-        }
-      );
-      console.log('[executeOrder] Trade execution result:', { thresholdId, tradeResult });
-    } catch (error: any) {
-      console.error('[executeOrder] Trade execution failed:', {
-        thresholdId,
-        error: error.message,
-        step: 'executeThresholdTrade',
-        pathDetails: {
-          hasPath: !!threshold.path,
-          pathType: typeof threshold.path,
-          pathLength: threshold.path?.length
-        }
-      });
-      error.step = 'executeThresholdTrade';
-      throw error;
-    }
+    // Add detailed logging before contract execution
+    console.log('[executeOrder] Contract execution parameters:', {
+      thresholdId,
+      orderType,
+      hederaAccountId: threshold.hederaAccountId,
+      tokenA: threshold.tokenA,
+      tokenB: threshold.tokenB,
+      fee: threshold.fee,
+      tradeAmount: tradeAmount.toString(),
+      pathBytesHex: Buffer.from(pathBytes).toString('hex')
+    });
 
     // Create and execute contract transaction
-    try {
-      const contractExecuteTx = new ContractExecuteTransaction()
-        .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
-        .setGas(3000000)
-        .setFunction(
-          "executeTradeForUser",
-          new ContractFunctionParameters()
-            .addString(threshold.hederaAccountId)
-            .addString(orderType)
-            .addBytes(pathBytes)
-        )
-        .setPayableAmount(new Hbar(tradeAmount.toString()));
+    const contractExecuteTx = new ContractExecuteTransaction()
+      .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
+      .setGas(3000000)
+      .setFunction(
+        "executeTradeForUser",
+        new ContractFunctionParameters()
+          .addString(threshold.hederaAccountId)
+          .addString(orderType)
+          .addBytes(pathBytes)
+      )
+      .setPayableAmount(new Hbar(tradeAmount.toString()));
 
-      console.log('Executing contract transaction:', {
-        thresholdId,
-        contractId: process.env.CONTRACT_ADDRESS_HEDERA,
-        hederaAccountId: threshold.hederaAccountId
-      });
+    console.log('[executeOrder] Executing transaction with params:', {
+      thresholdId,
+      contractId: process.env.CONTRACT_ADDRESS_HEDERA,
+      hederaAccountId: threshold.hederaAccountId,
+      pathBytesLength: pathBytes.length,
+      pathBytesHex: Buffer.from(pathBytes).toString('hex')
+    });
 
-      const txResponse = await contractExecuteTx.execute(client);
-      const receipt = await txResponse.getReceipt(client);
+    const txResponse = await contractExecuteTx.execute(client);
+    console.log('[executeOrder] Transaction submitted:', {
+      thresholdId,
+      transactionId: txResponse.transactionId.toString()
+    });
 
-      console.log('Transaction receipt:', {
-        thresholdId,
-        status: receipt.status.toString(),
-        transactionId: txResponse.transactionId.toString()
-      });
+    const receipt = await txResponse.getReceipt(client);
+    console.log('[executeOrder] Transaction receipt:', {
+      thresholdId,
+      status: receipt.status.toString(),
+      transactionId: txResponse.transactionId.toString()
+    });
 
-      if (receipt.status.toString() !== "SUCCESS") {
-        // Update threshold status to failed
-        await supabase
-          .from('Thresholds')
-          .update({ 
-            status: 'failed',
-            lastError: `Transaction failed with status: ${receipt.status.toString()}`,
-            lastChecked: new Date().toISOString()
-          })
-          .eq('id', thresholdId);
-
-        return new NextResponse(
-          JSON.stringify({ 
-            error: `Transaction failed with status: ${receipt.status.toString()}`,
-            details: {
-              thresholdId,
-              transactionId: txResponse.transactionId.toString(),
-              status: receipt.status.toString()
-            }
-          }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Update database status on success
-      await supabase
-        .from('Thresholds')
-        .update({ 
-          isActive: false,
-          status: 'executed',
-          lastChecked: new Date().toISOString(),
-          lastExecutedAt: new Date().toISOString(),
-          txHash: txResponse.transactionId.toString()
-        })
-        .eq('id', thresholdId);
-
-      // Award XP after successful execution
-      await awardThresholdExecutionXP(threshold.user_id, threshold.hederaAccountId);
-
-      return new NextResponse(
-        JSON.stringify({
-          message: `${orderType.toUpperCase()} order executed successfully!`,
-          txHash: txResponse.transactionId.toString(),
-          details: {
-            thresholdId,
-            transactionId: txResponse.transactionId.toString(),
-            status: receipt.status.toString()
-          }
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-
-    } catch (error: any) {
-      console.error('Contract execution failed:', {
-        thresholdId,
-        error: error.message,
-        step: 'contractExecution'
-      });
-      error.step = 'contractExecution';
-      throw error;
+    if (receipt.status.toString() !== "SUCCESS") {
+      throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
     }
+
+    // Update database status on success
+    await supabase
+      .from('Thresholds')
+      .update({ 
+        isActive: false,
+        status: 'executed',
+        lastChecked: new Date().toISOString(),
+        lastExecutedAt: new Date().toISOString(),
+        txHash: txResponse.transactionId.toString()
+      })
+      .eq('id', thresholdId);
+
+    // Award XP after successful execution
+    await awardThresholdExecutionXP(threshold.user_id, threshold.hederaAccountId);
+
+    return new NextResponse(
+      JSON.stringify({
+        message: `${orderType.toUpperCase()} order executed successfully!`,
+        txHash: txResponse.transactionId.toString(),
+        details: {
+          thresholdId,
+          transactionId: txResponse.transactionId.toString(),
+          status: receipt.status.toString()
+        }
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
 
   } catch (error: any) {
     console.error('[executeOrder] Unhandled error:', {
