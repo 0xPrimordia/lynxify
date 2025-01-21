@@ -93,27 +93,17 @@ export async function POST(req: NextRequest) {
     // Determine trade direction and amount based on order type
     let fromToken, toToken, tradeAmount;
     if (orderType === 'buyOrder') {
-      // For buy orders, we're trading token B for token A
       fromToken = threshold.tokenB;
       toToken = threshold.tokenA;
       tradeAmount = threshold.cap;
     } else {
-      // For stop loss and sell orders, we're trading token A for token B
       fromToken = threshold.tokenA;
       toToken = threshold.tokenB;
       tradeAmount = threshold.cap;
     }
 
-    console.log('Starting trade execution:', {
-      thresholdId,
-      orderType,
-      fromToken,
-      toToken,
-      tradeAmount
-    });
-
-    // After determining trade amount
-    if (isNaN(tradeAmount) || !tradeAmount) {
+    // Validate trade amount
+    if (!tradeAmount || isNaN(Number(tradeAmount))) {
       console.error('[executeOrder] Invalid trade amount:', {
         thresholdId,
         orderType,
@@ -126,8 +116,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Convert to string to ensure proper number handling
-    const tradeAmountString = tradeAmount.toString();
+    // Create path bytes - format: fee (3 bytes) + tokenA (20 bytes) + tokenB (20 bytes)
+    const pathBytes = new Uint8Array(43); // 3 + 20 + 20 bytes
+    const fee = parseInt(threshold.fee.toString());
+    pathBytes[0] = (fee >> 16) & 0xFF;
+    pathBytes[1] = (fee >> 8) & 0xFF;
+    pathBytes[2] = fee & 0xFF;
+
+    // Convert token addresses to bytes (removing '0.0.' prefix and padding to 20 bytes)
+    const tokenABytes = Buffer.from(threshold.tokenA.replace('0.0.', '').padStart(40, '0'), 'hex');
+    const tokenBBytes = Buffer.from(threshold.tokenB.replace('0.0.', '').padStart(40, '0'), 'hex');
+    pathBytes.set(tokenABytes, 3);
+    pathBytes.set(tokenBBytes, 23);
+
+    console.log('Starting trade execution:', {
+      thresholdId,
+      orderType,
+      fromToken,
+      toToken,
+      tradeAmount
+    });
 
     // Execute the trade using direct swap parameters
     let tradeResult;
@@ -165,13 +173,9 @@ export async function POST(req: NextRequest) {
           new ContractFunctionParameters()
             .addString(threshold.hederaAccountId)
             .addString(orderType)
-            .addBytes(new Uint8Array([
-              // Encode tokenA and tokenB as bytes
-              ...Buffer.from(threshold.tokenA.replace('0.0.', ''), 'hex'),
-              ...Buffer.from(threshold.tokenB.replace('0.0.', ''), 'hex')
-            ]))
+            .addBytes(pathBytes)
         )
-        .setPayableAmount(new Hbar(tradeAmountString));
+        .setPayableAmount(new Hbar(tradeAmount.toString()));
 
       console.log('Executing contract transaction:', {
         thresholdId,
