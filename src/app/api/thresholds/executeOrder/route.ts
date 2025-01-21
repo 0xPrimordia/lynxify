@@ -9,27 +9,31 @@ export async function POST(req: NextRequest) {
   let thresholdId: string | null = null;
   const cookieStore = cookies();
   
-  console.log('Received execute order request');
+  console.log('[executeOrder] Request received');
   
   try {
-    // Log the request headers and body
-    const body = await req.json();
-    console.log('Execute order request details:', {
-      headers: {
-        'x-api-key': req.headers.get('x-api-key')?.substring(0, 4) + '...',
-        'content-type': req.headers.get('content-type'),
-      },
-      body,
-      url: req.url
+    // First try-catch block just for parsing the request
+    let body;
+    try {
+      body = await req.json();
+      console.log('[executeOrder] Request body parsed:', body);
+    } catch (error: any) {
+      console.error('[executeOrder] Failed to parse request body:', error);
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // API key verification
+    const apiKey = req.headers.get('x-api-key');
+    console.log('[executeOrder] API key check:', {
+      hasKey: !!apiKey,
+      keyMatch: apiKey === process.env.API_KEY,
+      envKeyExists: !!process.env.API_KEY
     });
 
-    // Verify API key
-    const apiKey = req.headers.get('x-api-key');
     if (!apiKey || apiKey !== process.env.API_KEY) {
-      console.log('API key verification failed:', { 
-        provided: apiKey?.substring(0, 4) + '...',
-        expected: process.env.API_KEY?.substring(0, 4) + '...' 
-      });
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -39,17 +43,8 @@ export async function POST(req: NextRequest) {
     const { thresholdId: requestThresholdId, orderType } = body;
     thresholdId = requestThresholdId;
 
-    // Log successful API key verification and parsed request
-    console.log('Request validated:', { thresholdId, orderType });
-
-    if (!thresholdId || !orderType) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Threshold ID and order type are required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Get threshold data from Supabase
+    console.log('[executeOrder] Fetching threshold data:', { thresholdId });
     const supabase = createServerSupabase(cookieStore, true);
     const { data: threshold, error: fetchError } = await supabase
       .from('Thresholds')
@@ -58,7 +53,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (fetchError || !threshold) {
-      console.error('Threshold fetch error:', { thresholdId, error: fetchError });
+      console.error('[executeOrder] Threshold fetch error:', { thresholdId, error: fetchError });
       return new NextResponse(
         JSON.stringify({ error: 'Threshold not found' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
@@ -66,10 +61,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Initialize Hedera client
+    console.log('[executeOrder] Initializing Hedera client');
     const client = Client.forTestnet();
+    
+    if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY) {
+      console.error('[executeOrder] Missing Hedera credentials');
+      return new NextResponse(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     client.setOperator(
-      AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
-      PrivateKey.fromString(process.env.OPERATOR_KEY!)
+      AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID),
+      PrivateKey.fromString(process.env.OPERATOR_KEY)
     );
 
     // Determine trade direction and amount based on order type
@@ -208,12 +213,10 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('Order execution error:', {
+    console.error('[executeOrder] Unhandled error:', {
       error: error.message,
       stack: error.stack,
-      thresholdId,
-      step: error.step || 'unknown',
-      details: error.details || error.response?.data
+      thresholdId
     });
 
     // Update threshold status to failed if we have a thresholdId
@@ -234,12 +237,11 @@ export async function POST(req: NextRequest) {
     }
 
     return new NextResponse(
-      JSON.stringify({ 
-        error: 'Order execution failed',
+      JSON.stringify({
+        error: 'Internal server error',
         details: {
           message: error.message,
-          step: error.step || 'unknown',
-          details: error.details || error.response?.data
+          thresholdId
         }
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
