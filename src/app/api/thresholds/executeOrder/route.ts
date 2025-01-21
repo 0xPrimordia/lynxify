@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractId, Hbar, TransactionId } from "@hashgraph/sdk";
+import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractId, Hbar, TransactionId, ContractFunctionParameters } from "@hashgraph/sdk";
 import { ethers } from 'ethers';
 import { createServerSupabase } from '@/utils/supabase';
 import { executeThresholdTrade } from '@/app/lib/threshold';
@@ -102,61 +102,41 @@ export async function POST(req: NextRequest) {
       fromToken = WHBAR_ID;
       toToken = threshold.tokenA;
       tradeAmount = threshold.cap;
-    } else {
+    } else if (orderType === 'sellOrder') {
       fromToken = threshold.tokenA;
       toToken = WHBAR_ID;
       tradeAmount = threshold.cap;
+    } else if (orderType === 'stopLoss') {
+      fromToken = threshold.tokenA;
+      toToken = threshold.tokenB;
+      tradeAmount = threshold.cap;
+    } else {
+      console.error('[executeOrder] Invalid order type:', { orderType, thresholdId });
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid order type' }),
+        { status: 400 }
+      );
     }
 
-    // Construct path using the working implementation method
+    // Construct path for the swap
     const path = Buffer.concat([
       Buffer.from(ContractId.fromString(fromToken).toSolidityAddress().replace('0x', ''), 'hex'),
       Buffer.from(threshold.fee.toString(16).padStart(6, '0'), 'hex'),
       Buffer.from(ContractId.fromString(toToken).toSolidityAddress().replace('0x', ''), 'hex')
     ]);
 
-    // Calculate slippage (default to 0.5%)
-    const slippageBasisPoints = threshold.slippageBasisPoints || 50;
-    const slippagePercent = slippageBasisPoints / 10000;
-
-    // Construct swap parameters
-    const params = {
-      path: path,
-      recipient: orderType === 'buyOrder' 
-        ? AccountId.fromString(threshold.hederaAccountId).toSolidityAddress()
-        : ContractId.fromString(SWAP_ROUTER_ADDRESS).toSolidityAddress(),
-      deadline: Math.floor(Date.now() / 1000) + 60,
-      amountIn: tradeAmount.toString(),
-      amountOutMinimum: '0' // We could add minimum amount calculation here if needed
-    };
-
-    // Create encoded function calls
-    let encodedCalls: string[];
-    if (orderType === 'buyOrder') {
-      // HBAR to Token: wrap HBAR + swap
-      const wrapEncoded = swapRouterAbi.encodeFunctionData('wrapHBAR');
-      const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-      encodedCalls = [wrapEncoded, swapEncoded];
-    } else {
-      // Token to HBAR: swap + unwrap
-      const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-      const unwrapEncoded = swapRouterAbi.encodeFunctionData('unwrapWHBAR', [
-        0, // amount (0 means all)
-        AccountId.fromString(threshold.hederaAccountId).toSolidityAddress()
-      ]);
-      encodedCalls = [swapEncoded, unwrapEncoded];
-    }
-
-    // Encode multicall
-    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [encodedCalls]);
-
-    // Create and execute contract transaction
+    // Create and execute contract transaction using our contract
     const contractExecuteTx = new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
+      .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
       .setGas(5000000)
-      .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
-      .setPayableAmount(orderType === 'buyOrder' ? new Hbar(tradeAmount.toString()) : new Hbar(0))
-      .setTransactionId(TransactionId.generate(threshold.hederaAccountId));
+      .setFunction(
+        "executeTradeForUser",
+        new ContractFunctionParameters()
+          .addString(threshold.hederaAccountId)
+          .addString(orderType)
+          .addBytes(path)
+      )
+      .setPayableAmount(orderType === 'buyOrder' ? new Hbar(tradeAmount.toString()) : new Hbar(0));
 
     console.log('[executeOrder] Executing transaction:', {
       thresholdId,

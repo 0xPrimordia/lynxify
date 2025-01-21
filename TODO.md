@@ -79,6 +79,9 @@
     - [ ] Check token associations before setting thresholds
     - [ ] Associate tokens if needed
     - [ ] Handle association fees
+    - [ ] Add error handling for failed associations
+    - [ ] Add user feedback during association process
+    - [ ] Consider gas fees for multiple associations
 
 ## NFT tier based reward system
 
