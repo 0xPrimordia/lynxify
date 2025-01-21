@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect, useRef, FocusEvent } from "react";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent } from "@nextui-org/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip } from "@nextui-org/react";
 
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
@@ -42,6 +42,7 @@ import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { usePoolContext } from "../hooks/usePools";
 import { useRewards } from "../hooks/useRewards";
+import { CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
   
 export default function DexPage() {
     const router = useRouter();
@@ -799,6 +800,7 @@ export default function DexPage() {
                                                 <TableColumn>Fee</TableColumn>
                                                 <TableColumn>Price</TableColumn>
                                                 <TableColumn>Cap</TableColumn>
+                                                <TableColumn>Status</TableColumn>
                                                 <TableColumn>Actions</TableColumn>
                                             </TableHeader>
                                             <TableBody>
@@ -824,6 +826,27 @@ export default function DexPage() {
                                                         <TableCell>{threshold.fee / 10_000.0}%</TableCell>
                                                         <TableCell>${threshold.price}</TableCell>
                                                         <TableCell>{threshold.cap}</TableCell>
+                                                        <TableCell>
+                                                            <div className="flex items-center gap-1">
+                                                                {threshold.status === 'executed' && (
+                                                                    <CheckCircleIcon className="w-5 h-5 text-success" />
+                                                                )}
+                                                                {threshold.status === 'failed' && (
+                                                                    <Tooltip 
+                                                                        content="Transaction failed. This usually happens when there are insufficient funds in your wallet."
+                                                                        className="max-w-xs"
+                                                                    >
+                                                                        <div className="flex items-center gap-1">
+                                                                            <XCircleIcon className="w-5 h-5 text-danger" />
+                                                                            <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                                                                        </div>
+                                                                    </Tooltip>
+                                                                )}
+                                                                {threshold.status === 'pending' && (
+                                                                    <span className="text-default-500">Pending</span>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
                                                         <TableCell>
                                                             <Button 
                                                                 onPress={() => deleteThreshold(threshold.id)}

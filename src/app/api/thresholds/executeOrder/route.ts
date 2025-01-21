@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       tradeAmount = threshold.cap;
     } else if (orderType === 'sellOrder') {
       fromToken = threshold.tokenA;
-      toToken = WHBAR_ID;
+      toToken = threshold.tokenB;
       tradeAmount = threshold.cap;
     } else if (orderType === 'stopLoss') {
       fromToken = threshold.tokenA;
@@ -200,12 +200,13 @@ export async function POST(req: NextRequest) {
       thresholdId
     });
 
-    // Update threshold status to failed if we have a thresholdId
+    // Update threshold status to failed and set isActive to false
     if (thresholdId) {
       const supabase = createServerSupabase(cookieStore, true);
       await supabase
         .from('Thresholds')
         .update({ 
+          isActive: false,
           status: 'failed',
           lastError: JSON.stringify({
             message: error.message,
