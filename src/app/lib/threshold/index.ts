@@ -14,7 +14,6 @@ import {
   export const executeThresholdTrade = async (
     type: ThresholdType,
     params: ThresholdInputParams,
-    path: Buffer,
     slippageBasisPoints: number = 50 // Default to 0.5%
   ) => {
     console.log('Starting executeThresholdTrade:', {
@@ -24,7 +23,6 @@ import {
         // Exclude sensitive data
         hederaAccountId: params.hederaAccountId?.substring(0, 4) + '...'
       },
-      pathLength: path.length,
       slippageBasisPoints
     });
   
