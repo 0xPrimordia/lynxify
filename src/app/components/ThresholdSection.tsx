@@ -81,6 +81,16 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     saveThresholds,
     resetThresholdForm
 }) => {
+    const handleSaveThreshold = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
+        try {
+            await saveThresholds(type);
+            resetThresholdForm();
+            setSelectedThresholdType(null);
+        } catch (error) {
+            console.error('Failed to save threshold:', error);
+        }
+    };
+
     return (
         <div className="w-full flex flex-col gap-4 pb-8">
             <Select
@@ -89,7 +99,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                 className="max-w-xs"
                 onChange={(e) => setSelectedThresholdType(e.target.value as 'stopLoss' | 'buyOrder' | 'sellOrder' | null)}
                 selectedKeys={selectedThresholdType ? [selectedThresholdType] : []}
-                isDisabled={!currentPool}
+                isDisabled={!currentPool || isSubmitting}
             >
                 {thresholdOptions.map((option) => (
                     <SelectItem 
@@ -188,14 +198,11 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                     />
                     <Button 
                         className="mb-2" 
-                        onPress={() => {
-                            saveThresholds('stopLoss');
-                            resetThresholdForm();
-                        }}
+                        onPress={() => handleSaveThreshold('stopLoss').catch(console.error)}
                         isLoading={isSubmitting}
                         isDisabled={isSubmitting}
                     >
-                        Set Stop-Loss
+                        {isSubmitting ? 'Setting Stop-Loss...' : 'Set Stop-Loss'}
                     </Button>
                 </div>
             )}
@@ -282,14 +289,11 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                     />
                     <Button 
                         className="mb-2" 
-                        onPress={() => {
-                            saveThresholds('buyOrder');
-                            resetThresholdForm();
-                        }}
+                        onPress={() => handleSaveThreshold('buyOrder').catch(console.error)}
                         isLoading={isSubmitting}
                         isDisabled={isSubmitting}
                     >
-                        Set Buy Order
+                        {isSubmitting ? 'Setting Buy Order...' : 'Set Buy Order'}
                     </Button>
                 </div>
             )}
@@ -379,14 +383,11 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                     />
                     <Button 
                         className="mb-2" 
-                        onPress={() => {
-                            saveThresholds('sellOrder');
-                            resetThresholdForm();
-                        }}
+                        onPress={() => handleSaveThreshold('sellOrder').catch(console.error)}
                         isLoading={isSubmitting}
                         isDisabled={isSubmitting}
                     >
-                        Set Sell Order
+                        {isSubmitting ? 'Setting Sell Order...' : 'Set Sell Order'}
                     </Button>
                 </div>
             )}

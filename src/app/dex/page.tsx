@@ -322,12 +322,6 @@ export default function DexPage() {
 
         setIsSubmitting(true);
         try {
-            const slippageBasisPoints = Math.floor(
-                (type === 'stopLoss' ? stopLossSlippage :
-                 type === 'buyOrder' ? buyOrderSlippage :
-                 sellOrderSlippage) * 100
-            );
-
             const response = await fetch('/api/thresholds/setThresholds', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -344,21 +338,26 @@ export default function DexPage() {
                     tokenB: currentPool.tokenB.id,
                     fee: currentPool.fee,
                     userId: userId,
-                    slippageBasisPoints
+                    slippageBasisPoints: Math.floor(
+                        (type === 'stopLoss' ? stopLossSlippage :
+                         type === 'buyOrder' ? buyOrderSlippage :
+                         sellOrderSlippage) * 100
+                    )
                 }),
             });
-
+            
+            const data = await response.json();
+            
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to set thresholds');
+                throw new Error(data.error || 'Failed to save threshold');
             }
 
             setAlertState({
                 isVisible: true,
-                message: `${type} threshold set successfully!`,
+                message: "Threshold saved successfully!",
                 type: "success"
             });
-
+            
             // Refresh thresholds data
             const refreshResponse = await fetch(`/api/thresholds?userId=${userId}`);
             const refreshedData = await refreshResponse.json();
@@ -367,34 +366,19 @@ export default function DexPage() {
             try {
                 await awardXP('SET_THRESHOLD');
             } catch (error) {
-                console.error('Failed to award XP for setting threshold:', error);
+                console.error('Failed to award XP:', error);
             }
 
+            return data;
         } catch (error: any) {
-            console.error('Error setting threshold:', error);
-            let errorMessage = 'Failed to set threshold';
-            
-            try {
-                const errorData = await error.response?.json();
-                console.log('Detailed error information:', errorData);
-                
-                errorMessage = errorData?.details || errorData?.error || errorMessage;
-                
-                if (errorData?.debugInfo) {
-                    console.log('Debug information:', errorData.debugInfo);
-                }
-            } catch (e) {
-                console.error('Error parsing error response:', e);
-            }
-            
             setAlertState({
                 isVisible: true,
-                message: errorMessage,
+                message: error.message || "Failed to save threshold",
                 type: "danger"
             });
+            throw error;
         } finally {
             setIsSubmitting(false);
-            resetThresholdForm(); // Move reset here to ensure it happens regardless of success/failure
         }
     };
 
@@ -807,7 +791,7 @@ export default function DexPage() {
                             <div className="h-[calc(100vh-120px)] overflow-y-auto">
                                 <div className="pb-24">
                                     {thresholds.length > 0 ? (
-                                        <Table>
+                                        <Table aria-label="Active thresholds">
                                             <TableHeader>
                                                 <TableColumn>Threshold Type</TableColumn>
                                                 <TableColumn>Token A</TableColumn>
@@ -815,7 +799,7 @@ export default function DexPage() {
                                                 <TableColumn>Fee</TableColumn>
                                                 <TableColumn>Price</TableColumn>
                                                 <TableColumn>Cap</TableColumn>
-                                                <TableColumn>Delete</TableColumn>
+                                                <TableColumn>Actions</TableColumn>
                                             </TableHeader>
                                             <TableBody>
                                                 {thresholds.map((threshold: Threshold) => (
@@ -824,7 +808,7 @@ export default function DexPage() {
                                                         <TableCell>
                                                             <Image 
                                                                 src={getTokenImageUrl(getTokenIcon(threshold.tokenA))}
-                                                                alt="Token A"
+                                                                alt={`Token A icon for ${threshold.tokenA}`}
                                                                 width={30}
                                                                 height={30}
                                                             />
@@ -832,7 +816,7 @@ export default function DexPage() {
                                                         <TableCell>
                                                             <Image 
                                                                 src={getTokenImageUrl(getTokenIcon(threshold.tokenB))}
-                                                                alt="Token B"
+                                                                alt={`Token B icon for ${threshold.tokenB}`}
                                                                 width={30}
                                                                 height={30}
                                                             />
@@ -843,7 +827,7 @@ export default function DexPage() {
                                                         <TableCell>
                                                             <Button 
                                                                 onPress={() => deleteThreshold(threshold.id)}
-                                                                aria-label={`Delete threshold ${threshold.id}`}
+                                                                aria-label={`Delete ${threshold.type} threshold for ${threshold.tokenA}-${threshold.tokenB}`}
                                                             >
                                                                 Delete
                                                             </Button>

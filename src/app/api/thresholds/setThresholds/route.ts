@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!dbUser) {
+      console.error('User lookup failed:', { error: userError, hederaId: hederaAccountId });
       return new NextResponse(
         JSON.stringify({ 
           error: 'User not found',
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (insertError) {
+      console.error('Failed to create threshold record:', insertError);
       return new NextResponse(
         JSON.stringify({ error: `Failed to create threshold record: ${insertError.message}` }),
         { status: 500 }
@@ -62,6 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Initialize Hedera client
+    console.log('Initializing Hedera client...');
     const client = Client.forTestnet();
     client.setOperator(
       AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
@@ -86,69 +89,146 @@ export async function POST(req: NextRequest) {
     };
     console.log('Contract parameters:', debugParams);
 
-    // Create contract execute transaction
-    const contractExecuteTx = new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
-      .setGas(1000000)
-      .setFunction(
-        "setThreshold",
-        new ContractFunctionParameters()
-          .addUint256(priceBasisPoints)
-          .addString(hederaAccountId)
-          .addAddress(tokenAAddress)
-          .addAddress(tokenBAddress)
-          .addUint256(formattedCap.toString())
+    try {
+      // Create contract execute transaction
+      console.log('Creating contract transaction...');
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(ContractId.fromString(process.env.CONTRACT_ADDRESS_HEDERA!))
+        .setGas(1000000)
+        .setFunction(
+          "setThreshold",
+          new ContractFunctionParameters()
+            .addUint256(priceBasisPoints)
+            .addString(hederaAccountId)
+            .addAddress(tokenAAddress)
+            .addAddress(tokenBAddress)
+            .addUint256(formattedCap.toString())
+        );
+
+      console.log('Executing contract transaction...');
+      const txResponse = await contractExecuteTx.execute(client);
+      console.log('Transaction submitted:', txResponse.transactionId.toString());
+
+      const receipt = await txResponse.getReceipt(client);
+      console.log('Transaction receipt:', {
+        status: receipt.status.toString(),
+        transactionId: txResponse.transactionId.toString(),
+        contractId: process.env.CONTRACT_ADDRESS_HEDERA
+      });
+
+      if (receipt.status.toString() !== "SUCCESS") {
+        // Enhanced error logging for contract failure
+        const errorDetails = {
+          status: receipt.status.toString(),
+          transactionId: txResponse.transactionId.toString(),
+          contractParams: debugParams,
+          timestamp: new Date().toISOString()
+        };
+        console.error('Contract transaction failed:', errorDetails);
+
+        await serviceClient
+          .from('Thresholds')
+          .update({ 
+            status: 'failed',
+            lastError: JSON.stringify(errorDetails),
+            lastChecked: new Date().toISOString()
+          })
+          .eq('id', pendingThreshold.id);
+
+        return new NextResponse(
+          JSON.stringify({ 
+            error: `Contract transaction failed`,
+            details: errorDetails,
+            debugInfo: {
+              requestBody: body,
+              contractParams: debugParams,
+              receipt: receipt
+            }
+          }),
+          { status: 500 }
+        );
+      }
+
+      // After successful contract execution
+      console.log('Attempting database update for threshold:', {
+        id: pendingThreshold.id,
+        updatePayload: {
+          isActive: true,
+          status: 'active',
+          txHash: txResponse.transactionId.toString(),
+          lastChecked: new Date().toISOString()
+        }
+      });
+      
+      // First verify the threshold exists
+      const { data: verifyData, error: verifyError } = await serviceClient
+        .from('Thresholds')
+        .select('*')
+        .eq('id', pendingThreshold.id)
+        .single();
+        
+      console.log('Verification check:', {
+        found: !!verifyData,
+        currentData: verifyData,
+        error: verifyError
+      });
+
+      // Then attempt the update
+      const { data: updateData, error: updateError } = await serviceClient
+        .from('Thresholds')
+        .update({ 
+          isActive: true,
+          status: 'active',
+          txHash: txResponse.transactionId.toString(),
+          lastChecked: new Date().toISOString()
+        })
+        .eq('id', pendingThreshold.id)
+        .select('*');
+
+      console.log('Update operation result:', {
+        success: !!updateData && updateData.length > 0,
+        updatedData: updateData,
+        error: updateError,
+        rowCount: updateData?.length || 0,
+        thresholdId: pendingThreshold.id
+      });
+
+      return new NextResponse(
+        JSON.stringify({
+          message: 'Threshold set successfully',
+          txHash: txResponse.transactionId.toString(),
+          id: pendingThreshold.id
+        }),
+        { status: 200 }
       );
 
-    const txResponse = await contractExecuteTx.execute(client);
-    const receipt = await txResponse.getReceipt(client);
+    } catch (error: any) {
+      // Catch and log any unexpected errors during contract interaction
+      const errorDetails = {
+        message: error.message,
+        stack: error.stack,
+        contractParams: debugParams,
+        timestamp: new Date().toISOString()
+      };
+      console.error('Unexpected error during contract interaction:', errorDetails);
 
-    if (receipt.status.toString() !== "SUCCESS") {
-      // If contract fails, update database record to failed
       await serviceClient
         .from('Thresholds')
         .update({ 
           status: 'failed',
-          lastError: `Contract transaction failed: ${receipt.status.toString()}`
+          lastError: JSON.stringify(errorDetails),
+          lastChecked: new Date().toISOString()
         })
         .eq('id', pendingThreshold.id);
 
       return new NextResponse(
         JSON.stringify({ 
-          error: `Contract transaction failed with status: ${receipt.status.toString()}`,
-          debugInfo: {
-            requestBody: body,
-            contractParams: debugParams,
-            receipt: receipt
-          }
+          error: 'Failed to set threshold',
+          details: errorDetails
         }),
         { status: 500 }
       );
     }
-
-    // If successful, update the threshold record with transaction info
-    const { error: updateError } = await serviceClient
-      .from('Thresholds')
-      .update({ 
-        isActive: true,
-        status: 'active',
-        txHash: txResponse.transactionId.toString(),
-        lastChecked: new Date().toISOString()
-      })
-      .eq('id', pendingThreshold.id);
-
-    if (updateError) {
-      console.error('Failed to update threshold record:', updateError);
-    }
-
-    return new NextResponse(
-      JSON.stringify({
-        message: 'Threshold set successfully',
-        txHash: txResponse.transactionId.toString(),
-        id: pendingThreshold.id
-      }),
-      { status: 200 }
-    );
 
   } catch (error: any) {
     console.error('Error in setThresholds:', error);
