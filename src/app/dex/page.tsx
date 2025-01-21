@@ -323,6 +323,19 @@ export default function DexPage() {
 
         setIsSubmitting(true);
         try {
+            console.log('Sending threshold data:', {
+                type,
+                price: type === 'stopLoss' ? stopLossPrice :
+                       type === 'buyOrder' ? buyOrderPrice :
+                       sellOrderPrice,
+                cap: type === 'stopLoss' ? stopLossCap :
+                     type === 'buyOrder' ? buyOrderCap :
+                     sellOrderCap,
+                hederaAccountId: account,
+                tokenA: currentPool.tokenA.id,
+                tokenB: currentPool.tokenB.id
+            });
+
             const response = await fetch('/api/thresholds/setThresholds', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -346,38 +359,27 @@ export default function DexPage() {
                     )
                 }),
             });
-            
-            const data = await response.json();
-            
+
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to save threshold');
+                const errorData = await response.json();
+                throw new Error(`API Error: ${errorData.error || response.statusText}`);
             }
 
+            const data = await response.json();
+            console.log('Threshold creation response:', data);
+            
             setAlertState({
                 isVisible: true,
-                message: "Threshold saved successfully!",
+                message: "Threshold created successfully",
                 type: "success"
             });
-            
-            // Refresh thresholds data
-            const refreshResponse = await fetch(`/api/thresholds?userId=${userId}`);
-            const refreshedData = await refreshResponse.json();
-            setThresholds(refreshedData);
-
-            try {
-                await awardXP('SET_THRESHOLD');
-            } catch (error) {
-                console.error('Failed to award XP:', error);
-            }
-
-            return data;
         } catch (error: any) {
+            console.error('Failed to save threshold:', error);
             setAlertState({
                 isVisible: true,
-                message: error.message || "Failed to save threshold",
+                message: error.message || "Failed to create threshold",
                 type: "danger"
             });
-            throw error;
         } finally {
             setIsSubmitting(false);
         }
@@ -1022,6 +1024,7 @@ export default function DexPage() {
                         buyOrderSlippage={buyOrderSlippage}
                         sellOrderSlippage={sellOrderSlippage}
                         isSubmitting={isSubmitting}
+                        setIsSubmitting={setIsSubmitting}
                         setStopLossPrice={setStopLossPrice}
                         setStopLossCap={setStopLossCap}
                         setBuyOrderPrice={setBuyOrderPrice}

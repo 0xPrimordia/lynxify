@@ -5,6 +5,9 @@ import Image from 'next/image';
 import { Token } from "../hooks/useTokens";
 import { ThresholdSlippageSelector } from './ThresholdSlippageSelector';
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
+import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
+import { associateToken } from '@/app/lib/utils/tokens';
+import { useWalletContext } from '@/app/hooks/useWallet';
 
 const thresholdOptions = [
     { key: 'stopLoss', label: 'Stop Loss', description: 'Sells tokens when the price < threshold' },
@@ -45,6 +48,7 @@ interface ThresholdSectionProps {
     handleMaxClickSellOrder: () => void;
     saveThresholds: (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => void;
     resetThresholdForm: () => void;
+    setIsSubmitting: (isSubmitting: boolean) => void;
 }
 
 export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
@@ -79,15 +83,41 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     hanndleMaxClickStopLoss,
     handleMaxClickSellOrder,
     saveThresholds,
-    resetThresholdForm
+    resetThresholdForm,
+    setIsSubmitting
 }) => {
+    const { signAndExecuteTransaction, account } = useWalletContext();
+
     const handleSaveThreshold = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
         try {
+            const { needsAssociation, token } = await verifyThresholdTokens(
+                account!,
+                currentToken.id,
+                tradeToken?.id || '',
+                type === 'buyOrder'
+            );
+
+            if (needsAssociation && token) {
+                setIsSubmitting(true);
+                const associateTx = await associateToken(account!, token);
+                await signAndExecuteTransaction({
+                    transactionList: associateTx,
+                    signerAccountId: account!
+                });
+                // Wait for association to complete
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                setIsSubmitting(false);
+            }
+
+            // Now that association is complete (if needed), create the threshold
+            setIsSubmitting(true);
             await saveThresholds(type);
             resetThresholdForm();
             setSelectedThresholdType(null);
         } catch (error) {
             console.error('Failed to save threshold:', error);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
