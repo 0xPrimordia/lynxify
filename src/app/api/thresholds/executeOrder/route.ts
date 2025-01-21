@@ -60,6 +60,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!threshold.path) {
+      console.error('[executeOrder] Missing path in threshold data:', { thresholdId });
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid threshold configuration: missing path' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[executeOrder] Trade path validation:', {
+      thresholdId,
+      hasPath: !!threshold.path,
+      pathLength: threshold.path?.length
+    });
+
     // Initialize Hedera client
     console.log('[executeOrder] Initializing Hedera client');
     const client = Client.forTestnet();
@@ -102,20 +116,34 @@ export async function POST(req: NextRequest) {
     // Execute trade with stored slippage
     let tradeResult;
     try {
+      if (!threshold.path) {
+        throw new Error('Missing path in threshold configuration');
+      }
+
+      const tradePath = Buffer.from(threshold.path, 'hex');
+      if (!tradePath.length) {
+        throw new Error('Invalid trade path format');
+      }
+
       tradeResult = await executeThresholdTrade(
         orderType,
         {
           ...threshold,
-          slippageBasisPoints: threshold.slippageBasisPoints || 50 // Use stored slippage or default
+          slippageBasisPoints: threshold.slippageBasisPoints || 50
         },
-        Buffer.from(threshold.path, 'hex')
+        tradePath
       );
-      console.log('Trade execution result:', { thresholdId, tradeResult });
+      console.log('[executeOrder] Trade execution result:', { thresholdId, tradeResult });
     } catch (error: any) {
-      console.error('Trade execution failed:', {
+      console.error('[executeOrder] Trade execution failed:', {
         thresholdId,
         error: error.message,
-        step: 'executeThresholdTrade'
+        step: 'executeThresholdTrade',
+        pathDetails: {
+          hasPath: !!threshold.path,
+          pathType: typeof threshold.path,
+          pathLength: threshold.path?.length
+        }
       });
       error.step = 'executeThresholdTrade';
       throw error;
@@ -123,6 +151,7 @@ export async function POST(req: NextRequest) {
 
     // Create and execute contract transaction
     try {
+      const tradePath = Buffer.from(threshold.path, 'hex');
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
         .setGas(3000000)
@@ -131,7 +160,7 @@ export async function POST(req: NextRequest) {
           new ContractFunctionParameters()
             .addString(threshold.hederaAccountId)
             .addString(orderType)
-            .addBytes(Buffer.from(threshold.path, 'hex'))
+            .addBytes(tradePath)
         )
         .setPayableAmount(Hbar.from(tradeAmount, HbarUnit.Hbar));
 
