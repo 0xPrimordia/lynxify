@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, Hbar, HbarUnit } from "@hashgraph/sdk";
+import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractId, Hbar, TransactionId } from "@hashgraph/sdk";
+import { ethers } from 'ethers';
 import { createServerSupabase } from '@/utils/supabase';
 import { executeThresholdTrade } from '@/app/lib/threshold';
 import { cookies } from 'next/headers';
 import { awardThresholdExecutionXP } from '@/app/lib/rewards';
+import { WHBAR_ID, SWAP_ROUTER_ADDRESS } from '@/app/lib/constants';
+import { hexToUint8Array } from '@/app/lib/utils/format';
+import SwapRouterAbi from '@/app/lib/abis/SwapRouter.json';
+
+const swapRouterAbi = new ethers.Interface(SwapRouterAbi);
 
 export async function POST(req: NextRequest) {
   let thresholdId: string | null = null;
@@ -90,86 +96,76 @@ export async function POST(req: NextRequest) {
       PrivateKey.fromString(process.env.OPERATOR_KEY)
     );
 
-    // Determine trade direction and amount based on order type
+    // Determine trade direction and amount
     let fromToken, toToken, tradeAmount;
     if (orderType === 'buyOrder') {
-      fromToken = threshold.tokenB;
+      fromToken = WHBAR_ID;
       toToken = threshold.tokenA;
       tradeAmount = threshold.cap;
     } else {
       fromToken = threshold.tokenA;
-      toToken = threshold.tokenB;
+      toToken = WHBAR_ID;
       tradeAmount = threshold.cap;
     }
 
-    // Validate and parse trade amount
-    const parsedTradeAmount = Number(tradeAmount);
-    if (isNaN(parsedTradeAmount) || parsedTradeAmount <= 0) {
-      console.error('[executeOrder] Invalid trade amount:', {
-        thresholdId,
-        orderType,
-        cap: threshold.cap,
-        tradeAmount,
-        parsedAmount: parsedTradeAmount
-      });
-      return new NextResponse(
-        JSON.stringify({ error: 'Invalid trade amount' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+    // Construct path using the working implementation method
+    const path = Buffer.concat([
+      Buffer.from(ContractId.fromString(fromToken).toSolidityAddress().replace('0x', ''), 'hex'),
+      Buffer.from(threshold.fee.toString(16).padStart(6, '0'), 'hex'),
+      Buffer.from(ContractId.fromString(toToken).toSolidityAddress().replace('0x', ''), 'hex')
+    ]);
+
+    // Calculate slippage (default to 0.5%)
+    const slippageBasisPoints = threshold.slippageBasisPoints || 50;
+    const slippagePercent = slippageBasisPoints / 10000;
+
+    // Construct swap parameters
+    const params = {
+      path: path,
+      recipient: orderType === 'buyOrder' 
+        ? AccountId.fromString(threshold.hederaAccountId).toSolidityAddress()
+        : ContractId.fromString(SWAP_ROUTER_ADDRESS).toSolidityAddress(),
+      deadline: Math.floor(Date.now() / 1000) + 60,
+      amountIn: tradeAmount.toString(),
+      amountOutMinimum: '0' // We could add minimum amount calculation here if needed
+    };
+
+    // Create encoded function calls
+    let encodedCalls: string[];
+    if (orderType === 'buyOrder') {
+      // HBAR to Token: wrap HBAR + swap
+      const wrapEncoded = swapRouterAbi.encodeFunctionData('wrapHBAR');
+      const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
+      encodedCalls = [wrapEncoded, swapEncoded];
+    } else {
+      // Token to HBAR: swap + unwrap
+      const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
+      const unwrapEncoded = swapRouterAbi.encodeFunctionData('unwrapWHBAR', [
+        0, // amount (0 means all)
+        AccountId.fromString(threshold.hederaAccountId).toSolidityAddress()
+      ]);
+      encodedCalls = [swapEncoded, unwrapEncoded];
     }
 
-    // Create path bytes - format: fee (3 bytes) + tokenA (20 bytes) + tokenB (20 bytes)
-    const pathBytes = new Uint8Array(43); // 3 + 20 + 20 bytes
-    const fee = parseInt(threshold.fee.toString());
-    pathBytes[0] = (fee >> 16) & 0xFF;
-    pathBytes[1] = (fee >> 8) & 0xFF;
-    pathBytes[2] = fee & 0xFF;
+    // Encode multicall
+    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [encodedCalls]);
 
-    // Convert token addresses to bytes (removing '0.0.' prefix and padding to 20 bytes)
-    const tokenABytes = Buffer.from(threshold.tokenA.replace('0.0.', '').padStart(40, '0'), 'hex');
-    const tokenBBytes = Buffer.from(threshold.tokenB.replace('0.0.', '').padStart(40, '0'), 'hex');
-    pathBytes.set(tokenABytes, 3);
-    pathBytes.set(tokenBBytes, 23);
+    // Create and execute contract transaction
+    const contractExecuteTx = new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
+      .setGas(5000000)
+      .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
+      .setPayableAmount(orderType === 'buyOrder' ? new Hbar(tradeAmount.toString()) : new Hbar(0))
+      .setTransactionId(TransactionId.generate(threshold.hederaAccountId));
 
-    console.log('Starting trade execution:', {
+    console.log('[executeOrder] Executing transaction:', {
       thresholdId,
       orderType,
       fromToken,
       toToken,
-      tradeAmount: parsedTradeAmount
-    });
-
-    // Add detailed logging before contract execution
-    console.log('[executeOrder] Contract execution parameters:', {
-      thresholdId,
-      orderType,
-      hederaAccountId: threshold.hederaAccountId,
-      tokenA: threshold.tokenA,
-      tokenB: threshold.tokenB,
-      fee: threshold.fee,
       tradeAmount: tradeAmount.toString(),
-      pathBytesHex: Buffer.from(pathBytes).toString('hex')
-    });
-
-    // Create and execute contract transaction
-    const contractExecuteTx = new ContractExecuteTransaction()
-      .setContractId(process.env.CONTRACT_ADDRESS_HEDERA!)
-      .setGas(3000000)
-      .setFunction(
-        "executeTradeForUser",
-        new ContractFunctionParameters()
-          .addString(threshold.hederaAccountId)
-          .addString(orderType)
-          .addBytes(pathBytes)
-      )
-      .setPayableAmount(new Hbar(tradeAmount.toString()));
-
-    console.log('[executeOrder] Executing transaction with params:', {
-      thresholdId,
-      contractId: process.env.CONTRACT_ADDRESS_HEDERA,
-      hederaAccountId: threshold.hederaAccountId,
-      pathBytesLength: pathBytes.length,
-      pathBytesHex: Buffer.from(pathBytes).toString('hex')
+      pathHex: path.toString('hex'),
+      recipient: threshold.hederaAccountId
     });
 
     const txResponse = await contractExecuteTx.execute(client);
