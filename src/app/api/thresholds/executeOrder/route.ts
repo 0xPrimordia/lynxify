@@ -9,18 +9,38 @@ export async function POST(req: NextRequest) {
   let thresholdId: string | null = null;
   const cookieStore = cookies();
   
+  console.log('Received execute order request');
+  
   try {
+    // Log the request headers and body
+    const body = await req.json();
+    console.log('Execute order request details:', {
+      headers: {
+        'x-api-key': req.headers.get('x-api-key')?.substring(0, 4) + '...',
+        'content-type': req.headers.get('content-type'),
+      },
+      body,
+      url: req.url
+    });
+
     // Verify API key
     const apiKey = req.headers.get('x-api-key');
     if (!apiKey || apiKey !== process.env.API_KEY) {
+      console.log('API key verification failed:', { 
+        provided: apiKey?.substring(0, 4) + '...',
+        expected: process.env.API_KEY?.substring(0, 4) + '...' 
+      });
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    const { thresholdId: requestThresholdId, orderType } = await req.json();
+    const { thresholdId: requestThresholdId, orderType } = body;
     thresholdId = requestThresholdId;
+
+    // Log successful API key verification and parsed request
+    console.log('Request validated:', { thresholdId, orderType });
 
     if (!thresholdId || !orderType) {
       return new NextResponse(
