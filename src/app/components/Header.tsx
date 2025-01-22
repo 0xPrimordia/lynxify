@@ -85,19 +85,6 @@ const Header = () => {
                             </Button>
                         ) : (
                             <>
-                                {(!hasAccess && !nftLoading) && (
-                                    <Button 
-                                        className="mr-4"
-                                        variant="bordered"
-                                        style={{
-                                            borderColor: "#0159E0",
-                                            color: "#0159E0"
-                                        }}
-                                        onPress={() => setShowPurchaseModal(true)}
-                                    >
-                                        Get Access
-                                    </Button>
-                                )}
                                 <div className="mr-4 px-4 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center">
                                     <span className="text-[#0159E0] font-bold">
                                         {!isConnected ? (
