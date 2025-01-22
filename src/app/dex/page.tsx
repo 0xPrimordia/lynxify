@@ -1,13 +1,11 @@
 "use client"
 import React, { useState, useEffect, useRef, FocusEvent } from "react";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip } from "@nextui-org/react";
-
 import { useSaucerSwapContext, Token } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import dynamic from 'next/dynamic'
 import { useRouter } from "next/navigation";
 import { useWalletContext } from "../hooks/useWallet";
-import { useNFTGate } from "../hooks/useNFTGate";
 import { Threshold } from "../types";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { 
@@ -48,7 +46,6 @@ export default function DexPage() {
     const router = useRouter();
     const { account, userId, signAndExecuteTransaction } = useWalletContext();
     const { awardXP } = useRewards(userId || undefined, account || undefined);
-    const { hasAccess, isLoading: nftGateLoading } = useNFTGate(account);
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -113,13 +110,6 @@ export default function DexPage() {
             setSellOrderPrice(currentToken.priceUsd.toString());
         }
     }, [currentToken]);
-
-    useEffect(() => {
-        if (nftGateLoading) return; // Only check nftGateLoading
-        if (!account || !hasAccess) {
-            router.push('/');
-        }
-    }, [account, hasAccess, nftGateLoading, router]);
 
     useEffect(() => {
         if(!pools || !currentToken) return;
@@ -761,10 +751,6 @@ export default function DexPage() {
             }
         }
     }, [selectedThresholdType, currentToken]);
-
-    if (nftGateLoading) {
-        return <div>Loading...</div>;
-    }
 
     return (    
         <div className="fixed inset-0 flex flex-col w-full pt-16">
