@@ -57,7 +57,7 @@ const Header = () => {
 
     return ( 
         <>
-            <Navbar maxWidth="full">
+            <Navbar maxWidth="full" className="mb-4">
                 <NavbarBrand>
                     <Link href="/" className="cursor-pointer">
                         <span className="box">

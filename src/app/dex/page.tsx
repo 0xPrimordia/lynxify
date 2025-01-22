@@ -145,12 +145,12 @@ export default function DexPage() {
     useEffect(() => {
         if (!tokens || !tokens.length) return;
         
-        // Find WHBAR token from the loaded tokens using correct ID
-        const whbarToken = tokens.find((token: Token) => token.id === "0.0.15058");
+        // Use WHBAR_ID from constants which should be network-aware
+        const whbarToken = tokens.find((t: Token) => t.id === WHBAR_ID);
         if (whbarToken) {
             setCurrentToken(whbarToken);
         }
-    }, [tokens]); // Only run when tokens are loaded/updated
+    }, [tokens]);
 
     // Helper function to validate and format price
     const formatPrice = (price: number | string | undefined): string => {
