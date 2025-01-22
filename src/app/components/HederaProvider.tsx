@@ -36,7 +36,7 @@ export function HederaProvider({ children }: HederaProviderProps) {
     let state: HashConnectConnectionState = HashConnectConnectionState.Disconnected;
 
     //Create your Hedera Testnet client without an operator
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
 
     async function connectWallet() {
         if(hashConnectInstance && hashConnectInstance.connectedAccountIds.length > 0) {

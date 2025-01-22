@@ -51,7 +51,7 @@ export const WalletContext = createContext<WalletContextType>({
     handleConnect: async () => {},
     handleDisconnectSessions: async () => {},
     signAndExecuteTransaction: async () => {},
-    client: Client.forTestnet(),
+    client: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet(),
     appMetadata,
     sessions: [],
     signers: [],
@@ -134,11 +134,11 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       if (!dAppConnector) {
         const newDAppConnector = new DAppConnector(
           appMetadata,
-          LedgerId.TESTNET,
+          process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET,
           process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
           Object.values(HederaJsonRpcMethod),
           [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged],
-          [HederaChainId.Testnet]
+          [process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet]
         );
 
         await newDAppConnector.init();
@@ -610,7 +610,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         handleConnect,
         handleDisconnectSessions,
         signAndExecuteTransaction,
-        client: Client.forTestnet(),
+        client: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet(),
         appMetadata,
         sessions,
         signers,
