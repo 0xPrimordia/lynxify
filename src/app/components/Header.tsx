@@ -69,6 +69,19 @@ const Header = () => {
                 </NavbarBrand>
                 
                 <NavbarContent justify="end">
+                    <NavbarItem>
+                        <Link 
+                            href="/token" 
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                            <img 
+                                src="/images/lxy.png" 
+                                alt="LXY Token" 
+                                className="w-6 h-6"
+                            />
+                            <span className="text-sm font-medium">LXY</span>
+                        </Link>
+                    </NavbarItem>
                     <NavbarItem className="hidden lg:flex items-center">
                         {!isConnected ? (
                             <Button 
