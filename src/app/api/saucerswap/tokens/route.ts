@@ -1,14 +1,19 @@
+import { NextResponse } from 'next/server';
+
 export async function GET() {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SAUCERSWAP_API}/tokens/known`, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-    });
-    const data = await response.json();
+    const apiUrl = process.env.NEXT_PUBLIC_SAUCERSWAP_API;
     
-    // Filter out tokens that haven't completed due diligence
-    const filteredData = data.filter((token: any) => token.dueDiligenceComplete === true);
-    
-    return Response.json(filteredData)
+    if (!apiUrl) {
+        return NextResponse.json({ error: 'SaucerSwap API URL not configured' }, { status: 500 });
+    }
+
+    try {
+        const response = await fetch(`${apiUrl}/tokens/known`);
+        const data = await response.json();
+        return NextResponse.json(data);
+    } catch (error) {
+        return NextResponse.json({ error: 'Failed to fetch tokens' }, { status: 500 });
+    }
 }
+
+export const dynamic = 'force-dynamic';
