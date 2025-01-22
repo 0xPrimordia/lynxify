@@ -38,14 +38,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
-      name: "HederaEthereumMapping",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.HederaEthereumMapping__factory>;
-    getContractFactory(
-      name: "LiquidityStaking",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.LiquidityStaking__factory>;
-    getContractFactory(
       name: "NFTSale",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.NFTSale__factory>;
@@ -93,16 +85,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
-      name: "HederaEthereumMapping",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.HederaEthereumMapping>;
-    getContractAt(
-      name: "LiquidityStaking",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.LiquidityStaking>;
-    getContractAt(
       name: "NFTSale",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -147,14 +129,6 @@ declare module "hardhat/types/runtime" {
       name: "IERC165",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
-    deployContract(
-      name: "HederaEthereumMapping",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.HederaEthereumMapping>;
-    deployContract(
-      name: "LiquidityStaking",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.LiquidityStaking>;
     deployContract(
       name: "NFTSale",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -202,16 +176,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
-    deployContract(
-      name: "HederaEthereumMapping",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.HederaEthereumMapping>;
-    deployContract(
-      name: "LiquidityStaking",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.LiquidityStaking>;
     deployContract(
       name: "NFTSale",
       args: any[],

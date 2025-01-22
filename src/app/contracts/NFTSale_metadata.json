@@ -27,6 +27,25 @@
 					{
 						"indexed": true,
 						"internalType": "address",
+						"name": "owner",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"name": "ContractReset",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
 						"name": "buyer",
 						"type": "address"
 					},
@@ -38,6 +57,25 @@
 					}
 				],
 				"name": "NFTSold",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "PaymentForwarded",
 				"type": "event"
 			},
 			{
@@ -60,36 +98,17 @@
 				"type": "event"
 			},
 			{
-				"anonymous": false,
 				"inputs": [
 					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "buyer",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "value",
-						"type": "uint256"
+						"internalType": "address[]",
+						"name": "recipients",
+						"type": "address[]"
 					}
 				],
-				"name": "PurchaseInitiated",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": false,
-						"internalType": "int64",
-						"name": "responseCode",
-						"type": "int64"
-					}
-				],
-				"name": "TransferResponse",
-				"type": "event"
+				"name": "batchGiveawayNFTs",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
 			},
 			{
 				"inputs": [],
@@ -102,6 +121,48 @@
 					}
 				],
 				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "buyer",
+						"type": "address"
+					}
+				],
+				"name": "getPurchaseState",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "purchased",
+						"type": "bool"
+					},
+					{
+						"internalType": "uint256",
+						"name": "nextToken",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "remaining",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "recipient",
+						"type": "address"
+					}
+				],
+				"name": "giveawayNFT",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -171,6 +232,13 @@
 			},
 			{
 				"inputs": [],
+				"name": "resetContract",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
 				"name": "soldSupply",
 				"outputs": [
 					{
@@ -222,7 +290,7 @@
 	},
 	"settings": {
 		"compilationTarget": {
-			"contracts/lynxify.sol": "NFTSale"
+			"contracts/NFTSale.sol": "NFTSale"
 		},
 		"evmVersion": "cancun",
 		"libraries": {},
@@ -236,12 +304,12 @@
 		"remappings": []
 	},
 	"sources": {
-		"contracts/lynxify.sol": {
-			"keccak256": "0x98953f8593c87be2dfdfe1d15279b5c0cfc7f5f89c180a2c8a82fbcc99b4500f",
+		"contracts/NFTSale.sol": {
+			"keccak256": "0x80e558cbbd2da9fb5d3a25c9a625fea7db1143180d0c6b51abea7b9584b4523f",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://4a5109335dd8ad461ca14c1e6c0a4ef6d7318c7b9abb2b1a895cdce6d5001174",
-				"dweb:/ipfs/QmerZqsJd41SosieQZZaZfG1qvk7DKCUnxLpT2RYAecFJj"
+				"bzz-raw://a152f065a28ec132c321fa59fa4b8d4cca525c246a3afb07223a0e5b5c9a3e8f",
+				"dweb:/ipfs/QmY1e64p4PEfc6f4HcGxtAkEfvV7ABSDKd2PEkePc1vw5Y"
 			]
 		}
 	},

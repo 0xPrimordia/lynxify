@@ -10,63 +10,52 @@ import {
     Hbar
 } from "@hashgraph/sdk";
 import * as fs from "fs";
-import dotenv from "dotenv";
-import path from "path";
 
-dotenv.config({ path: '.env.local' });
+type NFTSaleParams = (operatorId: string, tokenId: string) => ContractFunctionParameters;
+type UserThresholdsParams = (operatorId: string) => ContractFunctionParameters;
 
-async function updateEnvFile(contractId: string, evmAddress: string) {
-    const envPath = path.join(process.cwd(), '.env.local');
-    let envContent = fs.readFileSync(envPath, 'utf-8');
-
-    // Update or add the contract addresses
-    const updates = {
-        'NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS': contractId,
-        'NEXT_PUBLIC_NFT_SALE_CONTRACT_EVM_ADDRESS': evmAddress
-    };
-
-    for (const [key, value] of Object.entries(updates)) {
-        const regex = new RegExp(`^${key}=.*$`, 'm');
-        if (envContent.match(regex)) {
-            // Update existing value
-            envContent = envContent.replace(regex, `${key}=${value}`);
-        } else {
-            // Add new value
-            envContent += `\n${key}=${value}`;
-        }
+// Contract configurations
+const CONTRACTS = {
+    NFTSale: {
+        path: "./artifacts/src/app/contracts/NFTSale.sol/NFTSale.json",
+        constructorParams: ((operatorId: string, tokenId: string) => 
+            new ContractFunctionParameters()
+                .addAddress(AccountId.fromString(tokenId).toSolidityAddress())
+                .addAddress(AccountId.fromString(operatorId).toSolidityAddress())
+        ) as NFTSaleParams
+    },
+    UserThresholds: {
+        path: "./artifacts/src/app/contracts/userThreshold.sol/userThreshold.json",
+        constructorParams: ((operatorId: string) => 
+            new ContractFunctionParameters()
+                .addAddress(AccountId.fromString(operatorId).toSolidityAddress())
+        ) as UserThresholdsParams
     }
+};
 
-    fs.writeFileSync(envPath, envContent);
-    console.log('Updated .env.local with new contract addresses');
-}
+type ContractType = keyof typeof CONTRACTS;
+type ContractConfig = {
+    path: string;
+    constructorParams: NFTSaleParams | UserThresholdsParams;
+};
 
-async function main() {
-    // Get environment variables
-    const operatorId = process.env.NEXT_PUBLIC_OPERATOR_ID;
-    const operatorKey = process.env.OPERATOR_KEY;
-    const tokenId = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
-
-    if (!operatorId || !operatorKey || !tokenId) {
-        throw new Error("Environment variables must be present");
-    }
-
-    // Create client
-    const client = Client.forTestnet();
-    client.setOperator(
-        AccountId.fromString(operatorId),
-        PrivateKey.fromString(operatorKey)
-    );
-
-    console.log("Deploying with parameters:", {
-        tokenId,
-        treasury: operatorId
-    });
-
+async function deployContract(
+    client: Client, 
+    operatorKey: string, 
+    contractConfig: ContractConfig,
+    params: string[]
+) {
     // Read contract bytecode
-    const bytecode = fs.readFileSync("artifacts/src/app/contracts/NFTSale.sol/NFTSale.json");
+    console.log("Reading contract from path:", contractConfig.path);
+    const bytecode = fs.readFileSync(contractConfig.path);
     const contract = JSON.parse(bytecode.toString());
+    
+    // Get the bytecode from the correct location in the JSON structure
+    const contractBytecode = contract.bytecode;
+    if (!contractBytecode) {
+        throw new Error(`No bytecode found in contract JSON at ${contractConfig.path}`);
+    }
 
-    // Create contract file
     console.log("Creating contract file...");
     const fileCreateTx = new FileCreateTransaction()
         .setKeys([PrivateKey.fromString(operatorKey)])
@@ -80,7 +69,7 @@ async function main() {
     // Append contract bytecode
     const fileAppendTx = new FileAppendTransaction()
         .setFileId(bytecodeFileId!)
-        .setContents(contract.bytecode)
+        .setContents(contractBytecode)
         .setMaxChunks(10)
         .freezeWith(client);
     const fileAppendSign = await fileAppendTx.sign(PrivateKey.fromString(operatorKey));
@@ -90,29 +79,60 @@ async function main() {
 
     // Deploy contract
     console.log("Creating contract...");
+    const constructorParams = params.length === 2 
+        ? (contractConfig.constructorParams as NFTSaleParams)(params[0], params[1])
+        : (contractConfig.constructorParams as UserThresholdsParams)(params[0]);
+
     const contractTx = new ContractCreateTransaction()
         .setBytecodeFileId(bytecodeFileId!)
         .setGas(3000000)
-        .setConstructorParameters(
-            new ContractFunctionParameters()
-                .addAddress(AccountId.fromString(tokenId).toSolidityAddress())
-                .addAddress(AccountId.fromString(operatorId).toSolidityAddress())
-        );
+        .setConstructorParameters(constructorParams);
 
     const contractResponse = await contractTx.execute(client);
     const contractReceipt = await contractResponse.getReceipt(client);
-    const contractId = contractReceipt.contractId;
-    console.log("- Contract created:", contractId?.toString());
+    return contractReceipt.contractId;
+}
 
-    // Get EVM address
-    const evmAddress = contractId?.toSolidityAddress();
+async function main() {
+    // Get command line arguments
+    const contractType = process.argv[2] as ContractType;
+    const network = process.argv[3] || 'testnet';
+    const operatorId = process.argv[4];
+    const operatorKey = process.argv[5];
+    const tokenId = process.argv[6]; // Only needed for NFTSale
 
-    // After successful deployment, update .env.local
-    if (contractId && evmAddress) {
-        await updateEnvFile(contractId.toString(), evmAddress);
+    if (!contractType || !operatorId || !operatorKey || (contractType === 'NFTSale' && !tokenId)) {
+        console.log(`
+Usage: 
+  NFTSale: npm run deploy NFTSale <network> <operatorId> <operatorKey> <tokenId>
+  UserThresholds: npm run deploy UserThresholds <network> <operatorId> <operatorKey>
+        `);
+        process.exit(1);
     }
 
-    console.log("Contract addresses:", {
+    if (!CONTRACTS[contractType]) {
+        throw new Error(`Invalid contract type. Must be one of: ${Object.keys(CONTRACTS).join(', ')}`);
+    }
+
+    // Create client
+    const client = network === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
+    client.setOperator(
+        AccountId.fromString(operatorId),
+        PrivateKey.fromString(operatorKey)
+    );
+
+    console.log(`Deploying ${contractType} to ${network} with parameters:`, {
+        operatorId,
+        ...(contractType === 'NFTSale' && { tokenId })
+    });
+
+    const contractConfig = CONTRACTS[contractType];
+    const params = contractType === 'NFTSale' ? [operatorId, tokenId!] : [operatorId];
+    
+    const contractId = await deployContract(client, operatorKey, contractConfig, params);
+    const evmAddress = contractId?.toSolidityAddress();
+
+    console.log(`${contractType} contract addresses:`, {
         hedera: contractId?.toString(),
         evm: evmAddress
     });
