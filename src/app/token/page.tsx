@@ -1,3 +1,4 @@
+"use client"
 import { Button, Card } from "@nextui-org/react";
 import Link from "next/link";
 import { Inria_Serif } from "next/font/google";
