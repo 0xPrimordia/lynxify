@@ -78,7 +78,7 @@ export default function TokenPage() {
             <Card className="max-w-3xl p-8">
                 <h2 className="text-2xl font-semibold mb-4">Early Access Coming Soon</h2>
                 <p className="text-lg mb-4">
-                    As a Lynxify Members NFT holder, you'll get exclusive early access to:
+                    As a Lynxify Members NFT holder, you&apos;ll get exclusive early access to:
                 </p>
                 <ul className="text-left list-disc list-inside mb-6 space-y-2">
                     <li>LXY Token Governance</li>
