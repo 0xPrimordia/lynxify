@@ -26,8 +26,11 @@ import type {
 export interface NFTSaleInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "PRICE_INCREASE"
+      | "batchGiveawayNFTs"
       | "currentTokenId"
       | "getPurchaseState"
+      | "giveawayNFT"
       | "hasPurchased"
       | "maxSupply"
       | "owner"
@@ -43,20 +46,34 @@ export interface NFTSaleInterface extends Interface {
     nameOrSignatureOrTopic:
       | "ContractReset"
       | "Debug"
+      | "NFTGivenAway"
       | "NFTSold"
       | "PaymentDebug"
       | "PaymentForwarded"
       | "PaymentReceived"
+      | "PriceUpdated"
       | "PurchaseInitiated"
       | "StateChange"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "PRICE_INCREASE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "batchGiveawayNFTs",
+    values: [AddressLike[]]
+  ): string;
   encodeFunctionData(
     functionFragment: "currentTokenId",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "getPurchaseState",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "giveawayNFT",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
@@ -85,11 +102,23 @@ export interface NFTSaleInterface extends Interface {
   encodeFunctionData(functionFragment: "treasury", values?: undefined): string;
 
   decodeFunctionResult(
+    functionFragment: "PRICE_INCREASE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "batchGiveawayNFTs",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "currentTokenId",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "getPurchaseState",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "giveawayNFT",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -139,6 +168,19 @@ export namespace DebugEvent {
     message: string;
     sender: string;
     value: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace NFTGivenAwayEvent {
+  export type InputTuple = [recipient: AddressLike, serialNumber: BigNumberish];
+  export type OutputTuple = [recipient: string, serialNumber: bigint];
+  export interface OutputObject {
+    recipient: string;
+    serialNumber: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -203,6 +245,19 @@ export namespace PaymentReceivedEvent {
   export interface OutputObject {
     from: string;
     amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PriceUpdatedEvent {
+  export type InputTuple = [oldPrice: BigNumberish, newPrice: BigNumberish];
+  export type OutputTuple = [oldPrice: bigint, newPrice: bigint];
+  export interface OutputObject {
+    oldPrice: bigint;
+    newPrice: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -288,18 +343,33 @@ export interface NFTSale extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  PRICE_INCREASE: TypedContractMethod<[], [bigint], "view">;
+
+  batchGiveawayNFTs: TypedContractMethod<
+    [recipients: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
   currentTokenId: TypedContractMethod<[], [bigint], "view">;
 
   getPurchaseState: TypedContractMethod<
     [buyer: AddressLike],
     [
-      [boolean, bigint, bigint] & {
+      [boolean, bigint, bigint, bigint] & {
         purchased: boolean;
         nextToken: bigint;
         remaining: bigint;
+        currentPrice: bigint;
       }
     ],
     "view"
+  >;
+
+  giveawayNFT: TypedContractMethod<
+    [recipient: AddressLike],
+    [void],
+    "nonpayable"
   >;
 
   hasPurchased: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
@@ -325,6 +395,12 @@ export interface NFTSale extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "PRICE_INCREASE"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "batchGiveawayNFTs"
+  ): TypedContractMethod<[recipients: AddressLike[]], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "currentTokenId"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -332,14 +408,18 @@ export interface NFTSale extends BaseContract {
   ): TypedContractMethod<
     [buyer: AddressLike],
     [
-      [boolean, bigint, bigint] & {
+      [boolean, bigint, bigint, bigint] & {
         purchased: boolean;
         nextToken: bigint;
         remaining: bigint;
+        currentPrice: bigint;
       }
     ],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "giveawayNFT"
+  ): TypedContractMethod<[recipient: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "hasPurchased"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
@@ -383,6 +463,13 @@ export interface NFTSale extends BaseContract {
     DebugEvent.OutputObject
   >;
   getEvent(
+    key: "NFTGivenAway"
+  ): TypedContractEvent<
+    NFTGivenAwayEvent.InputTuple,
+    NFTGivenAwayEvent.OutputTuple,
+    NFTGivenAwayEvent.OutputObject
+  >;
+  getEvent(
     key: "NFTSold"
   ): TypedContractEvent<
     NFTSoldEvent.InputTuple,
@@ -409,6 +496,13 @@ export interface NFTSale extends BaseContract {
     PaymentReceivedEvent.InputTuple,
     PaymentReceivedEvent.OutputTuple,
     PaymentReceivedEvent.OutputObject
+  >;
+  getEvent(
+    key: "PriceUpdated"
+  ): TypedContractEvent<
+    PriceUpdatedEvent.InputTuple,
+    PriceUpdatedEvent.OutputTuple,
+    PriceUpdatedEvent.OutputObject
   >;
   getEvent(
     key: "PurchaseInitiated"
@@ -446,6 +540,17 @@ export interface NFTSale extends BaseContract {
       DebugEvent.InputTuple,
       DebugEvent.OutputTuple,
       DebugEvent.OutputObject
+    >;
+
+    "NFTGivenAway(address,uint256)": TypedContractEvent<
+      NFTGivenAwayEvent.InputTuple,
+      NFTGivenAwayEvent.OutputTuple,
+      NFTGivenAwayEvent.OutputObject
+    >;
+    NFTGivenAway: TypedContractEvent<
+      NFTGivenAwayEvent.InputTuple,
+      NFTGivenAwayEvent.OutputTuple,
+      NFTGivenAwayEvent.OutputObject
     >;
 
     "NFTSold(address,uint256)": TypedContractEvent<
@@ -490,6 +595,17 @@ export interface NFTSale extends BaseContract {
       PaymentReceivedEvent.InputTuple,
       PaymentReceivedEvent.OutputTuple,
       PaymentReceivedEvent.OutputObject
+    >;
+
+    "PriceUpdated(uint256,uint256)": TypedContractEvent<
+      PriceUpdatedEvent.InputTuple,
+      PriceUpdatedEvent.OutputTuple,
+      PriceUpdatedEvent.OutputObject
+    >;
+    PriceUpdated: TypedContractEvent<
+      PriceUpdatedEvent.InputTuple,
+      PriceUpdatedEvent.OutputTuple,
+      PriceUpdatedEvent.OutputObject
     >;
 
     "PurchaseInitiated(address,uint256)": TypedContractEvent<

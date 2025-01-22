@@ -71,6 +71,7 @@ export type Threshold = {
     lastExecutedAt: string;
     txHash: string;
     slippageBasisPoints: number;
+    testnet: boolean;
 }
 
 export type User = {

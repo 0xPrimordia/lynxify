@@ -44,9 +44,14 @@ const LandingPage = () => {
     useEffect(() => {
         const fetchNFTCount = async () => {
             try {
+                const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet';
+                const mirrorNodeUrl = network === 'mainnet' 
+                    ? 'https://mainnet-public.mirrornode.hedera.com'
+                    : 'https://testnet.mirrornode.hedera.com';
+
                 // Get NFTs held by the treasury/operator with total count
                 const response = await fetch(
-                    `https://testnet.mirrornode.hedera.com/api/v1/tokens/${NFT_TOKEN_ID}/balances?account.id=${process.env.NEXT_PUBLIC_OPERATOR_ID}`
+                    `${mirrorNodeUrl}/api/v1/tokens/${NFT_TOKEN_ID}/balances?account.id=${process.env.NEXT_PUBLIC_OPERATOR_ID}`
                 );
                 
                 if (!response.ok) {

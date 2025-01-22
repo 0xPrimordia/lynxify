@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
         slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
         isActive: false,
         status: 'pending',
+        testnet: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet',
         createdAt: new Date().toISOString(),
         lastChecked: new Date().toISOString(),
         lastExecutedAt: new Date().toISOString(),
