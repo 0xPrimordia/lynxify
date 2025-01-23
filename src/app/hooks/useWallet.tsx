@@ -132,13 +132,21 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       const storedSession = getStoredSession();
       
       if (!dAppConnector) {
+        const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+        const chainId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet;
+        const ledgerId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
+        
+        const methods = Object.values(HederaJsonRpcMethod);
+        const events = [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged];
+        const chains = [`hedera:${network}`];
+
         const newDAppConnector = new DAppConnector(
           appMetadata,
-          process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET,
+          ledgerId,
           process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
-          Object.values(HederaJsonRpcMethod),
-          [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged],
-          [process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet]
+          methods,
+          events,
+          [chainId]
         );
 
         await newDAppConnector.init();
