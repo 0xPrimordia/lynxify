@@ -1,6 +1,6 @@
 "use client";
 import { VT323 } from "next/font/google";
-import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
+import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useNFTGate } from "../hooks/useNFTGate";
 import { useRewards } from "../hooks/useRewards";
@@ -14,12 +14,11 @@ const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 const Header = () => {
     const { handleConnect, dAppConnector, sessions, account, client, userId, handleDisconnect } = useWalletContext();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
-    const { achievements, isLoading: rewardsLoading, isInitializing } = useRewards(userId || undefined, account || undefined);
+    const { fetchAchievements, totalXP } = useRewards();
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [balance, setBalance] = useState<string>("0");
-
-    const totalXP = achievements?.reduce((sum, achievement) => sum + achievement.xp_awarded, 0) ?? 0;
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     useEffect(() => {
         if (account !== "") {
@@ -51,13 +50,28 @@ const Header = () => {
         }
     }, [account, client]);
 
+    useEffect(() => {
+        if (userId && account) {
+            fetchAchievements(userId, account);
+        }
+    }, [userId, account, fetchAchievements]);
+
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);
     };
 
     return ( 
         <>
-            <Navbar maxWidth="full" className="mb-4">
+            <Navbar 
+                maxWidth="full" 
+                className="mb-4"
+                isMenuOpen={isMenuOpen}
+                onMenuOpenChange={setIsMenuOpen}
+            >
+                <NavbarContent className="sm:hidden" justify="start">
+                    <NavbarMenuToggle />
+                </NavbarContent>
+
                 <NavbarBrand>
                     <Link href="/" className="cursor-pointer">
                         <span className="box">
@@ -68,25 +82,34 @@ const Header = () => {
                     </Link>
                 </NavbarBrand>
                 
-                <NavbarContent justify="end">
+                {/* Desktop Menu */}
+                <NavbarContent className="hidden sm:flex" justify="end">
                     <NavbarItem>
                         <Link 
                             href="/token" 
                             className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
-                            <img 
-                                src="/images/lxy.png" 
-                                alt="LXY Token" 
-                                className="w-6 h-6"
-                            />
+                            <img src="/images/lxy.png" alt="LXY Token" className="w-6 h-6" />
                             <span className="text-sm font-medium">LXY</span>
                         </Link>
                     </NavbarItem>
-                    <NavbarItem className="hidden lg:flex items-center">
+
+                    {isConnected && (
+                        <NavbarItem className="flex items-center">
+                            <div className="px-3 py-1 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center">
+                                <span className="text-[#0159E0] font-bold text-sm">
+                                    {totalXP} XP
+                                </span>
+                            </div>
+                        </NavbarItem>
+                    )}
+
+                    <NavbarItem>
                         {!isConnected ? (
                             <Button 
                                 className="mt-0" 
                                 variant="bordered"
+                                size="sm"
                                 style={{
                                     backgroundColor: "white",
                                     color: "black",
@@ -97,45 +120,93 @@ const Header = () => {
                                 Connect Wallet
                             </Button>
                         ) : (
-                            <>
-                                <div className="mr-4 px-4 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center">
-                                    <span className="text-[#0159E0] font-bold">
-                                        {!isConnected ? (
-                                            "Connect Wallet"
-                                        ) : rewardsLoading ? (
-                                            "Loading XP..."
-                                        ) : (
-                                            `${totalXP} XP`
-                                        )}
-                                    </span>
-                                </div>
-                                <Dropdown>
-                                    <DropdownTrigger>
-                                        <Button variant="light" className="text-sm">
-                                            {balance}
-                                            <img 
-                                                style={{width:"30px", display:"inline-block", marginRight: "8px", marginLeft: "-4px"}} 
-                                                src="/images/hedera-hbar-logo.png" 
-                                                alt="Hedera Logo"
-                                            />
-                                            {account}
-                                        </Button>
-                                    </DropdownTrigger>
-                                    <DropdownMenu aria-label="Account Actions">
-                                        <DropdownItem 
-                                            key="logout" 
-                                            className="text-danger" 
-                                            color="danger" 
-                                            onPress={handleDisconnect}
-                                        >
-                                            Sign Out
-                                        </DropdownItem>
-                                    </DropdownMenu>
-                                </Dropdown>
-                            </>
+                            <Dropdown>
+                                <DropdownTrigger>
+                                    <Button variant="light" size="sm" className="text-sm">
+                                        {balance} ℏ
+                                    </Button>
+                                </DropdownTrigger>
+                                <DropdownMenu aria-label="Account Actions">
+                                    <DropdownItem key="account" className="text-sm">
+                                        {account}
+                                    </DropdownItem>
+                                    <DropdownItem 
+                                        key="logout" 
+                                        className="text-danger" 
+                                        color="danger" 
+                                        onPress={handleDisconnect}
+                                    >
+                                        Sign Out
+                                    </DropdownItem>
+                                </DropdownMenu>
+                            </Dropdown>
                         )}
                     </NavbarItem>
                 </NavbarContent>
+
+                {/* Mobile Menu Button - Always visible on mobile */}
+                <NavbarContent className="sm:hidden" justify="end">
+                    {!isConnected ? (
+                        <Button 
+                            size="sm"
+                            variant="bordered"
+                            onPress={() => handleConnect()}
+                        >
+                            Connect
+                        </Button>
+                    ) : (
+                        <Button 
+                            variant="light" 
+                            size="sm"
+                            className="text-sm"
+                        >
+                            {balance} ℏ
+                        </Button>
+                    )}
+                </NavbarContent>
+
+                {/* Mobile Menu */}
+                <NavbarMenu>
+                    {isConnected && (
+                        <NavbarMenuItem className="mb-4">
+                            <div className="px-3 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center justify-between w-full">
+                                <span className="text-[#0159E0] font-bold">
+                                    {totalXP} XP
+                                </span>
+                            </div>
+                        </NavbarMenuItem>
+                    )}
+                    
+                    <NavbarMenuItem>
+                        <Link 
+                            href="/token" 
+                            className="flex items-center gap-2 py-2 w-full"
+                        >
+                            <img src="/images/lxy.png" alt="LXY Token" className="w-6 h-6" />
+                            <span>LXY Token</span>
+                        </Link>
+                    </NavbarMenuItem>
+
+                    {isConnected && (
+                        <>
+                            <NavbarMenuItem className="py-2">
+                                <div className="text-sm text-foreground-500">
+                                    Account: {account}
+                                </div>
+                            </NavbarMenuItem>
+                            <NavbarMenuItem>
+                                <Button 
+                                    color="danger" 
+                                    variant="flat" 
+                                    onPress={handleDisconnect}
+                                    className="w-full"
+                                >
+                                    Sign Out
+                                </Button>
+                            </NavbarMenuItem>
+                        </>
+                    )}
+                </NavbarMenu>
             </Navbar>
 
             <Modal 
