@@ -2,7 +2,7 @@ import React from 'react';
 import { Input, Button, Select, SelectItem, Chip } from "@nextui-org/react";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import Image from 'next/image';
-import { Token } from "../hooks/useTokens";
+import { Token } from "@/app/types";
 import { ThresholdSlippageSelector } from './ThresholdSlippageSelector';
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
