@@ -1,19 +1,8 @@
 "use client";
 import { ReactNode, createContext, useContext, useState, useEffect } from "react"
+import { Token } from "@/app/types"
 
 const SaucerSwapContext = createContext<any>({});
-
-export type Token = {
-    decimals: number;
-    dueDiligenceComplete: boolean;
-    icon: string;
-    id: string;
-    name: string;
-    price: string;
-    priceUsd: number;
-    symbol: string;
-    isFeeOnTransferToken: boolean;
-}
 
 interface Props {
     children: ReactNode

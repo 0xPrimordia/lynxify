@@ -74,6 +74,18 @@ export type Threshold = {
     testnet: boolean;
 }
 
+export type Token = {
+    decimals: number;
+    dueDiligenceComplete: boolean;
+    icon: string;
+    id: string;
+    name: string;
+    price: string;
+    priceUsd: number;
+    symbol: string;
+    isFeeOnTransferToken: boolean;
+}
+
 export type User = {
     id: string;
     hederaAccountId: string;
