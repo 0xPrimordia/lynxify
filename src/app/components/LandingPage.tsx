@@ -20,7 +20,7 @@ const LandingPage = () => {
     const [nftCount, setNftCount] = useState<number>(0);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
     const { account, client, userId } = useWalletContext();
-    const { awardXP } = useRewards(userId || undefined, account || undefined);
+    const { awardXP } = useRewards();
     const { hasAccess } = useNFTGate(account);
     const NFT_TOKEN_ID = process.env.NEXT_PUBLIC_NFT_TOKEN_ID;
     const searchParams = useSearchParams();
@@ -32,8 +32,8 @@ const LandingPage = () => {
     }, [searchParams]);
 
     useEffect(() => {
-        if (account) {
-            awardXP('CONNECT_WALLET');
+        if (account && userId) {
+            awardXP(userId, account, 'CONNECT_WALLET');
         }
     }, [account, awardXP]);
 

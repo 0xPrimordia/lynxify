@@ -114,7 +114,7 @@ function PurchaseNFT({
     client: Client
 }) {
     const { account, signAndExecuteTransaction, dAppConnector, userId } = useWalletContext();
-    const { awardXP } = useRewards(userId || undefined, account || undefined);
+    const { awardXP } = useRewards();
     const [status, setStatus] = useState("");
     const [isAwarding, setIsAwarding] = useState(false);
     const contractAddress = process.env.NEXT_PUBLIC_NFT_SALE_CONTRACT_ADDRESS;

@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect, useRef, FocusEvent } from "react";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip } from "@nextui-org/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip, Button } from "@nextui-org/react";
 import { useSaucerSwapContext } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import dynamic from 'next/dynamic'
@@ -19,33 +19,24 @@ import {
 import { ethers } from 'ethers';
 import TestnetAlert from "../components/TestnetAlert";
 import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
-import { Button } from '@nextui-org/react';
-import { WHBAR_ID } from "../lib/constants";
-import { ThresholdSection } from '../components/ThresholdSection';
-import { getTokenImageUrl } from '@/app/lib/utils/tokens';
-import { Pool, ApiToken, Token } from '@/app/types';
-
-// Dynamically import components that use window
-const TokenPriceChart = dynamic(
-    () => import('../components/TokenPriceChart'),
-    { ssr: false }
-);
-
-const ApexChart = dynamic(
-    () => import('../components/ApexChart'),
-    { ssr: false }
-);
-
-import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import { ArrowsRightLeftIcon } from "@heroicons/react/16/solid";
 import { usePoolContext } from "../hooks/usePools";
 import { useRewards } from "../hooks/useRewards";
 import { CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
+import { Pool, ApiToken, Token } from '../types';
+import { WHBAR_ID } from "../lib/constants";
+import { getTokenImageUrl } from '../lib/utils/tokens';
+import { ThresholdSection } from '../components/ThresholdSection';
+const ApexChart = dynamic(
+    () => import('../components/ApexChart'),
+    { ssr: false }
+);
   
 export default function DexPage() {
     const router = useRouter();
     const { account, userId, signAndExecuteTransaction } = useWalletContext();
-    const { awardXP } = useRewards(userId || undefined, account || undefined);
+    const { awardXP } = useRewards();
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -103,6 +94,7 @@ export default function DexPage() {
     const [buyOrderSlippage, setBuyOrderSlippage] = useState<number>(0.5);
     const [sellOrderSlippage, setSellOrderSlippage] = useState<number>(0.5);
     const [selectedThresholdType, setSelectedThresholdType] = useState<'stopLoss' | 'buyOrder' | 'sellOrder' | null>(null);
+    const [isChartCollapsed, setIsChartCollapsed] = useState(true);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -153,8 +145,6 @@ export default function DexPage() {
         
         // Use WHBAR_ID from constants
         const whbarToken = tokens.find((t: Token) => t.id === WHBAR_ID);
-        console.log('WHBAR_ID being searched for:', WHBAR_ID);
-        console.log('Found WHBAR token:', whbarToken);
         
         if (whbarToken) {
             setCurrentToken(whbarToken);
@@ -273,7 +263,9 @@ export default function DexPage() {
 
                 if (result.type === "swap") {
                     try {
-                        await awardXP('FIRST_TRADE');
+                        if (userId && account) {
+                            await awardXP(userId, account, 'FIRST_TRADE');
+                        }
                     } catch (error) {
                         console.error('Failed to award XP for first trade:', error);
                     }
@@ -768,107 +760,124 @@ export default function DexPage() {
             <div className="relative">
                 <TestnetAlert />
             </div>
-            <div className="flex flex-1 overflow-hidden pl-8">
-                {/* Left side - Chart */}
-                <div className="w-[70%] pr-8">
-                    <Tabs 
-                        aria-label="section" 
-                        selectedKey={selectedSection} 
-                        onSelectionChange={(key) => setSelectedSection(key.toString())}
-                    >
-                        <Tab key="chart" title='Price Chart'>
-                            <div className="w-full h-[calc(100vh-120px)]">
-                                {error ? (
-                                    <div className="flex justify-center items-center h-full">
-                                        <p>Error loading chart data</p>
-                                    </div>
-                                ) : (
-                                    <ApexChart data={data || []} />
-                                )}
-                            </div>
-                        </Tab>
-                        <Tab key="thresholds" title='Thresholds'>
-                            <div className="h-[calc(100vh-120px)] overflow-y-auto">
-                                <div className="pb-24">
-                                    {thresholds.length > 0 ? (
-                                        <Table aria-label="Active thresholds">
-                                            <TableHeader>
-                                                <TableColumn>Threshold Type</TableColumn>
-                                                <TableColumn>Token A</TableColumn>
-                                                <TableColumn>Token B</TableColumn>
-                                                <TableColumn>Fee</TableColumn>
-                                                <TableColumn>Price</TableColumn>
-                                                <TableColumn>Cap</TableColumn>
-                                                <TableColumn>Status</TableColumn>
-                                                <TableColumn>Actions</TableColumn>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {thresholds.map((threshold: Threshold) => (
-                                                    <TableRow key={threshold.id}>
-                                                        <TableCell>{threshold.type}</TableCell>
-                                                        <TableCell>
-                                                            <Image 
-                                                                src={getTokenImageUrl(getTokenIcon(threshold.tokenA))}
-                                                                alt={`Token A icon for ${threshold.tokenA}`}
-                                                                width={30}
-                                                                height={30}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Image 
-                                                                src={getTokenImageUrl(getTokenIcon(threshold.tokenB))}
-                                                                alt={`Token B icon for ${threshold.tokenB}`}
-                                                                width={30}
-                                                                height={30}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell>{threshold.fee / 10_000.0}%</TableCell>
-                                                        <TableCell>${threshold.price}</TableCell>
-                                                        <TableCell>{threshold.cap}</TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-1">
-                                                                {threshold.status === 'executed' && (
-                                                                    <CheckCircleIcon className="w-5 h-5 text-success" />
-                                                                )}
-                                                                {threshold.status === 'failed' && (
-                                                                    <Tooltip 
-                                                                        content="Transaction failed. This usually happens when there are insufficient funds in your wallet."
-                                                                        className="max-w-xs"
-                                                                    >
-                                                                        <div className="flex items-center gap-1">
-                                                                            <XCircleIcon className="w-5 h-5 text-danger" />
-                                                                            <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
-                                                                        </div>
-                                                                    </Tooltip>
-                                                                )}
-                                                                {threshold.status === 'pending' && (
-                                                                    <span className="text-default-500">Pending</span>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Button 
-                                                                onPress={() => deleteThreshold(threshold.id)}
-                                                                aria-label={`Delete ${threshold.type} threshold for ${threshold.tokenA}-${threshold.tokenB}`}
-                                                            >
-                                                                Delete
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
+            <div className="flex flex-col lg:flex-row overflow-hidden pl-0 lg:pl-8">
+                <div className="w-full lg:w-[70%] order-2 lg:order-1 px-4 lg:pr-8">
+                    <div className="lg:hidden">
+                        <Button
+                            variant="light"
+                            className="w-full mb-2 flex items-center justify-center"
+                            onPress={() => setIsChartCollapsed(!isChartCollapsed)}
+                        >
+                            {isChartCollapsed ? (
+                                <>
+                                    Show Chart <ChevronDownIcon className="w-4 h-4 ml-2" />
+                                </>
+                            ) : (
+                                <>
+                                    Hide Chart <ChevronUpIcon className="w-4 h-4 ml-2" />
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                    <div className={`${isChartCollapsed ? 'h-0 lg:h-[calc(100vh-120px)]' : 'h-[500px] lg:h-[calc(100vh-120px)]'} transition-all duration-300`}>
+                        <Tabs 
+                            aria-label="section" 
+                            selectedKey={selectedSection} 
+                            onSelectionChange={(key) => setSelectedSection(key.toString())}
+                        >
+                            <Tab key="chart" title='Price Chart'>
+                                <div className="w-full h-full">
+                                    {error ? (
+                                        <div className="flex justify-center items-center h-full">
+                                            <p>Error loading chart data</p>
+                                        </div>
                                     ) : (
-                                        <div>No thresholds found</div>
+                                        <ApexChart data={data || []} />
                                     )}
                                 </div>
-                            </div>
-                        </Tab>
-                    </Tabs>
+                            </Tab>
+                            <Tab key="thresholds" title='Thresholds'>
+                                <div className="h-full overflow-y-auto">
+                                    <div className="pb-24">
+                                        {thresholds.length > 0 ? (
+                                            <Table aria-label="Active thresholds">
+                                                <TableHeader>
+                                                    <TableColumn>Threshold Type</TableColumn>
+                                                    <TableColumn>Token A</TableColumn>
+                                                    <TableColumn>Token B</TableColumn>
+                                                    <TableColumn>Fee</TableColumn>
+                                                    <TableColumn>Price</TableColumn>
+                                                    <TableColumn>Cap</TableColumn>
+                                                    <TableColumn>Status</TableColumn>
+                                                    <TableColumn>Actions</TableColumn>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {thresholds.map((threshold: Threshold) => (
+                                                        <TableRow key={threshold.id}>
+                                                            <TableCell>{threshold.type}</TableCell>
+                                                            <TableCell>
+                                                                <Image 
+                                                                    src={getTokenImageUrl(getTokenIcon(threshold.tokenA))}
+                                                                    alt={`Token A icon for ${threshold.tokenA}`}
+                                                                    width={30}
+                                                                    height={30}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Image 
+                                                                    src={getTokenImageUrl(getTokenIcon(threshold.tokenB))}
+                                                                    alt={`Token B icon for ${threshold.tokenB}`}
+                                                                    width={30}
+                                                                    height={30}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>{threshold.fee / 10_000.0}%</TableCell>
+                                                            <TableCell>${threshold.price}</TableCell>
+                                                            <TableCell>{threshold.cap}</TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-1">
+                                                                    {threshold.status === 'executed' && (
+                                                                        <CheckCircleIcon className="w-5 h-5 text-success" />
+                                                                    )}
+                                                                    {threshold.status === 'failed' && (
+                                                                        <Tooltip 
+                                                                            content="Transaction failed. This usually happens when there are insufficient funds in your wallet."
+                                                                            className="max-w-xs"
+                                                                        >
+                                                                            <div className="flex items-center gap-1">
+                                                                                <XCircleIcon className="w-5 h-5 text-danger" />
+                                                                                <QuestionMarkCircleIcon className="w-4 h-4 text-gray-400 cursor-help" />
+                                                                            </div>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                    {threshold.status === 'pending' && (
+                                                                        <span className="text-default-500">Pending</span>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Button 
+                                                                    onPress={() => deleteThreshold(threshold.id)}
+                                                                    aria-label={`Delete ${threshold.type} threshold for ${threshold.tokenA}-${threshold.tokenB}`}
+                                                                >
+                                                                    Delete
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        ) : (
+                                            <div>No thresholds found</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </Tab>
+                        </Tabs>
+                    </div>
                 </div>
 
-                {/* Right side - Trading UI */}
-                <div className="w-[30%] overflow-y-auto pr-6 pb-24">
+                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto px-4 lg:pr-6 pb-24">
                     <div className="w-full flex">
                         {currentToken && currentToken.icon && (
                             <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} />
