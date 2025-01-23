@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect, useRef, FocusEvent } from "react";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip } from "@nextui-org/react";
-import { useSaucerSwapContext, Token } from "../hooks/useTokens";
+import { useSaucerSwapContext } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import dynamic from 'next/dynamic'
 import { useRouter } from "next/navigation";
@@ -23,7 +23,7 @@ import { Button } from '@nextui-org/react';
 import { WHBAR_ID } from "../lib/constants";
 import { ThresholdSection } from '../components/ThresholdSection';
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
-import { Pool, ApiToken } from '@/app/types';
+import { Pool, ApiToken, Token } from '@/app/types';
 
 // Dynamically import components that use window
 const TokenPriceChart = dynamic(
