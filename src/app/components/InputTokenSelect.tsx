@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { Token } from "../hooks/useTokens";
+import { Token } from "@/app/types";
 import { Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 
