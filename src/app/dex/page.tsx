@@ -145,10 +145,21 @@ export default function DexPage() {
     useEffect(() => {
         if (!tokens || !tokens.length) return;
         
-        // Use WHBAR_ID from constants which should be network-aware
+        console.log('Available tokens:', tokens.map((t: Token) => ({
+            id: t.id,
+            symbol: t.symbol,
+            name: t.name
+        })));
+        
+        // Use WHBAR_ID from constants
         const whbarToken = tokens.find((t: Token) => t.id === WHBAR_ID);
+        console.log('WHBAR_ID being searched for:', WHBAR_ID);
+        console.log('Found WHBAR token:', whbarToken);
+        
         if (whbarToken) {
             setCurrentToken(whbarToken);
+        } else {
+            console.error('Could not find WHBAR token in available tokens');
         }
     }, [tokens]);
 
