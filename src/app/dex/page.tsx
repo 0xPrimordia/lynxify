@@ -29,6 +29,7 @@ import { getTokenImageUrl } from '../lib/utils/tokens';
 import { ThresholdSection } from '../components/ThresholdSection';
 import PriceChart, { ChartData } from '../components/PriceChart';
 import { MagnifyingGlassIcon as SearchIcon } from "@heroicons/react/24/outline";
+import { checkTokenAssociation, associateToken } from '@/app/lib/utils/tokens';
 
 export default function DexPage() {
     const router = useRouter();
@@ -216,97 +217,107 @@ export default function DexPage() {
         if (!currentPool || !currentToken || !tradeToken || !account) return;
 
         try {
-            let result: any = { tx: null, type: null };
             const slippageBasisPoints = Math.floor(slippageTolerance * 100);
-
-            console.log('Trade execution parameters:', {
-                tradeAmount,
-                slippageTolerance,
-                slippageBasisPoints,
-                tradeType: getTradeType()
-            });
-
+            
+            // First check for any required associations
+            let transactions: string[] = [];
+            
+            // Check associations based on trade type
             switch (getTradeType()) {
                 case 'hbarToToken':
-                    result = await swapHbarToToken(
-                        tradeAmount.toString(),
-                        tradeToken.id,
-                        currentPool.fee || 3000,
-                        account,
-                        Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints,
-                        tradeToken.decimals
-                    );
-                    console.log('HBAR to Token swap result:', result);
+                    if (!await checkTokenAssociation(account, tradeToken.id)) {
+                        transactions.push(await associateToken(account, tradeToken.id));
+                    }
                     break;
-
                 case 'tokenToHbar':
-                    result = await swapTokenToHbar(
-                        tradeAmount.toString(),
-                        currentToken.id,
-                        currentPool.fee || 3000,
-                        account,
-                        Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints,
-                        currentToken.decimals
-                    );
+                    if (!await checkTokenAssociation(account, currentToken.id)) {
+                        transactions.push(await associateToken(account, currentToken.id));
+                    }
                     break;
-
                 case 'tokenToToken':
-                    result = await swapTokenToToken(
-                        tradeAmount.toString(),
-                        currentToken.id,
-                        tradeToken.id,
-                        currentPool.fee || 3000,
-                        account,
-                        Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints,
-                        currentToken.decimals,
-                        tradeToken.decimals
-                    );
+                    if (!await checkTokenAssociation(account, currentToken.id)) {
+                        transactions.push(await associateToken(account, currentToken.id));
+                    }
+                    if (!await checkTokenAssociation(account, tradeToken.id)) {
+                        transactions.push(await associateToken(account, tradeToken.id));
+                    }
                     break;
             }
 
-            if (result.tx) {
-                console.log('Attempting to execute transaction:', result);
-                await signAndExecuteTransaction({
-                    transactionList: result.tx,
-                    signerAccountId: account
-                });
-
-                // If it was an association, execute the swap after
-                if (result.type === "associate") {
-                    result = await swapHbarToToken(
-                        tradeAmount.toString(),
-                        tradeToken.id,
-                        currentPool.fee || 3000,
-                        account,
-                        Math.floor(Date.now() / 1000) + 60,
-                        slippageBasisPoints,
-                        tradeToken.decimals
-                    );
-                    
-                    if (result.tx) {
-                        await signAndExecuteTransaction({
-                            transactionList: result.tx,
-                            signerAccountId: account
-                        });
-                    }
-                }
-
-                if (result.type === "swap") {
-                    try {
-                        if (userId && account) {
-                            await awardXP(userId, account, 'FIRST_TRADE');
-                        }
-                    } catch (error) {
-                        console.error('Failed to award XP for first trade:', error);
-                    }
-                }
+            // Get the swap transaction
+            const swapResult = await getSwapTransaction();
+            if (swapResult.tx) {
+                transactions.push(swapResult.tx);
             }
 
+            // If we have any transactions, execute them all in sequence
+            if (transactions.length > 0) {
+                for (const tx of transactions) {
+                    await signAndExecuteTransaction({
+                        transactionList: tx,
+                        signerAccountId: account
+                    });
+                }
+
+                // Award XP for successful trade
+                try {
+                    if (userId && account) {
+                        await awardXP(userId, account, 'FIRST_TRADE');
+                    }
+                } catch (error) {
+                    console.error('Failed to award XP for first trade:', error);
+                }
+            }
         } catch (error) {
             console.error('Error in handleQuote:', error);
+            setAlertState({
+                isVisible: true,
+                message: 'Failed to execute trade',
+                type: 'danger'
+            });
+        }
+    };
+
+    // Helper function to get the appropriate swap transaction
+    const getSwapTransaction = async () => {
+        if (!tradeToken) return { tx: null, type: null };
+        const slippageBasisPoints = Math.floor(slippageTolerance * 100);
+
+        switch (getTradeType()) {
+            case 'hbarToToken':
+                return await swapHbarToToken(
+                    tradeAmount.toString(),
+                    tradeToken.id,
+                    currentPool.fee || 3000,
+                    account,
+                    Math.floor(Date.now() / 1000) + 60,
+                    slippageBasisPoints,
+                    tradeToken.decimals
+                );
+            case 'tokenToHbar':
+                return await swapTokenToHbar(
+                    tradeAmount.toString(),
+                    currentToken.id,
+                    currentPool.fee || 3000,
+                    account,
+                    Math.floor(Date.now() / 1000) + 60,
+                    slippageBasisPoints,
+                    currentToken.decimals
+                );
+            case 'tokenToToken':
+                return await swapTokenToToken(
+                    tradeAmount.toString(),
+                    currentToken.id,
+                    tradeToken.id,
+                    currentPool.fee || 3000,
+                    account,
+                    Math.floor(Date.now() / 1000) + 60,
+                    slippageBasisPoints,
+                    currentToken.decimals,
+                    tradeToken.decimals
+                );
+            default:
+                return { tx: null, type: null };
         }
     };
 
