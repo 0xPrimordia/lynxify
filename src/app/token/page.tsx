@@ -161,7 +161,7 @@ export default function TokenPage() {
                     Join Waitlist
                 </Button>
                 <p className={`${vt323.className} text-lg mb-4`}>
-                    Participate in governance discussions on our <a href="https://discord.gg/your-discord-link" target="_blank" className="text-[#0159E0] underline">Discord channel</a>.
+                    Participate in governance discussions on our <a href="https://discord.gg/GM5BfpPe2Y" target="_blank" className="text-[#0159E0] underline">Discord channel</a>.
                 </p>
                 <p className={`${vt323.className} text-3xl font-semibold text-[#0159E0] mt-8`}>
                     Check back on March 1st for early access!
