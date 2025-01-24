@@ -54,7 +54,10 @@ export default function TokenPage() {
                     isOpen={showPurchaseModal} 
                     onClose={() => setShowPurchaseModal(false)}
                     classNames={{
-                        base: "max-w-md mx-auto"
+                        base: "bg-black border border-gray-800 rounded-lg",
+                        header: "border-b border-gray-800",
+                        body: "max-h-[400px] overflow-y-auto",
+                        closeButton: "hover:bg-gray-800 active:bg-gray-700"
                     }}
                 >
                     <ModalContent>
