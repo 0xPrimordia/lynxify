@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, FocusEvent } from "react";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip, Button } from "@nextui-org/react";
 import { useSaucerSwapContext } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
-import dynamic from 'next/dynamic'
 import { useRouter } from "next/navigation";
 import { useWalletContext } from "../hooks/useWallet";
 import { Threshold } from "../types";
@@ -28,11 +27,8 @@ import { Pool, ApiToken, Token } from '../types';
 import { WHBAR_ID } from "../lib/constants";
 import { getTokenImageUrl } from '../lib/utils/tokens';
 import { ThresholdSection } from '../components/ThresholdSection';
-const ApexChart = dynamic(
-    () => import('../components/ApexChart'),
-    { ssr: false }
-);
-  
+import PriceChart, { ChartData } from '../components/PriceChart';
+
 export default function DexPage() {
     const router = useRouter();
     const { account, userId, signAndExecuteTransaction } = useWalletContext();
@@ -95,6 +91,38 @@ export default function DexPage() {
     const [sellOrderSlippage, setSellOrderSlippage] = useState<number>(0.5);
     const [selectedThresholdType, setSelectedThresholdType] = useState<'stopLoss' | 'buyOrder' | 'sellOrder' | null>(null);
     const [isChartCollapsed, setIsChartCollapsed] = useState(true);
+    const [selectedRange, setSelectedRange] = useState('1M');
+
+    const timeRanges = [
+        { id: '1H', label: '1H', value: 60 * 60 },
+        { id: '1D', label: '1D', value: 24 * 60 * 60 },
+        { id: '1W', label: '1W', value: 7 * 24 * 60 * 60 },
+        { id: '1M', label: '1M', value: 30 * 24 * 60 * 60 },
+        { id: 'ALL', label: 'All', value: 365 * 24 * 60 * 60 }
+    ];
+
+    const handleTimeRangeChange = (seconds: number, rangeId: string) => {
+        const to = Math.floor(Date.now() / 1000);
+        const from = to - seconds;
+        setTo(to);
+        setFrom(from);
+        setSelectedRange(rangeId);
+        
+        if (seconds <= 60 * 60) {
+            setInterval('FIVEMIN');
+        } else if (seconds <= 24 * 60 * 60) {
+            setInterval('HOUR');
+        } else {
+            setInterval('DAY');
+        }
+    };
+
+    useEffect(() => {
+        const defaultRange = timeRanges.find(range => range.id === '1M');
+        if (defaultRange) {
+            handleTimeRangeChange(defaultRange.value, defaultRange.id);
+        }
+    }, []);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -792,7 +820,32 @@ export default function DexPage() {
                                             <p>Error loading chart data</p>
                                         </div>
                                     ) : (
-                                        <ApexChart data={data || []} />
+                                        <>
+                                            <div className={`transition-all duration-300 ${isChartCollapsed ? 'h-[400px]' : 'h-[600px]'}`}>
+                                                <PriceChart 
+                                                    data={data?.map(item => ({
+                                                        time: item.timestampSeconds,
+                                                        open: Number(item.openUsd),
+                                                        high: Number(item.highUsd),
+                                                        low: Number(item.lowUsd),
+                                                        close: Number(item.closeUsd)
+                                                    })) || []} 
+                                                    height={isChartCollapsed ? 400 : 600}
+                                                />
+                                            </div>
+                                            <div className="flex justify-center gap-2 mt-4">
+                                                {timeRanges.map((range) => (
+                                                    <Button
+                                                        key={range.id}
+                                                        size="sm"
+                                                        variant={selectedRange === range.id ? "solid" : "flat"}
+                                                        onClick={() => handleTimeRangeChange(range.value, range.id)}
+                                                    >
+                                                        {range.label}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             </Tab>

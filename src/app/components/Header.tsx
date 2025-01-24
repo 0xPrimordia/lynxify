@@ -64,7 +64,7 @@ const Header = () => {
         <>
             <Navbar 
                 maxWidth="full" 
-                className="mb-4"
+                className={`${process.env.NEXT_PUBLIC_NETWORK === 'mainnet' ? 'mb-8' : 'mb-4'}`}
                 isMenuOpen={isMenuOpen}
                 onMenuOpenChange={setIsMenuOpen}
             >
@@ -111,9 +111,9 @@ const Header = () => {
                                 variant="bordered"
                                 size="sm"
                                 style={{
-                                    backgroundColor: "white",
-                                    color: "black",
-                                    borderColor: "black"
+                                    backgroundColor: "#0159E0",
+                                    color: "white",
+                                    borderColor: "#0159E0"
                                 }}
                                 onPress={() => handleConnect()}
                             >
@@ -150,6 +150,11 @@ const Header = () => {
                         <Button 
                             size="sm"
                             variant="bordered"
+                            style={{
+                                backgroundColor: "#0159E0",
+                                color: "white",
+                                borderColor: "#0159E0"
+                            }}
                             onPress={() => handleConnect()}
                         >
                             Connect
