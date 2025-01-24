@@ -132,15 +132,17 @@ export default function DexPage() {
     }, [currentToken]);
 
     useEffect(() => {
-        if(!pools || !currentToken) return;
-        const pairs = pools.filter((pool: Pool) => 
-            (pool.tokenA?.id === currentToken.id) || (pool.tokenB?.id === currentToken.id)
+        if (!currentToken || !pools) return;
+        
+        // Filter pools to only include those with the current token
+        const relevantPools = pools.filter((pool: any) => 
+            pool.tokenA?.id === currentToken.id || pool.tokenB?.id === currentToken.id
         );
-        if (JSON.stringify(pairs) !== JSON.stringify(prevPoolsRef.current)) {
-            setCurrentPools(pairs);
-            prevPoolsRef.current = pairs;
-        }
-    }, [pools, currentToken]);
+        
+        setCurrentPools(relevantPools);
+        // Clear current pool selection when switching tokens
+        setCurrentPool(null);
+    }, [currentToken, pools]);
 
     useEffect(() => {
         const fetchThresholds = async () => {
@@ -951,10 +953,14 @@ export default function DexPage() {
                                 </div>
                             </DropdownTrigger>
                             <DropdownMenu 
-                                onAction={(key) => (selectCurrentToken(key as string) )} 
+                                onAction={(key) => selectCurrentToken(key as string)} 
                                 className="max-h-72 overflow-scroll w-full" 
                                 aria-label="Token Selection" 
-                                items={Array.isArray(tokens) ? tokens : []} 
+                                items={Array.isArray(tokens) ? tokens.filter((token: Token) => 
+                                    pools?.some((pool: any) => 
+                                        pool.tokenA?.id === token.id || pool.tokenB?.id === token.id
+                                    )
+                                ) : []} 
                                 variant="flat"
                             >
                                 {(token:Token) => (
@@ -972,7 +978,6 @@ export default function DexPage() {
                                     <Select 
                                         items={currentPools}
                                         label="Select Pool"
-                                        isDisabled={account ? false : true}
                                         onSelectionChange={(key) => handleCurrentPool(key as any)}
                                         selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
                                         placeholder="Select Pool"
