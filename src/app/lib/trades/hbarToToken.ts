@@ -19,16 +19,10 @@ export const swapHbarToToken = async (
   outputTokenDecimals: number
 ) => {
   try {
-    // Check output token association first
-    const isAssociated = await checkTokenAssociation(recipientAddress, outputToken);
-    if (!isAssociated) {
-      return { type: 'associate' as const, tx: await associateToken(recipientAddress, outputToken) };
-    }
-
     // Parse amount to tinybars
     const amountInSmallestUnit = Hbar.from(amountIn, HbarUnit.Hbar).toTinybars().toString();
     
-    // First get the quote
+    // Get quote
     const quoteAmount = await getQuoteExactInput(
       WHBAR_ID,
       8, // WHBAR decimals
@@ -38,18 +32,9 @@ export const swapHbarToToken = async (
       outputTokenDecimals
     );
 
-    // Calculate minimum output using slippage on the quoted amount
-    const slippagePercent = slippageBasisPoints / 10000; // Convert basis points to decimal (e.g., 50 -> 0.005)
+    // Calculate minimum output using slippage
+    const slippagePercent = slippageBasisPoints / 10000;
     const outputMinInTokens = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
-
-    console.log('Swap Parameters:', {
-      amountIn,
-      amountInSmallestUnit,
-      quoteAmount: quoteAmount.toString(),
-      slippageBasisPoints,
-      slippagePercent,
-      outputMinInTokens
-    });
 
     // Construct path
     const path = Buffer.concat([
@@ -58,30 +43,21 @@ export const swapHbarToToken = async (
       Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
     ]);
 
-    // ExactInputParams matching the contract exactly
+    // ExactInputParams
     const params = {
       path: path,
       recipient: AccountId.fromString(recipientAddress).toSolidityAddress(),
-      deadline: Math.floor(Date.now() / 1000) + 60,
+      deadline: deadline,
       amountIn: amountInSmallestUnit,
       amountOutMinimum: outputMinInTokens
     };
 
-    // Create swap calls - include refundETH for HBAR swaps
+    const wrapEncoded = swapRouterAbi.encodeFunctionData('wrapHBAR');
     const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
-    const refundHBAREncoded = swapRouterAbi.encodeFunctionData('refundETH');
-    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [[swapEncoded, refundHBAREncoded]]);
 
-    const transaction = await new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
-      .setPayableAmount(Hbar.fromTinybars(amountInSmallestUnit))  // Required for HBAR swaps
-      .setGas(5000000)
-      .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
-      .setTransactionId(TransactionId.generate(recipientAddress));
-
-    return { type: 'swap' as const, tx: transactionToBase64String(transaction) };
+    return { type: 'swap' as const, tx: swapRouterAbi.encodeFunctionData('multicall', [[wrapEncoded, swapEncoded]]) };
   } catch (error) {
-    console.error("Error in swapHbarToToken:", error);
+    console.error('Error in swapHbarToToken:', error);
     throw error;
   }
 }; 
