@@ -784,7 +784,7 @@ export default function DexPage() {
     }, [selectedThresholdType, currentToken]);
 
     return (    
-        <div className="fixed inset-0 flex flex-col w-full pt-16">
+        <div className="fixed inset-0 flex flex-col w-full pt-24">
             <div className="relative">
                 <TestnetAlert />
             </div>
