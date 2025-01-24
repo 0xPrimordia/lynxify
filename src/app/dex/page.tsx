@@ -1,6 +1,6 @@
 "use client"
-import React, { useState, useEffect, useRef, FocusEvent } from "react";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip, Button } from "@nextui-org/react";
+import React, { useState, useEffect, useRef, FocusEvent, useMemo } from "react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tabs, Tab, Image, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Chip, Switch, Select, SelectItem, Alert, Popover, PopoverTrigger, PopoverContent, Tooltip, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/react";
 import { useSaucerSwapContext } from "../hooks/useTokens";
 import useTokenPriceHistory from "../hooks/useTokenPriceHistory";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,7 @@ import { WHBAR_ID } from "../lib/constants";
 import { getTokenImageUrl } from '../lib/utils/tokens';
 import { ThresholdSection } from '../components/ThresholdSection';
 import PriceChart, { ChartData } from '../components/PriceChart';
+import { MagnifyingGlassIcon as SearchIcon } from "@heroicons/react/24/outline";
 
 export default function DexPage() {
     const router = useRouter();
@@ -92,6 +93,8 @@ export default function DexPage() {
     const [selectedThresholdType, setSelectedThresholdType] = useState<'stopLoss' | 'buyOrder' | 'sellOrder' | null>(null);
     const [isChartCollapsed, setIsChartCollapsed] = useState(true);
     const [selectedRange, setSelectedRange] = useState('1M');
+    const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+    const [tokenSearch, setTokenSearch] = useState("");
 
     const timeRanges = [
         { id: '1H', label: '1H', value: 60 * 60 },
@@ -785,6 +788,21 @@ export default function DexPage() {
         }
     }, [selectedThresholdType, currentToken]);
 
+    const filteredTokens = useMemo(() => {
+        if (!tokens || !Array.isArray(tokens)) return [];
+        
+        return tokens
+            .filter((token: Token) => 
+                pools?.some((pool: any) => 
+                    pool.tokenA?.id === token.id || pool.tokenB?.id === token.id
+                )
+            )
+            .filter((token: Token) => 
+                token.name.toLowerCase().includes(tokenSearch.toLowerCase()) ||
+                token.symbol.toLowerCase().includes(tokenSearch.toLowerCase())
+            );
+    }, [tokens, pools, tokenSearch]);
+
     return (    
         <div className="fixed inset-0 flex flex-col w-full pt-24">
             <div className="relative">
@@ -946,30 +964,13 @@ export default function DexPage() {
                                 ${formatPrice(currentToken?.priceUsd)}
                             </span>
                         </div>
-                        <Dropdown placement="bottom-start">
-                            <DropdownTrigger>
-                                <div className="w-5 pt-1 pl-1 cursor-pointer">
-                                    <ChevronDownIcon />
-                                </div>
-                            </DropdownTrigger>
-                            <DropdownMenu 
-                                onAction={(key) => selectCurrentToken(key as string)} 
-                                className="max-h-72 overflow-scroll w-full" 
-                                aria-label="Token Selection" 
-                                items={Array.isArray(tokens) ? tokens.filter((token: Token) => 
-                                    pools?.some((pool: any) => 
-                                        pool.tokenA?.id === token.id || pool.tokenB?.id === token.id
-                                    )
-                                ) : []} 
-                                variant="flat"
-                            >
-                                {(token:Token) => (
-                                    <DropdownItem textValue={token.name} key={token.id} className="h-14 gap-2">
-                                            <p>{token.name}</p>
-                                    </DropdownItem>
-                                )}
-                            </DropdownMenu>
-                        </Dropdown>
+                        <Button
+                            variant="light"
+                            onPress={() => setIsTokenModalOpen(true)}
+                            className="min-w-10"
+                        >
+                            <ChevronDownIcon className="w-5 h-5" />
+                        </Button>
                     </div>
                     <div className="w-full pt-8 pb-8">
                         {Array.isArray(currentPools) && currentPools.length > 0 && (
@@ -1123,6 +1124,71 @@ export default function DexPage() {
                     </Alert>
                 </div>
             )}
+
+            <Modal 
+                isOpen={isTokenModalOpen} 
+                onClose={() => {
+                    setIsTokenModalOpen(false);
+                    setTokenSearch("");
+                }}
+                scrollBehavior="inside"
+                size="lg"
+                classNames={{
+                    base: "bg-black border border-gray-800 rounded-lg",
+                    header: "border-b border-gray-800",
+                    body: "max-h-[400px] overflow-y-auto",
+                    closeButton: "hover:bg-gray-800 active:bg-gray-700"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">Select Token</ModalHeader>
+                    <ModalBody>
+                        <Input
+                            placeholder="Search tokens..."
+                            value={tokenSearch}
+                            onChange={(e) => setTokenSearch(e.target.value)}
+                            startContent={<SearchIcon className="w-4 h-4 text-default-400" />}
+                            className="mb-4"
+                            classNames={{
+                                input: "bg-black",
+                                inputWrapper: "bg-black border border-gray-800 hover:bg-gray-900"
+                            }}
+                        />
+                        <div className="flex flex-col gap-2">
+                            {filteredTokens.map((token: Token) => (
+                                <Button
+                                    key={token.id}
+                                    variant="light"
+                                    className="w-full justify-start p-4 hover:bg-gray-900"
+                                    onPress={() => {
+                                        selectCurrentToken(token.id);
+                                        setIsTokenModalOpen(false);
+                                        setTokenSearch("");
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <Image
+                                            width={32}
+                                            height={32}
+                                            alt={token.symbol}
+                                            src={getTokenImageUrl(token.icon)}
+                                        />
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-semibold">{token.symbol}</span>
+                                            <span className="text-sm text-default-500">{token.name}</span>
+                                        </div>
+                                        <div className="ml-auto">
+                                            <span className="text-default-500">
+                                                ${formatPrice(token.priceUsd)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Button>
+                            ))}
+                        </div>
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
         </div>
     );
 }
