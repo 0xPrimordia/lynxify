@@ -1039,6 +1039,9 @@ export default function DexPage() {
                             }
                             step="0.000001"
                         />
+                        <p className="text-sm text-gray-400 mt-1 text-right">
+                            ≈ ${(Number(tradeAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD
+                        </p>
 
                         <p className="mt-4">Receive Amount</p>
                         <Input
