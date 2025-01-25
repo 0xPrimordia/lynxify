@@ -5,20 +5,13 @@ import axios from 'axios';
 import { SWAP_ROUTER_ADDRESS } from '../constants';
 
 export const checkTokenAllowance = async (
+  recipientAddress: string,
   tokenId: string,
-  accountId: string,
-  spenderAddress: string,
+  routerAddress: string,
   amount: string,
-  tokenDecimals: number
+  decimals: number
 ) => {
   try {
-    const amountInSmallestUnit = (Number(amount) * Math.pow(10, tokenDecimals)).toString();
-    
-    // Format addresses correctly
-    const fromAddress = AccountId.fromString(accountId).toSolidityAddress();
-    const spenderSolidityAddress = ContractId.fromString(spenderAddress).toSolidityAddress();
-    const tokenAddress = ContractId.fromString(tokenId).toSolidityAddress();
-    
     const response = await fetch(
       `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/contracts/call`,
       {
@@ -29,10 +22,10 @@ export const checkTokenAllowance = async (
         body: JSON.stringify({
           block: "latest",
           estimate: false,
-          from: fromAddress,
-          to: tokenAddress,
+          from: AccountId.fromString(recipientAddress).toSolidityAddress(),
+          to: ContractId.fromString(tokenId).toSolidityAddress(),
           gas: 30000,
-          data: `0xdd62ed3e${fromAddress.padStart(64, '0')}${spenderSolidityAddress.padStart(64, '0')}`
+          data: `0xdd62ed3e${AccountId.fromString(recipientAddress).toSolidityAddress().padStart(64, '0')}${ContractId.fromString(routerAddress).toSolidityAddress().padStart(64, '0')}`
         })
       }
     );
@@ -43,7 +36,12 @@ export const checkTokenAllowance = async (
     }
 
     const data = await response.json();
-    return BigInt(data.result) >= BigInt(amountInSmallestUnit);
+    
+    // Remove '0x' prefix if present and convert hex to decimal string
+    const allowanceHex = data.result.replace('0x', '');
+    const allowanceDecimal = BigInt('0x' + allowanceHex).toString();
+    
+    return BigInt(allowanceDecimal) >= BigInt(amount);
   } catch (error) {
     console.error('Error checking token allowance:', error);
     return false;

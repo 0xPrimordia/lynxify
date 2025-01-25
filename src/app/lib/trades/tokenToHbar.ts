@@ -61,11 +61,10 @@ export const swapTokenToHbar = async (
     const slippagePercent = slippageBasisPoints / 10000;
     const outputMinInTinybars = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
-
     // Construct path
     const path = Buffer.concat([
       Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
-      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
+      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),  // Ensure proper hex format
       Buffer.from(ContractId.fromString(WHBAR_ID).toSolidityAddress().replace('0x', ''), 'hex')
     ]);
 
