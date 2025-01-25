@@ -52,10 +52,25 @@ export const swapHbarToToken = async (
       amountOutMinimum: outputMinInTokens
     };
 
-    const wrapEncoded = swapRouterAbi.encodeFunctionData('wrapHBAR');
+    // Create swap calls
     const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
+    const refundEncoded = swapRouterAbi.encodeFunctionData('refundETH', []);
 
-    return { type: 'swap' as const, tx: swapRouterAbi.encodeFunctionData('multicall', [[wrapEncoded, swapEncoded]]) };
+    const multiCallParam = [swapEncoded, refundEncoded];
+    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
+
+    // Create the transaction
+    const transaction = new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
+      .setGas(3_000_000)
+      .setPayableAmount(Hbar.from(amountIn, HbarUnit.Hbar))
+      .setFunctionParameters(Buffer.from(encodedData.slice(2), 'hex'))
+      .setTransactionId(TransactionId.generate(recipientAddress));
+
+    return { 
+      type: 'swap' as const, 
+      tx: transactionToBase64String(transaction)
+    };
   } catch (error) {
     console.error('Error in swapHbarToToken:', error);
     throw error;
