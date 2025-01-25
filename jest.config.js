@@ -8,7 +8,7 @@ module.exports = {
     }]
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@hashgraph/hedera-wallet-connect|node-fetch)/)'
+    "node_modules/(?!(@hashgraph/hedera-wallet-connect|@hashgraph/sdk|ethers)/)"
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'

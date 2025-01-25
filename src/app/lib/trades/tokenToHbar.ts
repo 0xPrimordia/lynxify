@@ -26,6 +26,25 @@ export const swapTokenToHbar = async (
   inputTokenDecimals: number
 ) => {
   try {
+    const isApproved = await checkTokenAllowance(
+      recipientAddress,
+      inputToken,
+      SWAP_ROUTER_ADDRESS,
+      amountIn,
+      inputTokenDecimals
+    );
+
+    if (!isApproved) {
+      return { 
+        type: 'approve' as const, 
+        tx: await approveTokenForSwap(
+          inputToken,
+          amountIn,
+          recipientAddress,
+          inputTokenDecimals
+        )
+      };
+    }
     const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
 
     // Get quote
@@ -42,6 +61,7 @@ export const swapTokenToHbar = async (
     const slippagePercent = slippageBasisPoints / 10000;
     const outputMinInTinybars = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
+
     // Construct path
     const path = Buffer.concat([
       Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
@@ -53,7 +73,7 @@ export const swapTokenToHbar = async (
     const params = {
       path: path,
       recipient: ContractId.fromString(SWAP_ROUTER_ADDRESS).toSolidityAddress(),
-      deadline: deadline,
+      deadline: Math.floor(Date.now() / 1000) + 60,
       amountIn: amountInSmallestUnit,
       amountOutMinimum: outputMinInTinybars
     };
@@ -64,7 +84,21 @@ export const swapTokenToHbar = async (
       AccountId.fromString(recipientAddress).toSolidityAddress()
     ]).slice(2);
 
-    return { type: 'swap' as const, tx: swapRouterAbi.encodeFunctionData('multicall', [[swapEncoded, unwrapEncoded]]) };
+    const multiCallParam = [swapEncoded, unwrapEncoded];
+    const encodedData = swapRouterAbi.encodeFunctionData('multicall', [multiCallParam]);
+
+    // Create the transaction with the correct structure
+    const transaction = await new ContractExecuteTransaction()
+      .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
+      .setGas(3_000_000)
+      .setPayableAmount(new Hbar(0))
+      .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
+      .setTransactionId(TransactionId.generate(recipientAddress));
+
+    return {
+      type: 'swap' as const,
+      tx: transactionToBase64String(transaction)
+    };
   } catch (error) {
     console.error('Error in swapTokenToHbar:', error);
     throw error;

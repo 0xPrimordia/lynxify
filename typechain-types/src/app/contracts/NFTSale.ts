@@ -26,9 +26,10 @@ import type {
 export interface NFTSaleInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "PRICE_INCREASE"
+      | "PRICE_INCREMENT"
       | "batchGiveawayNFTs"
       | "currentTokenId"
+      | "getCurrentPrice"
       | "getPurchaseState"
       | "giveawayNFT"
       | "hasPurchased"
@@ -45,19 +46,14 @@ export interface NFTSaleInterface extends Interface {
   getEvent(
     nameOrSignatureOrTopic:
       | "ContractReset"
-      | "Debug"
-      | "NFTGivenAway"
       | "NFTSold"
-      | "PaymentDebug"
       | "PaymentForwarded"
       | "PaymentReceived"
       | "PriceUpdated"
-      | "PurchaseInitiated"
-      | "StateChange"
   ): EventFragment;
 
   encodeFunctionData(
-    functionFragment: "PRICE_INCREASE",
+    functionFragment: "PRICE_INCREMENT",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -66,6 +62,10 @@ export interface NFTSaleInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "currentTokenId",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getCurrentPrice",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -102,7 +102,7 @@ export interface NFTSaleInterface extends Interface {
   encodeFunctionData(functionFragment: "treasury", values?: undefined): string;
 
   decodeFunctionResult(
-    functionFragment: "PRICE_INCREASE",
+    functionFragment: "PRICE_INCREMENT",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -111,6 +111,10 @@ export interface NFTSaleInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "currentTokenId",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getCurrentPrice",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -157,68 +161,12 @@ export namespace ContractResetEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace DebugEvent {
-  export type InputTuple = [
-    message: string,
-    sender: AddressLike,
-    value: BigNumberish
-  ];
-  export type OutputTuple = [message: string, sender: string, value: bigint];
-  export interface OutputObject {
-    message: string;
-    sender: string;
-    value: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace NFTGivenAwayEvent {
-  export type InputTuple = [recipient: AddressLike, serialNumber: BigNumberish];
-  export type OutputTuple = [recipient: string, serialNumber: bigint];
-  export interface OutputObject {
-    recipient: string;
-    serialNumber: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace NFTSoldEvent {
   export type InputTuple = [buyer: AddressLike, serialNumber: BigNumberish];
   export type OutputTuple = [buyer: string, serialNumber: bigint];
   export interface OutputObject {
     buyer: string;
     serialNumber: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace PaymentDebugEvent {
-  export type InputTuple = [
-    message: string,
-    from: AddressLike,
-    to: AddressLike,
-    amount: BigNumberish
-  ];
-  export type OutputTuple = [
-    message: string,
-    from: string,
-    to: string,
-    amount: bigint
-  ];
-  export interface OutputObject {
-    message: string;
-    from: string;
-    to: string;
-    amount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -258,41 +206,6 @@ export namespace PriceUpdatedEvent {
   export interface OutputObject {
     oldPrice: bigint;
     newPrice: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace PurchaseInitiatedEvent {
-  export type InputTuple = [buyer: AddressLike, value: BigNumberish];
-  export type OutputTuple = [buyer: string, value: bigint];
-  export interface OutputObject {
-    buyer: string;
-    value: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace StateChangeEvent {
-  export type InputTuple = [
-    operation: string,
-    tokenId: BigNumberish,
-    newSoldSupply: BigNumberish
-  ];
-  export type OutputTuple = [
-    operation: string,
-    tokenId: bigint,
-    newSoldSupply: bigint
-  ];
-  export interface OutputObject {
-    operation: string;
-    tokenId: bigint;
-    newSoldSupply: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -343,7 +256,7 @@ export interface NFTSale extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  PRICE_INCREASE: TypedContractMethod<[], [bigint], "view">;
+  PRICE_INCREMENT: TypedContractMethod<[], [bigint], "view">;
 
   batchGiveawayNFTs: TypedContractMethod<
     [recipients: AddressLike[]],
@@ -352,6 +265,8 @@ export interface NFTSale extends BaseContract {
   >;
 
   currentTokenId: TypedContractMethod<[], [bigint], "view">;
+
+  getCurrentPrice: TypedContractMethod<[], [bigint], "view">;
 
   getPurchaseState: TypedContractMethod<
     [buyer: AddressLike],
@@ -395,13 +310,16 @@ export interface NFTSale extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "PRICE_INCREASE"
+    nameOrSignature: "PRICE_INCREMENT"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "batchGiveawayNFTs"
   ): TypedContractMethod<[recipients: AddressLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "currentTokenId"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getCurrentPrice"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "getPurchaseState"
@@ -456,32 +374,11 @@ export interface NFTSale extends BaseContract {
     ContractResetEvent.OutputObject
   >;
   getEvent(
-    key: "Debug"
-  ): TypedContractEvent<
-    DebugEvent.InputTuple,
-    DebugEvent.OutputTuple,
-    DebugEvent.OutputObject
-  >;
-  getEvent(
-    key: "NFTGivenAway"
-  ): TypedContractEvent<
-    NFTGivenAwayEvent.InputTuple,
-    NFTGivenAwayEvent.OutputTuple,
-    NFTGivenAwayEvent.OutputObject
-  >;
-  getEvent(
     key: "NFTSold"
   ): TypedContractEvent<
     NFTSoldEvent.InputTuple,
     NFTSoldEvent.OutputTuple,
     NFTSoldEvent.OutputObject
-  >;
-  getEvent(
-    key: "PaymentDebug"
-  ): TypedContractEvent<
-    PaymentDebugEvent.InputTuple,
-    PaymentDebugEvent.OutputTuple,
-    PaymentDebugEvent.OutputObject
   >;
   getEvent(
     key: "PaymentForwarded"
@@ -504,20 +401,6 @@ export interface NFTSale extends BaseContract {
     PriceUpdatedEvent.OutputTuple,
     PriceUpdatedEvent.OutputObject
   >;
-  getEvent(
-    key: "PurchaseInitiated"
-  ): TypedContractEvent<
-    PurchaseInitiatedEvent.InputTuple,
-    PurchaseInitiatedEvent.OutputTuple,
-    PurchaseInitiatedEvent.OutputObject
-  >;
-  getEvent(
-    key: "StateChange"
-  ): TypedContractEvent<
-    StateChangeEvent.InputTuple,
-    StateChangeEvent.OutputTuple,
-    StateChangeEvent.OutputObject
-  >;
 
   filters: {
     "ContractReset(address,uint256)": TypedContractEvent<
@@ -531,28 +414,6 @@ export interface NFTSale extends BaseContract {
       ContractResetEvent.OutputObject
     >;
 
-    "Debug(string,address,uint256)": TypedContractEvent<
-      DebugEvent.InputTuple,
-      DebugEvent.OutputTuple,
-      DebugEvent.OutputObject
-    >;
-    Debug: TypedContractEvent<
-      DebugEvent.InputTuple,
-      DebugEvent.OutputTuple,
-      DebugEvent.OutputObject
-    >;
-
-    "NFTGivenAway(address,uint256)": TypedContractEvent<
-      NFTGivenAwayEvent.InputTuple,
-      NFTGivenAwayEvent.OutputTuple,
-      NFTGivenAwayEvent.OutputObject
-    >;
-    NFTGivenAway: TypedContractEvent<
-      NFTGivenAwayEvent.InputTuple,
-      NFTGivenAwayEvent.OutputTuple,
-      NFTGivenAwayEvent.OutputObject
-    >;
-
     "NFTSold(address,uint256)": TypedContractEvent<
       NFTSoldEvent.InputTuple,
       NFTSoldEvent.OutputTuple,
@@ -562,17 +423,6 @@ export interface NFTSale extends BaseContract {
       NFTSoldEvent.InputTuple,
       NFTSoldEvent.OutputTuple,
       NFTSoldEvent.OutputObject
-    >;
-
-    "PaymentDebug(string,address,address,uint256)": TypedContractEvent<
-      PaymentDebugEvent.InputTuple,
-      PaymentDebugEvent.OutputTuple,
-      PaymentDebugEvent.OutputObject
-    >;
-    PaymentDebug: TypedContractEvent<
-      PaymentDebugEvent.InputTuple,
-      PaymentDebugEvent.OutputTuple,
-      PaymentDebugEvent.OutputObject
     >;
 
     "PaymentForwarded(address,uint256)": TypedContractEvent<
@@ -606,28 +456,6 @@ export interface NFTSale extends BaseContract {
       PriceUpdatedEvent.InputTuple,
       PriceUpdatedEvent.OutputTuple,
       PriceUpdatedEvent.OutputObject
-    >;
-
-    "PurchaseInitiated(address,uint256)": TypedContractEvent<
-      PurchaseInitiatedEvent.InputTuple,
-      PurchaseInitiatedEvent.OutputTuple,
-      PurchaseInitiatedEvent.OutputObject
-    >;
-    PurchaseInitiated: TypedContractEvent<
-      PurchaseInitiatedEvent.InputTuple,
-      PurchaseInitiatedEvent.OutputTuple,
-      PurchaseInitiatedEvent.OutputObject
-    >;
-
-    "StateChange(string,uint256,uint256)": TypedContractEvent<
-      StateChangeEvent.InputTuple,
-      StateChangeEvent.OutputTuple,
-      StateChangeEvent.OutputObject
-    >;
-    StateChange: TypedContractEvent<
-      StateChangeEvent.InputTuple,
-      StateChangeEvent.OutputTuple,
-      StateChangeEvent.OutputObject
     >;
   };
 }
