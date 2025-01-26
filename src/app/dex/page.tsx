@@ -216,10 +216,30 @@ export default function DexPage() {
     const handleQuote = async () => {
         if (!currentPool || !currentToken || !tradeToken || !account) return;
 
+        // Check HBAR balance first
         try {
+            const hbarBalance = await getTokenBalance("0.0.15058"); // WHBAR ID
+            const hbarBalanceInHbar = Number(hbarBalance) / Math.pow(10, 8); // Convert from tinybars
+            const minimumHbarRequired = 0.1; // Base fee for any transaction
+
+            // Additional HBAR needed if doing an HBAR to token swap
+            const totalHbarNeeded = getTradeType() === 'hbarToToken' 
+                ? minimumHbarRequired + Number(tradeAmount)
+                : minimumHbarRequired;
+
+            if (hbarBalanceInHbar < totalHbarNeeded) {
+                setAlertState({
+                    isVisible: true,
+                    message: getTradeType() === 'hbarToToken'
+                        ? `Insufficient HBAR balance. You need ${totalHbarNeeded.toFixed(2)} HBAR (${Number(tradeAmount).toFixed(2)} HBAR for swap + ${minimumHbarRequired} HBAR for fees)`
+                        : `Insufficient HBAR balance. You need at least ${minimumHbarRequired} HBAR for transaction fees.`,
+                    type: 'danger'
+                });
+                return;
+            }
+
+            // Continue with existing quote logic
             const slippageBasisPoints = Math.floor(slippageTolerance * 100);
-            
-            // First check for any required associations
             let transactions: string[] = [];
             
             // Check associations based on trade type
@@ -971,8 +991,7 @@ export default function DexPage() {
                                         ) : (
                                             <div>No thresholds found</div>
                                         )}
-                                    </div>
-                                </div>
+                                    </div>                                </div>
                             </Tab>
                         </Tabs>
                     </div>
