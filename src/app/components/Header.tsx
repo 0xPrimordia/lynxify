@@ -12,7 +12,7 @@ import { handleDisconnectSessions } from '@/utils/supabase/session';
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, dAppConnector, sessions, account, client, userId, handleDisconnect } = useWalletContext();
+    const { handleConnect, dAppConnector, sessions, account, client, userId, handleDisconnect, error, setError, isConnecting } = useWalletContext();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { fetchAchievements, totalXP } = useRewards();
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -29,21 +29,54 @@ const Header = () => {
                     const query = new AccountBalanceQuery()
                         .setAccountId(account)
                         .setMaxAttempts(3)
-                        .setMaxBackoff(5000);
-                    
+                        .setMaxBackoff(5000)
+                        .setMinBackoff(250);
+
                     const accountBalance = await query.execute(client);
                     const hbarBalance = accountBalance.hbars.toString();
                     setBalance(parseFloat(hbarBalance).toFixed(2));
-                } catch (error) {
+                    return true; // Successful fetch
+                } catch (error: any) {
+                    if (error.toString().includes('503')) {
+                        // Silently ignore 503 errors and keep existing balance
+                        return false;
+                    }
+                    console.error('Balance fetch error:', error);
                     if (balance === "0") {
                         setBalance("0");
                     }
+                    return false;
                 }
             };
 
+            // Initial fetch
             fetchBalance();
-            const refreshInterval = setInterval(fetchBalance, 30000);
-            return () => clearInterval(refreshInterval);
+
+            // Set up polling with less frequent updates
+            const INITIAL_POLL_INTERVAL = 60000; // Start with 60s instead of 30s
+            const MAX_POLL_INTERVAL = 300000;    // Max 5 minutes
+            let pollInterval = INITIAL_POLL_INTERVAL;
+            let timeoutId: NodeJS.Timeout;
+
+            const pollWithBackoff = async () => {
+                const success = await fetchBalance();
+                
+                // Adjust polling interval based on success
+                if (success) {
+                    pollInterval = INITIAL_POLL_INTERVAL; // Reset to normal interval on success
+                } else {
+                    // Increase interval more gradually
+                    pollInterval = Math.min(pollInterval * 1.2, MAX_POLL_INTERVAL);
+                }
+
+                timeoutId = setTimeout(pollWithBackoff, pollInterval);
+            };
+
+            timeoutId = setTimeout(pollWithBackoff, pollInterval);
+
+            return () => {
+                clearTimeout(timeoutId);
+            };
         } else {
             setIsConnected(false);
             setBalance("0");
@@ -234,6 +267,28 @@ const Header = () => {
                     </ModalBody>
                 </ModalContent>
             </Modal>
+
+            {error && (
+                <div className="fixed top-4 right-4 z-50">
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong className="font-bold">Error: </strong>
+                        <span className="block sm:inline">{error}</span>
+                        <button 
+                            className="absolute top-0 right-0 px-4 py-3"
+                            onClick={() => setError(null)}
+                        >
+                            <span className="sr-only">Close</span>
+                            <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                                <path 
+                                    fillRule="evenodd" 
+                                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" 
+                                    clipRule="evenodd"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
