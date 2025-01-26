@@ -15,6 +15,7 @@
 
 ## Frontend Tasks
 
+- [ ] receive amount should show small decimal ints, right nnow it shows 0 if the float is too small
 - [✓] Add configurable slippage tolerance to DEX
   - [✓] Add slippage settings UI (typical range 0.1% - 5%)
   - [✓] Implement slippage calculations in trade execution

@@ -246,18 +246,35 @@ export default function DexPage() {
 
             // Get the swap transaction
             const swapResult = await getSwapTransaction();
-            if (swapResult.tx) {
+            if (typeof swapResult === 'object' && swapResult.tx) {
                 transactions.push(swapResult.tx);
             }
 
             // If we have any transactions, execute them all in sequence
             if (transactions.length > 0) {
                 for (const tx of transactions) {
-                    await signAndExecuteTransaction({
+                    const result = await signAndExecuteTransaction({
                         transactionList: tx,
                         signerAccountId: account
                     });
+                    
+                    // Add debug logging
+                    console.log('Transaction result:', result);
+                    
+                    // Check if transaction was successful
+                    if (result.status === 'reverted' || result.status === 'failed') {
+                        throw new Error(`Transaction failed with status: ${result.status}`);
+                    }
                 }
+
+                // Only show success after all transactions are confirmed
+                setTradeAmount("0.0");
+                setReceiveAmount("0.0");
+                setAlertState({
+                    isVisible: true,
+                    message: 'Swap completed successfully!',
+                    type: 'success'
+                });
 
                 // Award XP for successful trade
                 try {

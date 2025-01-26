@@ -36,9 +36,11 @@ export const checkTokenAllowance = async (
     }
 
     const data = await response.json();
+    console.log('Mirror node response:', data);  // Debug log
     
     // Remove '0x' prefix if present and convert hex to decimal string
     const allowanceHex = data.result.replace('0x', '');
+    console.log('Allowance hex:', allowanceHex);  // Debug log
     const allowanceDecimal = BigInt('0x' + allowanceHex).toString();
     
     return BigInt(allowanceDecimal) >= BigInt(amount);

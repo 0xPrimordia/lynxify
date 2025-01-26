@@ -21,17 +21,33 @@ export const swapTokenToToken = async (
   outputTokenDecimals: number
 ) => {
   try {
-    // Validate amount format
-    if (amountIn.startsWith('0x')) {
-      throw new Error('Amount cannot be in hex format');
-    }
+    const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
     
-    // Convert amount to smallest unit
-    const amountNum = Number(amountIn);
-    if (isNaN(amountNum)) {
-      throw new Error('Invalid amount format');
+    // Check allowance first
+    const allowanceResponse = await checkTokenAllowance(
+      recipientAddress,
+      inputToken,
+      SWAP_ROUTER_ADDRESS,
+      amountInSmallestUnit,
+      inputTokenDecimals
+    );
+
+    // If not approved, return approval transaction
+    if (!allowanceResponse) {
+      console.log('Token needs approval, returning approval transaction');
+      return {
+        type: 'approve' as const,
+        tx: await approveTokenForSwap(
+          inputToken,
+          amountInSmallestUnit,
+          recipientAddress,
+          inputTokenDecimals
+        )
+      };
     }
-    const amountInSmallestUnit = (amountNum * Math.pow(10, inputTokenDecimals)).toString();
+
+    // If approved, proceed with swap
+    console.log('Token is approved, proceeding with swap');
 
     // Get quote
     const quoteAmount = await getQuoteExactInput(
@@ -45,32 +61,38 @@ export const swapTokenToToken = async (
 
     // Calculate minimum output using slippage
     const slippagePercent = slippageBasisPoints / 10000;
-    const outputMinInTokens = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
+    const outputMinimum = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
-    // ExactInputSingleParams
+    // Construct path
+    const path = Buffer.concat([
+      Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
+      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
+      Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
+    ]);
+
+    // ExactInputParams
     const params = {
-      tokenIn: ContractId.fromString(inputToken).toSolidityAddress(),
-      tokenOut: ContractId.fromString(outputToken).toSolidityAddress(),
-      fee: fee,
+      path: path,
       recipient: AccountId.fromString(recipientAddress).toSolidityAddress(),
       deadline: deadline,
       amountIn: amountInSmallestUnit,
-      amountOutMinimum: outputMinInTokens,
-      sqrtPriceLimitX96: 0
+      amountOutMinimum: outputMinimum
     };
 
-    // Create swap call
-    const encodedData = swapRouterAbi.encodeFunctionData('exactInputSingle', [params]);
-
-    // Create the transaction
-    const transaction = await new ContractExecuteTransaction()
+    // Create swap transaction
+    const swapEncoded = swapRouterAbi.encodeFunctionData('exactInput', [params]);
+    
+    const transaction = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
-      .setPayableAmount(new Hbar(0))
-      .setGas(5000000)
-      .setFunctionParameters(hexToUint8Array(encodedData.slice(2)))
+      .setGas(3_000_000)
+      .setFunctionParameters(Buffer.from(swapEncoded.slice(2), 'hex'))
       .setTransactionId(TransactionId.generate(recipientAddress));
 
-    return { type: 'swap' as const, tx: transactionToBase64String(transaction) };
+    return {
+      type: 'swap' as const,
+      tx: transactionToBase64String(transaction)
+    };
+
   } catch (error) {
     console.error('Error in swapTokenToToken:', error);
     throw error;
