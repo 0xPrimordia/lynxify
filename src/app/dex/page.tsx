@@ -96,6 +96,11 @@ export default function DexPage() {
     const [selectedRange, setSelectedRange] = useState('1M');
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
     const [tokenSearch, setTokenSearch] = useState("");
+    const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
+    const [isPoolModalOpen, setIsPoolModalOpen] = useState(false);
+    const [poolSearch, setPoolSearch] = useState("");
+    const [isUsdInput, setIsUsdInput] = useState(false);
+    const [usdAmount, setUsdAmount] = useState("0.0");
 
     const timeRanges = [
         { id: '1H', label: '1H', value: 60 * 60 },
@@ -460,42 +465,30 @@ export default function DexPage() {
     };
 
     const handleCurrentPool = (poolId: any) => {
+        console.log('Pool selection:', {
+            poolId,
+            currentPools,
+            selectedPool: selectedPool,
+            currentPool: currentPool
+        });
+
         if (!currentPools || !Array.isArray(currentPools)) {
             console.log('No current pools available');
             return;
         }
         
-        // Extract the actual ID from the Set
         const selectedId = Array.from(poolId)[0];
-        
-        console.log('Selecting pool:', {
-            rawPoolId: poolId,
-            selectedId,
-            availablePools: currentPools.map(p => ({
-                id: p.id,
-                tokenA: p.tokenA?.symbol,
-                tokenB: p.tokenB?.symbol
-            }))
-        });
-        
         const pool = currentPools.find((p: Pool) => p.id.toString() === selectedId);
-        if (!pool) {
-            console.log('Pool not found:', selectedId);
-            return;
-        }
         
-        console.log('Found pool:', {
-            id: pool.id,
-            tokenA: pool.tokenA?.symbol,
-            tokenB: pool.tokenB?.symbol
-        });
-        
-        setCurrentPool(pool);
-        
-        // Set trade token based on current token
-        if (currentToken && pool.tokenA && pool.tokenB) {
-            const tradeToken = pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA;
-            setTradeToken(tradeToken);
+        if (pool) {
+            console.log('Setting selected pool:', pool);
+            setCurrentPool(pool);
+            setSelectedPool(pool);
+            
+            if (currentToken && pool.tokenA && pool.tokenB) {
+                const tradeToken = pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA;
+                setTradeToken(tradeToken);
+            }
         }
     };
 
@@ -591,47 +584,69 @@ export default function DexPage() {
     };
 
     useEffect(() => {
-        console.log("Current pool listener:", currentPool)
-    }, [currentPool]);
+        console.log("Current pool listener:", currentPool);
+        
+        // If currentPool becomes null but we have a selectedPool, restore it
+        if (!currentPool && selectedPool) {
+            console.log("Restoring pool from selectedPool:", selectedPool);
+            setCurrentPool(selectedPool);
+        }
+    }, [currentPool, selectedPool]);
 
     const calculateTradeAmount = async (amount: string) => {
-        if (!currentPool || !tradeToken || !currentToken || !amount || Number(amount) <= 0) {
+        const activePool = currentPool || selectedPool;
+        
+        console.log('Starting trade calculation:', {
+            inputAmount: amount,
+            inputToken: {
+                symbol: tradeToken?.symbol,
+                decimals: tradeToken?.decimals,
+                priceUsd: tradeToken?.priceUsd
+            },
+            outputToken: {
+                symbol: currentToken?.symbol,
+                decimals: currentToken?.decimals,
+                priceUsd: currentToken?.priceUsd
+            },
+            pool: {
+                id: activePool?.id,
+                fee: activePool?.fee
+            }
+        });
+
+        if (!activePool || !tradeToken || !currentToken || !amount || Number(amount) <= 0) {
+            console.log('Trade calculation validation failed:', {
+                hasPool: !!activePool,
+                hasTradeToken: !!tradeToken,
+                hasCurrentToken: !!currentToken,
+                amount,
+                isPositive: Number(amount) > 0
+            });
             setReceiveAmount("0.0");
             return;
         }
 
         try {
-            // Ensure we're working with a clean number
             const cleanAmount = amount.replace(/[^0-9.]/g, '');
             
-            console.log('Trade amount calculation:', {
-                input: {
-                    amount: cleanAmount,
-                    token: currentToken.symbol,
-                    decimals: currentToken.decimals,
-                    expectedRawAmount: (Number(cleanAmount) * Math.pow(10, currentToken.decimals)).toString()
-                },
-                output: {
-                    token: tradeToken.symbol,
-                    decimals: tradeToken.decimals
-                }
-            });
-
             const quoteAmount = await getQuoteExactInput(
-                currentToken.id,
-                currentToken.decimals,
                 tradeToken.id,
+                tradeToken.decimals,
+                currentToken.id,
                 cleanAmount,
-                currentPool.fee,
-                tradeToken.decimals
+                activePool.fee,
+                currentToken.decimals
             );
             
-            const formattedAmount = ethers.formatUnits(quoteAmount, tradeToken.decimals);
+            const formattedAmount = ethers.formatUnits(quoteAmount, currentToken.decimals);
             
-            console.log('Quote result:', {
-                rawQuote: quoteAmount.toString(),
-                outputDecimals: tradeToken.decimals,
-                formattedAmount: formattedAmount
+            console.log('Quote calculation result:', {
+                inputAmount: cleanAmount,
+                rawQuoteAmount: quoteAmount.toString(),
+                formattedQuoteAmount: formattedAmount,
+                inputTokenDecimals: tradeToken.decimals,
+                outputTokenDecimals: currentToken.decimals,
+                estimatedUsdValue: (Number(formattedAmount) * (currentToken?.priceUsd || 0))
             });
             
             setReceiveAmount(formattedAmount);
@@ -851,13 +866,163 @@ export default function DexPage() {
             );
     }, [tokens, pools, tokenSearch]);
 
+    const getDefaultPool = (pools: Pool[]) => {
+        if (!pools || !Array.isArray(pools)) return null;
+        return pools.find(pool => 
+            (pool.tokenA?.symbol === 'HBAR' && pool.tokenB?.symbol === 'SAUCE') ||
+            (pool.tokenA?.symbol === 'SAUCE' && pool.tokenB?.symbol === 'HBAR')
+        ) || null;
+    };
+
+    useEffect(() => {
+        console.log('Setting default pool:', {
+            hasPools: !!pools,
+            poolsLength: pools?.length,
+            availablePools: pools?.map((p: Pool) => ({
+                id: p.id,
+                tokenA: p.tokenA?.symbol,
+                tokenB: p.tokenB?.symbol
+            }))
+        });
+
+        if (pools && Array.isArray(pools)) {
+            const defaultPool = pools.find(pool => 
+                (pool.tokenA?.symbol === 'HBAR' && pool.tokenB?.symbol === 'SAUCE') ||
+                (pool.tokenA?.symbol === 'SAUCE' && pool.tokenB?.symbol === 'HBAR')
+            );
+
+            console.log('Found default pool:', defaultPool);
+
+            if (defaultPool) {
+                setSelectedPool(defaultPool);
+                setCurrentPool(defaultPool);
+                
+                // Set the current token and trade token based on the pool
+                if (defaultPool.tokenA && defaultPool.tokenB) {
+                    const hbarToken = defaultPool.tokenA.symbol === 'HBAR' ? defaultPool.tokenA : defaultPool.tokenB;
+                    const sauceToken = defaultPool.tokenA.symbol === 'SAUCE' ? defaultPool.tokenA : defaultPool.tokenB;
+                    
+                    console.log('Setting tokens:', {
+                        hbarToken,
+                        sauceToken
+                    });
+
+                    if (hbarToken.icon && sauceToken.icon) {
+                        setCurrentToken(hbarToken as Token);
+                        setTradeToken(sauceToken as Token);
+                    }
+                }
+            } else {
+                console.log('No default HBAR-SAUCE pool found');
+            }
+        }
+    }, [pools]);
+
+    const filteredPools = useMemo(() => {
+        if (!pools || !Array.isArray(pools)) return [];
+        
+        return pools.filter((pool: Pool) => {
+            const searchLower = poolSearch.toLowerCase();
+            return pool.tokenA?.symbol.toLowerCase().includes(searchLower) ||
+                   pool.tokenB?.symbol.toLowerCase().includes(searchLower) ||
+                   pool.tokenA?.name.toLowerCase().includes(searchLower) ||
+                   pool.tokenB?.name.toLowerCase().includes(searchLower);
+        });
+    }, [pools, poolSearch]);
+
+    const PoolSelector = () => (
+        <Button
+            variant="bordered"
+            onPress={() => setIsPoolModalOpen(true)}
+            className="rounded-full px-4 py-2 border border-gray-800"
+        >
+            <div className="flex items-center gap-2">
+                <div className="relative w-12 h-6">
+                    {selectedPool?.tokenA && (
+                        <Image
+                            src={getTokenImageUrl(selectedPool.tokenA.icon || '')}
+                            alt={selectedPool.tokenA.symbol}
+                            width={24}
+                            height={24}
+                            className="absolute left-0 top-0"
+                        />
+                    )}
+                    {selectedPool?.tokenB && (
+                        <Image
+                            src={getTokenImageUrl(selectedPool.tokenB.icon || '')}
+                            alt={selectedPool.tokenB.symbol}
+                            width={24}
+                            height={24}
+                            className="absolute left-4 top-0"
+                        />
+                    )}
+                </div>
+                <span>
+                    {selectedPool 
+                        ? `${selectedPool.tokenA?.symbol} / ${selectedPool.tokenB?.symbol}`
+                        : "Select Pool"
+                    }
+                </span>
+                <ChevronDownIcon className="w-4 h-4" />
+            </div>
+        </Button>
+    );
+
+    const SwapDirectionSelector = () => (
+        <div className="flex items-center gap-2">
+            <div className="flex items-center p-2 rounded-full border border-gray-800">
+                <div className={`p-1 rounded-full ${currentToken?.id === selectedPool?.tokenA?.id ? 'bg-gray-800' : ''}`}>
+                    <Image
+                        src={getTokenImageUrl(selectedPool?.tokenA?.icon || '')}
+                        alt={selectedPool?.tokenA?.symbol || ''}
+                        width={24}
+                        height={24}
+                    />
+                </div>
+                <Button
+                    isIconOnly
+                    variant="light"
+                    className="mx-2"
+                    onPress={() => {
+                        if (selectedPool?.tokenA && selectedPool?.tokenB) {
+                            setCurrentToken(tradeToken as Token);
+                            setTradeToken(currentToken);
+                        }
+                    }}
+                >
+                    <ArrowsRightLeftIcon className="w-4 h-4" />
+                </Button>
+                <div className={`p-1 rounded-full ${currentToken?.id === selectedPool?.tokenB?.id ? 'bg-gray-800' : ''}`}>
+                    <Image
+                        src={getTokenImageUrl(selectedPool?.tokenB?.icon || '')}
+                        alt={selectedPool?.tokenB?.symbol || ''}
+                        width={24}
+                        height={24}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+
+    const convertAmount = (amount: string, price: number, toUsd: boolean) => {
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount)) return "0.0";
+        return toUsd ? (numAmount * price).toFixed(2) : (numAmount / price).toFixed(6);
+    };
+
     return (    
         <div className="fixed inset-0 flex flex-col w-full pt-24">
             <div className="relative">
                 <TestnetAlert />
             </div>
-            <div className="flex flex-col lg:flex-row overflow-hidden pl-0 lg:pl-8">
-                <div className="w-full lg:w-[70%] order-2 lg:order-1 px-4 lg:pr-8">
+            <div className="w-full px-8 mb-6">
+                <div className="flex justify-between items-center">
+                    <PoolSelector />
+                    <SwapDirectionSelector />
+                </div>
+            </div>
+            <div className="flex flex-col lg:flex-row overflow-hidden">
+                <div className="w-full lg:w-[70%] order-2 lg:order-1 lg:pr-8">
                     <div className="lg:hidden">
                         <Button
                             variant="light"
@@ -865,13 +1030,9 @@ export default function DexPage() {
                             onPress={() => setIsChartCollapsed(!isChartCollapsed)}
                         >
                             {isChartCollapsed ? (
-                                <>
-                                    Show Chart <ChevronDownIcon className="w-4 h-4 ml-2" />
-                                </>
+                                <>Show Chart <ChevronDownIcon className="w-4 h-4 ml-2" /></>
                             ) : (
-                                <>
-                                    Hide Chart <ChevronUpIcon className="w-4 h-4 ml-2" />
-                                </>
+                                <>Hide Chart <ChevronUpIcon className="w-4 h-4 ml-2" /></>
                             )}
                         </Button>
                     </div>
@@ -880,6 +1041,9 @@ export default function DexPage() {
                             aria-label="section" 
                             selectedKey={selectedSection} 
                             onSelectionChange={(key) => setSelectedSection(key.toString())}
+                            classNames={{
+                                tabList: "ml-4"
+                            }}
                         >
                             <Tab key="chart" title='Price Chart'>
                                 <div className="w-full h-full">
@@ -997,167 +1161,337 @@ export default function DexPage() {
                     </div>
                 </div>
 
-                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto px-4 lg:pr-6 pb-24">
-                    <div className="w-full flex">
-                        {currentToken && currentToken.icon && (
-                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} />
-                        )}
-                        <div className="px-3">
-                            <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
-                            <p>{currentToken.name}</p>
-                        </div>
-                        <div className="pl-1">
-                            <span className="text-xl text-green-500">
-                                ${formatPrice(currentToken?.priceUsd)}
-                            </span>
-                        </div>
-                        <Button
-                            variant="light"
-                            onPress={() => setIsTokenModalOpen(true)}
-                            className="min-w-10"
+                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto lg:pr-8 pb-24">
+                    <Tabs 
+                        aria-label="Trading Options" 
+                        className="w-full"
+                        classNames={{
+                            tabList: "gap-4 w-full",
+                            cursor: "w-full",
+                            tab: "flex-1 h-12",
+                            tabContent: "group-data-[selected=true]:text-white w-full text-center",
+                            base: "w-full",
+                            panel: "w-full"
+                        }}
+                    >
+                        <Tab 
+                            key="buy" 
+                            title={
+                                <div className="flex items-center justify-center w-full">
+                                    Buy
+                                </div>
+                            }
                         >
-                            <ChevronDownIcon className="w-5 h-5" />
-                        </Button>
-                    </div>
-                    <div className="w-full pt-8 pb-8">
-                        {Array.isArray(currentPools) && currentPools.length > 0 && (
-                            <div className="mb-8">
-                                {!currentPool ? (
-                                    <Select 
-                                        items={currentPools}
-                                        label="Select Pool"
-                                        onSelectionChange={(key) => handleCurrentPool(key as any)}
-                                        selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
-                                        placeholder="Select Pool"
+                            <div className="w-full pb-8">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p>Swap Amount</p>
+                                    <Button
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => {
+                                            setIsUsdInput(!isUsdInput);
+                                            if (!isUsdInput) {
+                                                // Switching to USD - round to 2 decimal places
+                                                const newUsdAmount = (Number(tradeAmount) * (tradeToken?.priceUsd || 0)).toFixed(2);
+                                                setUsdAmount(newUsdAmount);
+                                            }
+                                        }}
                                     >
-                                        {(pool:any) => (
-                                            <SelectItem 
-                                                key={pool.id.toString()} 
-                                                textValue={`${pool.tokenA?.symbol} - ${pool.tokenB?.symbol} pool with ${pool.fee / 10_000.0}% fee`}
+                                        <div className="flex items-center gap-2">
+                                            <span className={isUsdInput ? "text-white" : "text-default-500"}>USD</span>
+                                            <span className="text-default-500">/</span>
+                                            <span className={!isUsdInput ? "text-white" : "text-default-500"}>{tradeToken?.symbol}</span>
+                                        </div>
+                                    </Button>
+                                </div>
+                                <Input
+                                    type="number"
+                                    value={isUsdInput ? usdAmount : tradeAmount}
+                                    onChange={(e) => {
+                                        const newValue = e.target.value;
+                                        if (isUsdInput) {
+                                            // Round USD to 2 decimal places
+                                            const roundedUsd = Number(newValue).toFixed(2);
+                                            setUsdAmount(roundedUsd);
+                                            const tokenAmount = (Number(roundedUsd) / (tradeToken?.priceUsd || 1)).toString();
+                                            setTradeAmount(tokenAmount);
+                                            calculateTradeAmount(tokenAmount);
+                                        } else {
+                                            setTradeAmount(newValue);
+                                            // Round USD to 2 decimal places when calculating equivalent
+                                            const usdValue = (Number(newValue) * (tradeToken?.priceUsd || 0)).toFixed(2);
+                                            setUsdAmount(usdValue);
+                                            calculateTradeAmount(newValue);
+                                        }
+                                    }}
+                                    onFocus={handleInputFocus}
+                                    isDisabled={!tradeToken}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {tradeToken && <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} />
+                                        </div>
+                                    }
+                                    endContent={
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-default-400">
+                                                {isUsdInput ? '$' : ''}
+                                            </span>
+                                            <Button 
+                                                onClick={handleMaxClick} 
+                                                aria-label="Set maximum amount"
+                                                className="cursor-pointer" 
+                                                radius="sm" 
+                                                size="sm"
                                             >
-                                                {pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%
-                                            </SelectItem>
-                                        )}
-                                    </Select>
-                                ):(
-                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onPress={() => setCurrentPool(null)} aria-label="Clear pool selection">Clear</Button></p>
-                                )}
-                                
-                            </div>
-                        
-                        )}
-                        {!Array.isArray(currentPools) || currentPools.length === 0 && (
-                            <p className="pb-8">No pools found for {currentToken.symbol}</p>
-                        )}
-                        <p className="mb-4">Trade Amount</p>
-                        <Input
-                            type="number"
-                            value={String(tradeAmount)}
-                            description="  "
-                            onChange={(e) => {
-                                setTradeAmount(e.target.value);
-                                calculateTradeAmount(e.target.value);
-                            }}
-                            onFocus={handleInputFocus}
-                            isDisabled={tradeToken ? false : true}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} /> 
-                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
-                                </div>
-                            }
-                            endContent={
-                                <Button 
-                                    onClick={handleMaxClick} 
-                                    aria-label="Set maximum amount"
-                                    className="cursor-pointer" 
-                                    radius="sm" 
-                                    size="sm"
-                                >
-                                    MAX
-                                </Button>
-                            }
-                            step="0.000001"
-                        />
-                        <p className="text-sm text-gray-400 mt-1 text-right">
-                            ≈ ${(Number(tradeAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD
-                        </p>
+                                                MAX
+                                            </Button>
+                                        </div>
+                                    }
+                                    step="0.000001"
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    {isUsdInput 
+                                        ? `≈ ${tradeAmount} ${tradeToken?.symbol}`
+                                        : `≈ $${(Number(tradeAmount) * (tradeToken?.priceUsd || 0)).toFixed(2)} USD`
+                                    }
+                                </p>
 
-                        <p className="mt-4">Receive Amount</p>
-                        <Input
-                            type="number"
-                            value={receiveAmount}
-                            className="text-lg pt-4"
-                            isReadOnly={true}
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            step="0.000001"
-                            isDisabled={tradeToken ? false : true}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    {tradeToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
+                                <p className="mt-4">Receive Amount</p>
+                                <Input
+                                    type="number"
+                                    value={receiveAmount}
+                                    className="text-lg pt-4"
+                                    isReadOnly={true}
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    step="0.000001"
+                                    isDisabled={tradeToken ? false : true}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {currentToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(currentToken.icon)} />}
+                                        </div>
+                                    }
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    ≈ ${(Number(receiveAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD
+                                </p>
+                                <ThresholdSlippageSelector 
+                                    slippage={slippageTolerance} 
+                                    setSlippage={setSlippageTolerance}
+                                    label="Trade Slippage"
+                                />
+                                <Button 
+                                    isDisabled={currentPool ? false : true} 
+                                    onPress={handleQuote} 
+                                    className="w-full" 
+                                    endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
+                                >
+                                    Trade
+                                </Button>
+                            </div>
+                            <ThresholdSection
+                                selectedThresholdType={selectedThresholdType}
+                                setSelectedThresholdType={setSelectedThresholdType}
+                                currentPool={currentPool}
+                                currentToken={currentToken}
+                                tradeToken={tradeToken}
+                                stopLossPrice={stopLossPrice}
+                                stopLossCap={stopLossCap}
+                                buyOrderPrice={buyOrderPrice}
+                                buyOrderCap={buyOrderCap}
+                                sellOrderPrice={sellOrderPrice}
+                                sellOrderCap={sellOrderCap}
+                                stopLossSlippage={stopLossSlippage}
+                                buyOrderSlippage={buyOrderSlippage}
+                                sellOrderSlippage={sellOrderSlippage}
+                                isSubmitting={isSubmitting}
+                                setIsSubmitting={setIsSubmitting}
+                                setStopLossPrice={setStopLossPrice}
+                                setStopLossCap={setStopLossCap}
+                                setBuyOrderPrice={setBuyOrderPrice}
+                                setBuyOrderCap={setBuyOrderCap}
+                                setSellOrderPrice={setSellOrderPrice}
+                                setSellOrderCap={setSellOrderCap}
+                                setStopLossSlippage={setStopLossSlippage}
+                                setBuyOrderSlippage={setBuyOrderSlippage}
+                                setSellOrderSlippage={setSellOrderSlippage}
+                                handleInputFocus={handleInputFocus}
+                                adjustStopLossPrice={adjustStopLossPrice}
+                                adjustSellOrderPrice={adjustSellOrderPrice}
+                                hanndleMaxClickStopLoss={handleMaxClickStopLoss}
+                                handleMaxClickSellOrder={handleMaxClickSellOrder}
+                                saveThresholds={saveThresholds}
+                                resetThresholdForm={resetThresholdForm}
+                                adjustBuyOrderPrice={adjustBuyOrderPrice}
+                                mode="buy"
+                            />
+                        </Tab>
+                        <Tab 
+                            key="sell" 
+                            title={
+                                <div className="flex items-center justify-center w-full">
+                                    Sell
                                 </div>
                             }
-                        />
-                        <ThresholdSlippageSelector 
-                            slippage={slippageTolerance} 
-                            setSlippage={setSlippageTolerance}
-                            label="Trade Slippage"
-                        />
-                        <Button 
-                            isDisabled={currentPool ? false : true} 
-                            onPress={handleQuote} 
-                            className="w-full" 
-                            endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
                         >
-                            Trade
-                        </Button>
-                    </div>
-                    <ThresholdSection
-                        selectedThresholdType={selectedThresholdType}
-                        setSelectedThresholdType={setSelectedThresholdType}
-                        currentPool={currentPool}
-                        currentToken={currentToken}
-                        tradeToken={tradeToken}
-                        stopLossPrice={stopLossPrice}
-                        stopLossCap={stopLossCap}
-                        buyOrderPrice={buyOrderPrice}
-                        buyOrderCap={buyOrderCap}
-                        sellOrderPrice={sellOrderPrice}
-                        sellOrderCap={sellOrderCap}
-                        stopLossSlippage={stopLossSlippage}
-                        buyOrderSlippage={buyOrderSlippage}
-                        sellOrderSlippage={sellOrderSlippage}
-                        isSubmitting={isSubmitting}
-                        setIsSubmitting={setIsSubmitting}
-                        setStopLossPrice={setStopLossPrice}
-                        setStopLossCap={setStopLossCap}
-                        setBuyOrderPrice={setBuyOrderPrice}
-                        setBuyOrderCap={setBuyOrderCap}
-                        setSellOrderPrice={setSellOrderPrice}
-                        setSellOrderCap={setSellOrderCap}
-                        setStopLossSlippage={setStopLossSlippage}
-                        setBuyOrderSlippage={setBuyOrderSlippage}
-                        setSellOrderSlippage={setSellOrderSlippage}
-                        handleInputFocus={handleInputFocus}
-                        adjustStopLossPrice={adjustStopLossPrice}
-                        adjustSellOrderPrice={adjustSellOrderPrice}
-                        hanndleMaxClickStopLoss={handleMaxClickStopLoss}
-                        handleMaxClickSellOrder={handleMaxClickSellOrder}
-                        saveThresholds={saveThresholds}
-                        resetThresholdForm={resetThresholdForm}
-                        adjustBuyOrderPrice={adjustBuyOrderPrice}
-                    />
+                            <div className="w-full pb-8">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p>Swap Amount</p>
+                                    <Button
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => setIsUsdInput(!isUsdInput)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className={isUsdInput ? "text-default-500" : "text-white"}>USD</span>
+                                            <span className="text-default-500">/</span>
+                                            <span className={!isUsdInput ? "text-default-500" : "text-white"}>{currentToken?.symbol}</span>
+                                        </div>
+                                    </Button>
+                                </div>
+                                <Input
+                                    type="number"
+                                    value={isUsdInput ? usdAmount : tradeAmount}
+                                    onChange={(e) => {
+                                        const newValue = e.target.value;
+                                        if (isUsdInput) {
+                                            const roundedUsd = Number(newValue).toFixed(2);
+                                            setUsdAmount(roundedUsd);
+                                            const tokenAmount = (Number(roundedUsd) / (currentToken?.priceUsd || 1)).toString();
+                                            setTradeAmount(tokenAmount);
+                                            calculateTradeAmount(tokenAmount);
+                                        } else {
+                                            setTradeAmount(newValue);
+                                            const usdValue = (Number(newValue) * (currentToken?.priceUsd || 0)).toFixed(2);
+                                            setUsdAmount(usdValue);
+                                            calculateTradeAmount(newValue);
+                                        }
+                                    }}
+                                    onFocus={handleInputFocus}
+                                    isDisabled={!currentToken}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken?.icon)} />
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken?.icon || '')} />
+                                        </div>
+                                    }
+                                    endContent={
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-default-400">
+                                                {isUsdInput ? '$' : ''}
+                                            </span>
+                                            <Button 
+                                                onClick={handleMaxClick} 
+                                                aria-label="Set maximum amount"
+                                                className="cursor-pointer" 
+                                                radius="sm" 
+                                                size="sm"
+                                            >
+                                                MAX
+                                            </Button>
+                                        </div>
+                                    }
+                                    step="0.000001"
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    {isUsdInput 
+                                        ? `≈ ${tradeAmount} ${currentToken?.symbol}`
+                                        : `≈ $${(Number(tradeAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD`
+                                    }
+                                </p>
+
+                                <p className="mt-4">Receive Amount</p>
+                                <Input
+                                    type="number"
+                                    value={receiveAmount}
+                                    className="text-lg pt-4"
+                                    isReadOnly={true}
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    step="0.000001"
+                                    isDisabled={currentToken ? false : true}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {tradeToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
+                                        </div>
+                                    }
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    ≈ ${(Number(receiveAmount) * (tradeToken?.priceUsd || 0)).toFixed(2)} USD
+                                </p>
+                                <ThresholdSlippageSelector 
+                                    slippage={slippageTolerance} 
+                                    setSlippage={setSlippageTolerance}
+                                    label="Trade Slippage"
+                                />
+                                <Button 
+                                    isDisabled={currentPool ? false : true} 
+                                    onPress={handleQuote} 
+                                    className="w-full" 
+                                    endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
+                                >
+                                    Trade
+                                </Button>
+                            </div>
+                            <ThresholdSection
+                                selectedThresholdType={selectedThresholdType}
+                                setSelectedThresholdType={setSelectedThresholdType}
+                                currentPool={currentPool}
+                                currentToken={currentToken}
+                                tradeToken={tradeToken}
+                                stopLossPrice={stopLossPrice}
+                                stopLossCap={stopLossCap}
+                                buyOrderPrice={buyOrderPrice}
+                                buyOrderCap={buyOrderCap}
+                                sellOrderPrice={sellOrderPrice}
+                                sellOrderCap={sellOrderCap}
+                                stopLossSlippage={stopLossSlippage}
+                                buyOrderSlippage={buyOrderSlippage}
+                                sellOrderSlippage={sellOrderSlippage}
+                                isSubmitting={isSubmitting}
+                                setIsSubmitting={setIsSubmitting}
+                                setStopLossPrice={setStopLossPrice}
+                                setStopLossCap={setStopLossCap}
+                                setBuyOrderPrice={setBuyOrderPrice}
+                                setBuyOrderCap={setBuyOrderCap}
+                                setSellOrderPrice={setSellOrderPrice}
+                                setSellOrderCap={setSellOrderCap}
+                                setStopLossSlippage={setStopLossSlippage}
+                                setBuyOrderSlippage={setBuyOrderSlippage}
+                                setSellOrderSlippage={setSellOrderSlippage}
+                                handleInputFocus={handleInputFocus}
+                                adjustStopLossPrice={adjustStopLossPrice}
+                                adjustSellOrderPrice={adjustSellOrderPrice}
+                                hanndleMaxClickStopLoss={handleMaxClickStopLoss}
+                                handleMaxClickSellOrder={handleMaxClickSellOrder}
+                                saveThresholds={saveThresholds}
+                                resetThresholdForm={resetThresholdForm}
+                                adjustBuyOrderPrice={adjustBuyOrderPrice}
+                                mode="sell"
+                            />
+                        </Tab>
+                    </Tabs>
                 </div>
             </div>
             
@@ -1230,6 +1564,85 @@ export default function DexPage() {
                                         <div className="ml-auto">
                                             <span className="text-default-500">
                                                 ${formatPrice(token.priceUsd)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Button>
+                            ))}
+                        </div>
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
+
+            <Modal 
+                isOpen={isPoolModalOpen} 
+                onClose={() => {
+                    setIsPoolModalOpen(false);
+                    setPoolSearch("");
+                }}
+                scrollBehavior="inside"
+                size="lg"
+                classNames={{
+                    base: "bg-black border border-gray-800 rounded-lg",
+                    header: "border-b border-gray-800",
+                    body: "max-h-[400px] overflow-y-auto",
+                    closeButton: "hover:bg-gray-800 active:bg-gray-700"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">Select Pool</ModalHeader>
+                    <ModalBody>
+                        <Input
+                            placeholder="Search pools..."
+                            value={poolSearch}
+                            onChange={(e) => setPoolSearch(e.target.value)}
+                            startContent={<SearchIcon className="w-4 h-4 text-default-400" />}
+                            className="mb-4"
+                            classNames={{
+                                input: "bg-black",
+                                inputWrapper: "bg-black border border-gray-800 hover:bg-gray-900"
+                            }}
+                        />
+                        <div className="flex flex-col gap-2">
+                            {filteredPools.map((pool: Pool) => (
+                                <Button
+                                    key={pool.id}
+                                    variant="light"
+                                    className="w-full justify-start p-4 hover:bg-gray-900"
+                                    onPress={() => {
+                                        setSelectedPool(pool);
+                                        setCurrentPool(pool);
+                                        if (pool.tokenA && pool.tokenB) {
+                                            setCurrentToken(pool.tokenA as Token);
+                                            setTradeToken(pool.tokenB as Token);
+                                        }
+                                        setIsPoolModalOpen(false);
+                                        setPoolSearch("");
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative w-12 h-6">
+                                            <Image
+                                                src={getTokenImageUrl(pool.tokenA?.icon || '')}
+                                                alt={pool.tokenA?.symbol}
+                                                width={24}
+                                                height={24}
+                                                className="absolute left-0 top-0"
+                                            />
+                                            <Image
+                                                src={getTokenImageUrl(pool.tokenB?.icon || '')}
+                                                alt={pool.tokenB?.symbol}
+                                                width={24}
+                                                height={24}
+                                                className="absolute left-4 top-0"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-semibold">
+                                                {pool.tokenA?.symbol} / {pool.tokenB?.symbol}
+                                            </span>
+                                            <span className="text-sm text-default-500">
+                                                Fee: {pool.fee / 10_000.0}%
                                             </span>
                                         </div>
                                     </div>

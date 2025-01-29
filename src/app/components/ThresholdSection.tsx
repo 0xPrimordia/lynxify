@@ -16,6 +16,7 @@ const thresholdOptions = [
 ];
 
 interface ThresholdSectionProps {
+    mode: 'buy' | 'sell';
     selectedThresholdType: 'stopLoss' | 'buyOrder' | 'sellOrder' | null;
     setSelectedThresholdType: (type: 'stopLoss' | 'buyOrder' | 'sellOrder' | null) => void;
     currentPool: any;
@@ -52,6 +53,7 @@ interface ThresholdSectionProps {
 }
 
 export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
+    mode,
     selectedThresholdType,
     setSelectedThresholdType,
     currentPool,
