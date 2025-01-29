@@ -1292,12 +1292,12 @@ export default function DexPage() {
                                     label="Trade Slippage"
                                 />
                                 <Button 
-                                    isDisabled={currentPool ? false : true} 
+                                    isDisabled={!currentPool || !account}
                                     onPress={handleQuote} 
                                     className="w-full" 
                                     endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
                                 >
-                                    Trade
+                                    {account ? "Trade" : "Connect Wallet to Trade"}
                                 </Button>
                             </div>
                             <ThresholdSection
@@ -1446,7 +1446,7 @@ export default function DexPage() {
                                     label="Trade Slippage"
                                 />
                                 <Button 
-                                    isDisabled={currentPool ? false : true} 
+                                    isDisabled={currentPool && account ? false : true} 
                                     onPress={handleQuote} 
                                     className="w-full" 
                                     endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
