@@ -30,6 +30,7 @@ import { ThresholdSection } from '../components/ThresholdSection';
 import PriceChart, { ChartData } from '../components/PriceChart';
 import { MagnifyingGlassIcon as SearchIcon } from "@heroicons/react/24/outline";
 import { checkTokenAssociation, associateToken } from '@/app/lib/utils/tokens';
+import { DepthChart } from '../components/DepthChart';
 
 export default function DexPage() {
     const router = useRouter();
@@ -101,6 +102,8 @@ export default function DexPage() {
     const [poolSearch, setPoolSearch] = useState("");
     const [isUsdInput, setIsUsdInput] = useState(false);
     const [usdAmount, setUsdAmount] = useState("0.0");
+    const [depthData, setDepthData] = useState([]);
+    const [currentPrice, setCurrentPrice] = useState(0);
 
     const timeRanges = [
         { id: '1H', label: '1H', value: 60 * 60 },
@@ -1063,6 +1066,38 @@ export default function DexPage() {
                                                         close: Number(item.closeUsd)
                                                     })) || []} 
                                                     height={isChartCollapsed ? 400 : 600}
+                                                />
+                                            </div>
+                                            <div className="flex justify-center gap-2 mt-4">
+                                                {timeRanges.map((range) => (
+                                                    <Button
+                                                        key={range.id}
+                                                        size="sm"
+                                                        variant={selectedRange === range.id ? "solid" : "flat"}
+                                                        onClick={() => handleTimeRangeChange(range.value, range.id)}
+                                                    >
+                                                        {range.label}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </Tab>
+                            <Tab key="depth" title='Depth Chart'>
+                                <div className="w-full h-full">
+                                    {error ? (
+                                        <div className="flex justify-center items-center h-full">
+                                            <p>Error loading depth data</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className={`transition-all duration-300 ${isChartCollapsed ? 'h-[400px]' : 'h-[600px]'}`}>
+                                                <DepthChart 
+                                                    data={depthData}
+                                                    height={isChartCollapsed ? 400 : 600}
+                                                    currentPrice={currentPrice}
+                                                    selectedPool={selectedPool}
                                                 />
                                             </div>
                                             <div className="flex justify-center gap-2 mt-4">
