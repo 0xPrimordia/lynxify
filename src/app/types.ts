@@ -90,24 +90,21 @@ export type User = {
     id: string;
     hederaAccountId: string;
     created_at: string;
+    isInAppWallet?: boolean;
 }
 
 // Session State Types
-export interface WalletState {
+export interface SessionState {
+  wallet: {
     isConnected: boolean;
     accountId: string | null;
     session: SessionTypes.Struct | null;
-}
-
-export interface AuthState {
+  };
+  auth: {
     isAuthenticated: boolean;
     userId: string | null;
     session: Session | null;
-}
-
-export interface SessionState {
-    wallet: WalletState;
-    auth: AuthState;
+  };
 }
   
 

@@ -14,6 +14,12 @@ import { supabase } from '@/utils/supabase';
 import { SessionState } from '@/app/types';
 import { persistSession, getStoredSession, clearStoredSession } from '@/utils/supabase/session';
 import { handleDisconnectSessions } from '@/utils/supabase/session';
+import { useInAppWallet } from '../contexts/InAppWalletContext';
+import { useSupabase } from './useSupabase';
+import { TransactionResponse } from '@hashgraph/sdk';
+import { SignAndExecuteTransactionResult } from '@hashgraph/hedera-wallet-connect';
+import SessionPasswordManager from '@/lib/utils/sessionPassword';
+import { SessionPasswordModal } from '@/app/components/SessionPasswordModal';
 
 declare global {
   interface Window {
@@ -28,11 +34,18 @@ const appMetadata = {
     url: process.env.NEXT_PUBLIC_APP_URL as string
 }
 
+type TransactionResult = TransactionResponse | SignAndExecuteTransactionResult;
+
 interface WalletContextType {
     account: string;
+    activeAccount: string | null;
     handleConnect: (extensionId?: string) => Promise<void>;
     handleDisconnectSessions: () => Promise<void>;
-    signAndExecuteTransaction: (params: { transactionList: string, signerAccountId: string }) => Promise<any>;
+    signAndExecuteTransaction: (params: { 
+      transactionList: string, 
+      signerAccountId: string,
+      password: string 
+    }) => Promise<TransactionResult>;
     client: Client;
     appMetadata: typeof appMetadata;
     sessions?: SessionTypes.Struct[];
@@ -45,13 +58,23 @@ interface WalletContextType {
     sessionState: SessionState;
     handleDisconnect: () => Promise<void>;
     setError: (error: string | null) => void;
+    walletType: 'extension' | 'inApp' | null;
+    handleConnectInAppWallet: (email: string, password: string, accountId: string) => Promise<void>;
+    setIsConnecting: (isConnecting: boolean) => void;
 }
 
 export const WalletContext = createContext<WalletContextType>({
     account: "",
+    activeAccount: null,
     handleConnect: async () => {},
     handleDisconnectSessions: async () => {},
-    signAndExecuteTransaction: async () => {},
+    signAndExecuteTransaction: async (params: { 
+      transactionList: string, 
+      signerAccountId: string,
+      password: string 
+    }): Promise<TransactionResult> => {
+      throw new Error("Context not initialized");
+    },
     client: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet(),
     appMetadata,
     sessions: [],
@@ -74,7 +97,10 @@ export const WalletContext = createContext<WalletContextType>({
         }
     },
     handleDisconnect: async () => {},
-    setError: () => {}
+    setError: () => {},
+    walletType: null,
+    handleConnectInAppWallet: async () => {},
+    setIsConnecting: () => {},
 });
 
 interface WalletProviderProps {
@@ -103,6 +129,15 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       session: null
     }
   });
+  const [walletType, setWalletType] = useState<'extension' | 'inApp' | null>(null);
+  const inAppWallet = useInAppWallet();
+  const { supabase } = useSupabase();
+  const [userAccountId, setUserAccountId] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pendingSessionRestore, setPendingSessionRestore] = useState(false);
+  
+  // Calculate active account based on wallet type
+  const activeAccount = account || (walletType === 'inApp' ? userAccountId : null);
 
   const initializeDAppConnector = async (walletSession: any) => {
     if (!dAppConnector) {
@@ -302,7 +337,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     };
   }, [isInitialized, dAppConnector, init, restoreSession]);
 
-  const handleConnect = async (extensionId?: string) => {
+  const handleConnect = async () => {
     console.log('handleConnect called');
     setIsConnecting(true);
     setError(null);
@@ -313,7 +348,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         }
 
         if (!dAppConnector) {
-            throw new Error("Unable to initialize wallet connection. Please try again.");
+            throw new Error("DApp Connector not initiated");
         }
 
         // Clear any existing sessions first
@@ -322,42 +357,12 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
             await handleDisconnectSessions();
         }
 
-        let session;
-        try {
-            // Get session through modal or extension
-            session = extensionId ? 
-                await dAppConnector.connectExtension(extensionId) : 
-                await dAppConnector.openModal();
-        } catch (connError: any) {
-            // Handle specific connection errors
-            if (connError.message?.includes('User rejected')) {
-                throw new Error('Connection cancelled by user');
-            }
-            throw new Error('Failed to connect to wallet. Please try again.');
-        }
+        // Open modal for wallet selection
+        const session = await dAppConnector.openModal();
 
-        // Validate session structure with specific error messages
-        if (!session) {
-            throw new Error('No connection received from wallet');
-        }
-
-        if (!session.namespaces) {
-            throw new Error('Invalid wallet connection response');
-        }
-
-        if (!session.namespaces.hedera) {
-            throw new Error('This wallet does not support Hedera network');
-        }
-
-        if (!session.namespaces.hedera.accounts || 
-            !Array.isArray(session.namespaces.hedera.accounts) || 
-            session.namespaces.hedera.accounts.length === 0) {
-            throw new Error('No Hedera account found in wallet. Please make sure you have an account set up.');
-        }
-
-        const accountId = session.namespaces.hedera.accounts[0].split(':').pop();
+        const accountId = session.namespaces?.hedera?.accounts?.[0]?.split(':').pop();
         if (!accountId) {
-            throw new Error('Invalid account format received from wallet');
+            throw new Error('No account ID in session');
         }
 
         // Set wallet state
@@ -484,11 +489,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
 
     } catch (error: any) {
         console.error('Connection error:', error);
-        // Set a user-friendly error message
-        setError(
-            error.message || 
-            'Unable to connect to wallet. Please check if HashPack is installed and try again.'
-        );
+        setError(error.message);
         clearStoredSession();
     } finally {
         setIsConnecting(false);
@@ -598,58 +599,75 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     }
   };
 
-  const signAndExecuteTransaction = async (params: { transactionList: string, signerAccountId: string }) => {
-    if (!dAppConnector) {
-      throw new Error("DAppConnector not initialized");
+  type TransactionResult = TransactionResponse | SignAndExecuteTransactionResult;
+
+  const signAndExecuteTransaction = async (params: { 
+    transactionList: string, 
+    signerAccountId: string,
+    password: string 
+  }): Promise<TransactionResult> => {
+    if (walletType === 'inApp') {
+        if (!inAppWallet.inAppPrivateKey) {
+            throw new Error("No private key available for in-app wallet");
+        }
+        return inAppWallet.signTransaction(params.transactionList, params.password);
+    } else {
+        return dAppConnector?.signAndExecuteTransaction({
+            signerAccountId: params.signerAccountId,
+            transactionList: params.transactionList
+        }) ?? Promise.reject(new Error("DAppConnector not initialized"));
     }
-    
-    const result = await dAppConnector.signAndExecuteTransaction({
-      signerAccountId: params.signerAccountId,
-      transactionList: params.transactionList
-    });
-    
-    return result;
   };
 
   const handleDisconnect = async () => {
     try {
-        setIsConnecting(true); // Prevent multiple clicks
-        
-        if (dAppConnector && sessions?.length > 0) {
-            // Disconnect each session in parallel with error handling for each
-            await Promise.all(
-                sessions.map(async (session) => {
-                    try {
-                        await dAppConnector.disconnect(session.topic);
-                    } catch (error: any) {
-                        // Ignore specific errors about already disconnected sessions
-                        if (!error.message?.includes('Missing or invalid') && 
-                            !error.message?.includes('already disconnected') &&
-                            !error.message?.includes('Record was recently deleted')) {
-                            console.error('[ERROR] Disconnect error:', error);
+        SessionPasswordManager.clearPassword();
+        setIsConnecting(true);
+
+        if (walletType === 'inApp') {
+            // Clear in-app wallet state
+            await inAppWallet.loadWallet("");  // TODO: Implement proper password handling for session restoration
+            setAccount("");
+            setUserId(null);
+            setWalletType(null);
+            setSessionState({
+                wallet: {
+                  isConnected: false,
+                  accountId: null,
+                  session: null
+                },
+                auth: {
+                  isAuthenticated: false,
+                  userId: null,
+                  session: null
+                }
+            });
+        } else {
+            // Existing extension wallet disconnect flow
+            if (dAppConnector && sessions?.length > 0) {
+                await Promise.all(
+                    sessions.map(async (session) => {
+                        try {
+                            await dAppConnector.disconnect(session.topic);
+                        } catch (error: any) {
+                            if (!error.message?.includes('Missing or invalid') && 
+                                !error.message?.includes('already disconnected') &&
+                                !error.message?.includes('Record was recently deleted')) {
+                                console.error('[ERROR] Disconnect error:', error);
+                            }
                         }
-                    }
-                })
-            );
+                    })
+                );
+            }
+
+            setSessions([]);
+            setAccount("");
+            setUserId(null);
+            setWalletType(null);
         }
 
-        // Clear local state regardless of disconnect success
-        setSessions([]);
-        setAccount("");
-        setUserId(null);
-        
-        // Clear stored session
-        try {
-            await clearStoredSession();
-        } catch (error) {
-            console.error('[ERROR] Failed to clear stored session:', error);
-        }
-
-        // Force clear any remaining WalletConnect state
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('walletconnect');
-            localStorage.removeItem('WALLETCONNECT_DEEPLINK_CHOICE');
-        }
+        // Clear stored session for both wallet types
+        await clearStoredSession();
 
     } catch (error) {
         console.error('[ERROR] Disconnect failed:', error);
@@ -657,15 +675,159 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         setSessions([]);
         setAccount("");
         setUserId(null);
+        setWalletType(null);
     } finally {
         setIsConnecting(false);
     }
   };
 
+  const handleConnectInAppWallet = async (email: string, password: string, accountId: string) => {
+    console.log('handleConnectInAppWallet called with:', { email, accountId });
+    try {
+        const response = await fetch('/api/auth/in-app-wallet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                password,
+                accountId
+            }),
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to connect wallet');
+        }
+        
+        const data = await response.json();
+        setUserId(data.userId);
+        setError('Please check your email to verify your account');
+        
+        // Store password for session
+        SessionPasswordManager.setPassword(password);
+    } catch (error) {
+        SessionPasswordManager.clearPassword();
+        console.error('handleConnectInAppWallet error:', error);
+        throw error;
+    }
+  };
+
+  const handlePasswordSubmit = async (password: string) => {
+    try {
+        setIsConnecting(true);
+        SessionPasswordManager.setPassword(password);
+        await inAppWallet.loadWallet(password);
+        
+        if (inAppWallet.inAppAccount) {
+            const { data: { user } } = await supabase.auth.getUser();
+            setAccount(inAppWallet.inAppAccount);
+            setUserId(user?.id || null);
+            setSessionState({
+                wallet: {
+                    isConnected: true,
+                    accountId: inAppWallet.inAppAccount,
+                    session: null
+                },
+                auth: {
+                    isAuthenticated: true,
+                    userId: user?.id || null,
+                    session: null
+                }
+            });
+        }
+        setShowPasswordModal(false);
+        setPendingSessionRestore(false);
+    } catch (error) {
+        console.error('Failed to restore session:', error);
+        setError('Invalid password or session expired');
+        SessionPasswordManager.clearPassword();
+    } finally {
+        setIsConnecting(false);
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setShowPasswordModal(false);
+    setPendingSessionRestore(false);
+    handleDisconnect();
+  };
+
+  // Update restoreInAppSession
+  const restoreInAppSession = async () => {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            if (user?.user_metadata?.isInAppWallet) {
+                setWalletType('inApp');
+                
+                const sessionPassword = SessionPasswordManager.getPassword();
+                if (!sessionPassword) {
+                    setPendingSessionRestore(true);
+                    setShowPasswordModal(true);
+                    return;
+                }
+                
+                await inAppWallet.loadWallet(sessionPassword);
+                
+                if (inAppWallet.inAppAccount) {
+                    setAccount(inAppWallet.inAppAccount);
+                    setUserId(user.id);
+                    setSessionState({
+                        wallet: {
+                            isConnected: true,
+                            accountId: inAppWallet.inAppAccount,
+                            session: null
+                        },
+                        auth: {
+                            isAuthenticated: true,
+                            userId: user.id,
+                            session: null
+                        }
+                    });
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to restore session:', error);
+        handleDisconnect();
+    }
+  };
+
+  // Add session expiry listener
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        if (walletType === 'inApp') {
+          if (!session) {
+            // Session expired or user signed out
+            handleDisconnect();
+          } else {
+            // Token was refreshed, update session state
+            setSessionState(prev => ({
+              ...prev,
+              auth: {
+                ...prev.auth,
+                session
+              }
+            }));
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [walletType]);
+
   return (
     <WalletContext.Provider
       value={{
         account,
+        activeAccount,
         handleConnect,
         handleDisconnectSessions,
         signAndExecuteTransaction,
@@ -680,10 +842,19 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         error,
         sessionState,
         handleDisconnect,
-        setError
+        setError,
+        walletType,
+        handleConnectInAppWallet,
+        setIsConnecting,
       }}
     >
       {children}
+      {showPasswordModal && (
+        <SessionPasswordModal
+          onSubmit={handlePasswordSubmit}
+          onCancel={handlePasswordCancel}
+        />
+      )}
     </WalletContext.Provider>
   );
 }

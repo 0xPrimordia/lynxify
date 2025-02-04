@@ -6,82 +6,114 @@ import { useNFTGate } from "../hooks/useNFTGate";
 import { useRewards } from "../hooks/useRewards";
 import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
-import { AccountBalanceQuery } from "@hashgraph/sdk";
+import { AccountBalanceQuery, AccountId } from "@hashgraph/sdk";
 import { handleDisconnectSessions } from '@/utils/supabase/session';
+import { ConnectWallet } from './ConnectWallet';
+import { useSupabase } from "../hooks/useSupabase";
+import { useRouter } from "next/navigation";
+import { toast } from 'sonner';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, dAppConnector, sessions, account, client, userId, handleDisconnect, error, setError, isConnecting } = useWalletContext();
+    const { handleConnect, account, client, userId, handleDisconnect, error, setError, isConnecting, walletType } = useWalletContext();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { fetchAchievements, totalXP } = useRewards();
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
     const [balance, setBalance] = useState<string>("0");
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [showConnectModal, setShowConnectModal] = useState(false);
+    const { supabase } = useSupabase();
+    const [isSignedIn, setIsSignedIn] = useState(false);
+    const router = useRouter();
+    const [userAccountId, setUserAccountId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (account !== "") {
-            setIsConnected(true);
-            
-            const fetchBalance = async () => {
-                try {
-                    const query = new AccountBalanceQuery()
-                        .setAccountId(account)
-                        .setMaxAttempts(3)
-                        .setMaxBackoff(5000)
-                        .setMinBackoff(250);
-
-                    const accountBalance = await query.execute(client);
-                    const hbarBalance = accountBalance.hbars.toString();
-                    setBalance(parseFloat(hbarBalance).toFixed(2));
-                    return true; // Successful fetch
-                } catch (error: any) {
-                    if (error.toString().includes('503')) {
-                        // Silently ignore 503 errors and keep existing balance
-                        return false;
-                    }
-                    console.error('Balance fetch error:', error);
-                    if (balance === "0") {
-                        setBalance("0");
-                    }
-                    return false;
-                }
-            };
-
-            // Initial fetch
-            fetchBalance();
-
-            // Set up polling with less frequent updates
-            const INITIAL_POLL_INTERVAL = 60000; // Start with 60s instead of 30s
-            const MAX_POLL_INTERVAL = 300000;    // Max 5 minutes
-            let pollInterval = INITIAL_POLL_INTERVAL;
-            let timeoutId: NodeJS.Timeout;
-
-            const pollWithBackoff = async () => {
-                const success = await fetchBalance();
+        // Initial session check
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            setIsSignedIn(!!session);
+            if (session?.user) {
+                // Fetch user's Hedera account ID
+                const { data: userData } = await supabase
+                    .from('Users')
+                    .select('hederaAccountId')
+                    .eq('id', session.user.id)
+                    .single();
                 
-                // Adjust polling interval based on success
-                if (success) {
-                    pollInterval = INITIAL_POLL_INTERVAL; // Reset to normal interval on success
-                } else {
-                    // Increase interval more gradually
-                    pollInterval = Math.min(pollInterval * 1.2, MAX_POLL_INTERVAL);
+                if (userData?.hederaAccountId) {
+                    setUserAccountId(userData.hederaAccountId);
                 }
+            }
+        };
+        checkSession();
 
-                timeoutId = setTimeout(pollWithBackoff, pollInterval);
-            };
+        // Listen for auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            setIsSignedIn(!!session);
+            if (session?.user) {
+                const { data: userData } = await supabase
+                    .from('Users')
+                    .select('hederaAccountId')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                if (userData?.hederaAccountId) {
+                    setUserAccountId(userData.hederaAccountId);
+                }
+            } else {
+                setUserAccountId(null);
+            }
+        });
 
-            timeoutId = setTimeout(pollWithBackoff, pollInterval);
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [supabase]);
 
-            return () => {
-                clearTimeout(timeoutId);
-            };
-        } else {
-            setIsConnected(false);
-            setBalance("0");
+    const activeAccount = account || userAccountId;
+    const isConnected = Boolean(activeAccount);
+
+    useEffect(() => {
+        console.log('Header - Effect triggered with:', {
+            isConnected,
+            activeAccount,
+            client,
+            walletType
+        });
+
+        if (!isConnected) {
+            console.log('Header - Not connected, skipping balance fetch');
+            return;
         }
-    }, [account, client]);
+
+        const fetchBalance = async () => {
+            try {
+                if (!activeAccount) return;
+                console.log('Header - Fetching balance for:', {
+                    activeAccount,
+                    walletType,
+                    client: client?.ledgerId?.toString()
+                });
+                const query = new AccountBalanceQuery()
+                    .setAccountId(AccountId.fromString(activeAccount));
+                const balance = await query.execute(client);
+                console.log('Header - Balance result:', {
+                    raw: balance.hbars.toString(),
+                    parsed: parseFloat(balance.hbars.toString())
+                });
+                const hbarBalance = parseFloat(balance.hbars.toString());
+                setBalance(hbarBalance.toFixed(2));
+            } catch (error) {
+                console.error('Header - Failed to fetch balance:', error);
+                setBalance('0.00');
+            }
+        };
+
+        fetchBalance();
+        const interval = setInterval(fetchBalance, 10000);
+        return () => clearInterval(interval);
+    }, [isConnected, activeAccount, client]);
 
     useEffect(() => {
         if (userId && account) {
@@ -91,6 +123,15 @@ const Header = () => {
 
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);
+    };
+
+    const handleCopyAccount = async (accountId: string) => {
+        try {
+            await navigator.clipboard.writeText(accountId);
+            toast.success('Account ID copied to clipboard');
+        } catch (err) {
+            toast.error('Failed to copy account ID');
+        }
     };
 
     return ( 
@@ -116,6 +157,25 @@ const Header = () => {
                 </NavbarBrand>
                 
                 {/* Desktop Menu */}
+                <NavbarContent className="hidden sm:flex gap-6" justify="center">
+                    <NavbarItem>
+                        <Link 
+                            href="/dex" 
+                            className={`text-white text-2xl hover:text-foreground transition-colors ${vt323.className}`}
+                        >
+                            Swap
+                        </Link>
+                    </NavbarItem>
+                    <NavbarItem>
+                        <Link 
+                            href="/wallet" 
+                            className={`text-white text-2xl hover:text-foreground transition-colors ${vt323.className}`}
+                        >
+                            Wallet
+                        </Link>
+                    </NavbarItem>
+                </NavbarContent>
+
                 <NavbarContent className="hidden sm:flex" justify="end">
                     <NavbarItem>
                         <Link 
@@ -127,7 +187,7 @@ const Header = () => {
                         </Link>
                     </NavbarItem>
 
-                    {isConnected && (
+                    {(isConnected || isSignedIn) && (
                         <NavbarItem className="flex items-center">
                             <div className="px-3 py-1 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center">
                                 <span className="text-[#0159E0] font-bold text-sm">
@@ -137,21 +197,39 @@ const Header = () => {
                         </NavbarItem>
                     )}
 
-                    <NavbarItem>
-                        {!isConnected ? (
-                            <Button 
-                                className="mt-0" 
-                                variant="bordered"
-                                size="sm"
-                                style={{
-                                    backgroundColor: "#0159E0",
-                                    color: "white",
-                                    borderColor: "#0159E0"
-                                }}
-                                onPress={() => handleConnect()}
-                            >
-                                Connect Wallet
-                            </Button>
+                    <NavbarItem className="flex gap-2">
+                        {!isConnected && !isSignedIn ? (
+                            <>
+                                <Button 
+                                    className="mt-0" 
+                                    variant="bordered"
+                                    size="sm"
+                                    style={{
+                                        backgroundColor: "#0159E0",
+                                        color: "white",
+                                        borderColor: "#0159E0"
+                                    }}
+                                    onPress={() => handleConnect()}
+                                >
+                                    Connect Wallet
+                                </Button>
+                                <Button
+                                    className="mt-0"
+                                    variant="bordered"
+                                    size="sm"
+                                    onPress={() => setShowConnectModal(true)}
+                                >
+                                    Create Wallet
+                                </Button>
+                                <Button
+                                    className="mt-0"
+                                    variant="light"
+                                    size="sm"
+                                    onPress={() => router.push('/auth/login')}
+                                >
+                                    Sign In
+                                </Button>
+                            </>
                         ) : (
                             <Dropdown>
                                 <DropdownTrigger>
@@ -160,14 +238,32 @@ const Header = () => {
                                     </Button>
                                 </DropdownTrigger>
                                 <DropdownMenu aria-label="Account Actions">
-                                    <DropdownItem key="account" className="text-sm">
-                                        {account}
+                                    <DropdownItem 
+                                        key="account" 
+                                        className="text-sm cursor-pointer"
+                                        onClick={() => handleCopyAccount(isConnected ? account : userAccountId!)}
+                                    >
+                                        {isConnected ? account : userAccountId!}
+                                    </DropdownItem>
+                                    <DropdownItem 
+                                        key="wallet"
+                                        className="text-sm"
+                                        onPress={() => router.push('/wallet')}
+                                    >
+                                        View Wallet
                                     </DropdownItem>
                                     <DropdownItem 
                                         key="logout" 
                                         className="text-danger" 
                                         color="danger" 
-                                        onPress={handleDisconnect}
+                                        onPress={async () => {
+                                            if (isConnected) {
+                                                await handleDisconnect();
+                                            }
+                                            if (isSignedIn) {
+                                                await supabase.auth.signOut();
+                                            }
+                                        }}
                                     >
                                         Sign Out
                                     </DropdownItem>
@@ -188,7 +284,7 @@ const Header = () => {
                                 color: "white",
                                 borderColor: "#0159E0"
                             }}
-                            onPress={() => handleConnect()}
+                            onPress={() => setShowConnectModal(true)}
                         >
                             Connect
                         </Button>
@@ -205,6 +301,22 @@ const Header = () => {
 
                 {/* Mobile Menu */}
                 <NavbarMenu>
+                    <NavbarMenuItem>
+                        <Link 
+                            href="/dex" 
+                            className="w-full py-2 text-foreground-500 hover:text-foreground"
+                        >
+                            DEX
+                        </Link>
+                    </NavbarMenuItem>
+                    <NavbarMenuItem>
+                        <Link 
+                            href="/wallet" 
+                            className="w-full py-2 text-foreground-500 hover:text-foreground"
+                        >
+                            Wallet
+                        </Link>
+                    </NavbarMenuItem>
                     {isConnected && (
                         <NavbarMenuItem className="mb-4">
                             <div className="px-3 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center justify-between w-full">
@@ -251,7 +363,7 @@ const Header = () => {
                 isOpen={showPurchaseModal} 
                 onClose={() => setShowPurchaseModal(false)}
                 classNames={{
-                    base: "max-w-md mx-auto",
+                    base: "max-w-md mx-auto bg-black border border-gray-800 rounded-lg",
                     header: vt323.className
                 }}
                 placement="center"
@@ -264,6 +376,25 @@ const Header = () => {
                             tokenId={process.env.NEXT_PUBLIC_ACCESS_NFT_TOKEN_ID || ""}
                             client={client}
                         />
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
+
+            <Modal 
+                isOpen={showConnectModal} 
+                onClose={() => setShowConnectModal(false)}
+                placement="center"
+                classNames={{
+                    base: "bg-black border border-gray-800 rounded-lg",
+                    header: "border-b border-gray-800",
+                    body: "max-h-[400px] overflow-y-auto",
+                    closeButton: "hover:bg-gray-800 active:bg-gray-700"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="text-xl font-bold">Create Wallet</ModalHeader>
+                    <ModalBody className="pb-6">
+                        <ConnectWallet />
                     </ModalBody>
                 </ModalContent>
             </Modal>

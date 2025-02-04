@@ -44,20 +44,17 @@ export const clearStoredSession = async () => {
     
     try {
         isClearing = true;
-        
-        // Clear local storage first
         localStorage.removeItem(SESSION_STORAGE_KEY);
         
-        // Perform Supabase signout
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            throw error;
+        // Only sign out if we have an active session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            console.log('Session storage and auth cleared');
         }
-        
-        console.log('Session storage and auth cleared');
     } catch (error) {
         console.error('Error clearing session:', error);
-        throw error;
     } finally {
         isClearing = false;
     }

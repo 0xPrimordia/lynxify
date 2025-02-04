@@ -30,11 +30,19 @@ import { ThresholdSection } from '../components/ThresholdSection';
 import PriceChart, { ChartData } from '../components/PriceChart';
 import { MagnifyingGlassIcon as SearchIcon } from "@heroicons/react/24/outline";
 import { checkTokenAssociation, associateToken } from '@/app/lib/utils/tokens';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { useInAppWallet } from '../contexts/InAppWalletContext';
+import { AccountBalanceQuery, TokenId, AccountId, Client } from "@hashgraph/sdk";
+import SessionPasswordManager from '@/lib/utils/sessionPassword';
 
 export default function DexPage() {
     const router = useRouter();
-    const { account, userId, signAndExecuteTransaction } = useWalletContext();
+    const { account, userId, signAndExecuteTransaction, isConnecting, handleConnect, walletType } = useWalletContext();
     const { awardXP } = useRewards();
+    const { supabase } = useSupabase();
+    const [isSignedIn, setIsSignedIn] = useState(false);
+    const [userAccountId, setUserAccountId] = useState<string | null>(null);
+    const activeAccount = account || userAccountId;
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -101,6 +109,8 @@ export default function DexPage() {
     const [poolSearch, setPoolSearch] = useState("");
     const [isUsdInput, setIsUsdInput] = useState(false);
     const [usdAmount, setUsdAmount] = useState("0.0");
+    const client = Client.forTestnet();
+    const { signTransaction } = useInAppWallet();
 
     const timeRanges = [
         { id: '1H', label: '1H', value: 60 * 60 },
@@ -219,7 +229,8 @@ export default function DexPage() {
     }, [slippageTolerance]);
 
     const handleQuote = async () => {
-        if (!currentPool || !currentToken || !tradeToken || !account) return;
+        const activeAccount = account || userAccountId;
+        if (!currentPool || !currentToken || !tradeToken || !activeAccount) return;
 
         // Check HBAR balance first
         try {
@@ -250,21 +261,21 @@ export default function DexPage() {
             // Check associations based on trade type
             switch (getTradeType()) {
                 case 'hbarToToken':
-                    if (!await checkTokenAssociation(account, tradeToken.id)) {
-                        transactions.push(await associateToken(account, tradeToken.id));
+                    if (!await checkTokenAssociation(activeAccount, tradeToken.id)) {
+                        transactions.push(await associateToken(activeAccount, tradeToken.id));
                     }
                     break;
                 case 'tokenToHbar':
-                    if (!await checkTokenAssociation(account, currentToken.id)) {
-                        transactions.push(await associateToken(account, currentToken.id));
+                    if (!await checkTokenAssociation(activeAccount, currentToken.id)) {
+                        transactions.push(await associateToken(activeAccount, currentToken.id));
                     }
                     break;
                 case 'tokenToToken':
-                    if (!await checkTokenAssociation(account, currentToken.id)) {
-                        transactions.push(await associateToken(account, currentToken.id));
+                    if (!await checkTokenAssociation(activeAccount, currentToken.id)) {
+                        transactions.push(await associateToken(activeAccount, currentToken.id));
                     }
-                    if (!await checkTokenAssociation(account, tradeToken.id)) {
-                        transactions.push(await associateToken(account, tradeToken.id));
+                    if (!await checkTokenAssociation(activeAccount, tradeToken.id)) {
+                        transactions.push(await associateToken(activeAccount, tradeToken.id));
                     }
                     break;
             }
@@ -278,17 +289,27 @@ export default function DexPage() {
             // If we have any transactions, execute them all in sequence
             if (transactions.length > 0) {
                 for (const tx of transactions) {
-                    const result = await signAndExecuteTransaction({
-                        transactionList: tx,
-                        signerAccountId: account
-                    });
+                    let result;
+                    if (walletType === 'inApp') {
+                        // Use the hook value from component level
+                        result = await signTransaction(tx, SessionPasswordManager.getPassword() || "");
+                    } else {
+                        result = await signAndExecuteTransaction({
+                            transactionList: tx,
+                            signerAccountId: activeAccount,
+                            password: SessionPasswordManager.getPassword() || ""
+                        });
+                    }
                     
                     // Add debug logging
                     console.log('Transaction result:', result);
                     
                     // Check if transaction was successful
-                    if (result.status === 'reverted' || result.status === 'failed') {
+                    if ('status' in result && (result.status === 'reverted' || result.status === 'failed')) {
                         throw new Error(`Transaction failed with status: ${result.status}`);
+                    }
+                    if ('receipt' in result && result.receipt && typeof result.receipt === 'object' && 'status' in result.receipt && result.receipt.status !== 'SUCCESS') {
+                        throw new Error(`Transaction failed with receipt status: ${result.receipt.status}`);
                     }
                 }
 
@@ -303,8 +324,8 @@ export default function DexPage() {
 
                 // Award XP for successful trade
                 try {
-                    if (userId && account) {
-                        await awardXP(userId, account, 'FIRST_TRADE');
+                    if (userId && activeAccount) {
+                        await awardXP(userId, activeAccount, 'FIRST_TRADE');
                     }
                 } catch (error) {
                     console.error('Failed to award XP for first trade:', error);
@@ -331,7 +352,7 @@ export default function DexPage() {
                     tradeAmount.toString(),
                     tradeToken.id,
                     currentPool.fee || 3000,
-                    account,
+                    activeAccount || '',
                     Math.floor(Date.now() / 1000) + 60,
                     slippageBasisPoints,
                     tradeToken.decimals
@@ -341,7 +362,7 @@ export default function DexPage() {
                     tradeAmount.toString(),
                     currentToken.id,
                     currentPool.fee || 3000,
-                    account,
+                    activeAccount || '',
                     Math.floor(Date.now() / 1000) + 60,
                     slippageBasisPoints,
                     currentToken.decimals
@@ -352,7 +373,7 @@ export default function DexPage() {
                     currentToken.id,
                     tradeToken.id,
                     currentPool.fee || 3000,
-                    account,
+                    activeAccount || '',
                     Math.floor(Date.now() / 1000) + 60,
                     slippageBasisPoints,
                     currentToken.decimals,
@@ -391,7 +412,7 @@ export default function DexPage() {
     };
 
     const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
-        if (!account || !userId || !currentPool) {
+        if (!activeAccount || !userId || !currentPool) {
             setAlertState({
                 isVisible: true,
                 message: "Missing required data: account, userId, or pool",
@@ -410,7 +431,7 @@ export default function DexPage() {
                 cap: type === 'stopLoss' ? stopLossCap :
                      type === 'buyOrder' ? buyOrderCap :
                      sellOrderCap,
-                hederaAccountId: account,
+                hederaAccountId: activeAccount,
                 tokenA: currentPool.tokenA.id,
                 tokenB: currentPool.tokenB.id
             });
@@ -426,7 +447,7 @@ export default function DexPage() {
                     cap: type === 'stopLoss' ? stopLossCap :
                          type === 'buyOrder' ? buyOrderCap :
                          sellOrderCap,
-                    hederaAccountId: account,
+                    hederaAccountId: activeAccount,
                     tokenA: currentPool.tokenA.id,
                     tokenB: currentPool.tokenB.id,
                     fee: currentPool.fee,
@@ -531,29 +552,44 @@ export default function DexPage() {
     };
 
     const getTokenBalance = async (tokenId: string) => {
-        if (!account) return 0;
+        if (!activeAccount) return 0;
         
         try {
             // Special case for WHBAR - check native HBAR balance instead
             if (tokenId === "0.0.15058") {
-                const response = await fetch(`https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${account}`);
+                const response = await fetch(`https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${activeAccount}`);
                 if (!response.ok) {
-                    throw new Error('Failed to fetch HBAR balance');
+                    throw new Error(`Failed to fetch HBAR balance: ${response.statusText}`);
                 }
                 const data = await response.json();
-                // Convert from tinybars (10^8) to HBAR
                 return data.balance.balance;
             }
 
-            // Regular token balance check
-            const response = await fetch(`/api/tokens/balance?accountId=${account}&tokenId=${tokenId}`);
+            // For in-app wallets, use direct SDK query
+            if (walletType === 'inApp') {
+                const query = new AccountBalanceQuery()
+                    .setAccountId(AccountId.fromString(activeAccount));
+                const balance = await query.execute(client);
+                
+                // Return token balance if exists, otherwise 0
+                const tokenBalance = balance.tokens?.get(TokenId.fromString(tokenId));
+                return tokenBalance ? tokenBalance.toNumber() : 0;
+            }
+
+            // For extension wallets, use existing API route
+            const response = await fetch(`/api/tokens/balance?accountId=${activeAccount}&tokenId=${tokenId}`);
             if (!response.ok) {
-                throw new Error('Failed to fetch token balance');
+                throw new Error(`Failed to fetch token balance: ${response.statusText}`);
             }
             const data = await response.json();
             return data.balance;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching token balance:', error);
+            setAlertState({
+                isVisible: true,
+                message: `Failed to fetch balance: ${error.message}`,
+                type: 'danger'
+            });
             return 0;
         }
     };
@@ -858,8 +894,7 @@ export default function DexPage() {
             .filter((token: Token) => 
                 pools?.some((pool: any) => 
                     pool.tokenA?.id === token.id || pool.tokenB?.id === token.id
-                )
-            )
+                ))
             .filter((token: Token) => 
                 token.name.toLowerCase().includes(tokenSearch.toLowerCase()) ||
                 token.symbol.toLowerCase().includes(tokenSearch.toLowerCase())
@@ -1008,6 +1043,65 @@ export default function DexPage() {
         const numAmount = parseFloat(amount);
         if (isNaN(numAmount)) return "0.0";
         return toUsd ? (numAmount * price).toFixed(2) : (numAmount / price).toFixed(6);
+    };
+
+    useEffect(() => {
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            setIsSignedIn(!!session);
+
+            if (session?.user) {
+                // Fetch user's Hedera account ID
+                const { data: userData } = await supabase
+                    .from('Users')
+                    .select('hederaAccountId')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                if (userData?.hederaAccountId) {
+                    setUserAccountId(userData.hederaAccountId);
+                }
+            }
+        };
+
+        checkSession();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            setIsSignedIn(!!session);
+            if (session?.user) {
+                const { data: userData } = await supabase
+                    .from('Users')
+                    .select('hederaAccountId')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                if (userData?.hederaAccountId) {
+                    setUserAccountId(userData.hederaAccountId);
+                }
+            } else {
+                setUserAccountId(null);
+            }
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [supabase]);
+
+    const renderTradeButton = () => {
+        const hasAccount = Boolean(account || userAccountId);
+
+        return (
+            <Button
+                color="primary"
+                className="w-full"
+                onPress={() => hasAccount ? handleQuote() : handleConnect()}
+                isLoading={loading || isConnecting}
+                isDisabled={!hasAccount}
+            >
+                {hasAccount ? 'Swap' : 'Connect Wallet to Trade'}
+            </Button>
+        );
     };
 
     return (    
@@ -1291,14 +1385,7 @@ export default function DexPage() {
                                     setSlippage={setSlippageTolerance}
                                     label="Trade Slippage"
                                 />
-                                <Button 
-                                    isDisabled={!currentPool || !account}
-                                    onPress={handleQuote} 
-                                    className="w-full" 
-                                    endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
-                                >
-                                    {account ? "Trade" : "Connect Wallet to Trade"}
-                                </Button>
+                                {renderTradeButton()}
                             </div>
                             <ThresholdSection
                                 selectedThresholdType={selectedThresholdType}
@@ -1445,14 +1532,7 @@ export default function DexPage() {
                                     setSlippage={setSlippageTolerance}
                                     label="Trade Slippage"
                                 />
-                                <Button 
-                                    isDisabled={currentPool && account ? false : true} 
-                                    onPress={handleQuote} 
-                                    className="w-full" 
-                                    endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
-                                >
-                                    Trade
-                                </Button>
+                                {renderTradeButton()}
                             </div>
                             <ThresholdSection
                                 selectedThresholdType={selectedThresholdType}
