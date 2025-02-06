@@ -1,39 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/utils/supabase';
 import { cookies } from 'next/headers';
-import crypto from 'crypto';
 import { User } from '@/app/types';
+import SessionPasswordManager from '@/lib/utils/sessionPassword';
+import { rateLimiterMiddleware } from '@/middleware/rateLimiter';
 
 export async function POST(req: NextRequest) {
+    // Apply rate limiting first
+    const rateLimitResponse = await rateLimiterMiddleware(req, 'auth');
+    if (!rateLimitResponse.ok) {
+        return rateLimitResponse;
+    }
+
+    console.log('Starting in-app-wallet registration');
     const cookieStore = cookies();
     const supabase = createServerSupabase(cookieStore, true);
     
     try {
-        const { accountId, email, password } = await req.json();
+        const { email, password, isInAppWallet } = await req.json();
+        console.log('Received registration request:', { email, isInAppWallet });
         
-        if (!accountId || !email || !password) {
+        if (!email || !password) {
+            console.log('Missing required fields');
             return NextResponse.json({ 
-                error: 'Account ID, email, and password are required' 
+                error: 'Email and password are required' 
             }, { status: 400 });
         }
 
-        console.log('Creating auth user:', { accountId, email });
+        console.log('Setting password in SessionPasswordManager');
+        try {
+            await SessionPasswordManager.setPassword(password);
+            console.log('Password set successfully');
+        } catch (error: any) {
+            console.error('SessionPasswordManager error:', error);
+            return NextResponse.json({ 
+                error: error.message,
+                stack: error.stack
+            }, { status: 500 });
+        }
+
+        console.log('Creating auth user:', { email });
         const { data: userData, error: createError } = await supabase.auth.signUp({
             email,
             password,
             options: {
                 emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email`,
                 data: {
-                    hederaAccountId: accountId,
                     isInAppWallet: true
                 }
             }
         });
 
         if (createError) {
+            // Handle specific Supabase errors
+            if (createError.message.includes('rate limit')) {
+                return NextResponse.json({ 
+                    error: 'Too many attempts. Please try again later.' 
+                }, { status: 429 });
+            }
             if (createError.message.includes('already been registered')) {
                 return NextResponse.json({ 
-                    error: 'Email already registered. Please sign in or use a different email.' 
+                    error: 'Email already registered. Please sign in.' 
                 }, { status: 400 });
             }
             console.error('Auth user creation failed:', createError);
@@ -42,10 +69,9 @@ export async function POST(req: NextRequest) {
 
         console.log('Auth user created:', userData.user);
 
-        // Create DB record
+        // Create DB record without Hedera account ID
         const newUser: User = {
             id: userData?.user?.id || '',
-            hederaAccountId: accountId,
             created_at: new Date().toISOString(),
             isInAppWallet: true
         };
@@ -69,9 +95,9 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (error: any) {
-        console.error('Auth error:', error);
+        console.error('Registration error:', error);
         return NextResponse.json(
-            { error: error.message || 'Authentication failed' },
+            { error: error.message || 'Registration failed' },
             { status: 500 }
         );
     }

@@ -59,7 +59,7 @@ interface WalletContextType {
     handleDisconnect: () => Promise<void>;
     setError: (error: string | null) => void;
     walletType: 'extension' | 'inApp' | null;
-    handleConnectInAppWallet: (email: string, password: string, accountId: string) => Promise<void>;
+    handleConnectInAppWallet: (email: string, password: string) => Promise<void>;
     setIsConnecting: (isConnecting: boolean) => void;
 }
 
@@ -681,22 +681,22 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     }
   };
 
-  const handleConnectInAppWallet = async (email: string, password: string, accountId: string) => {
-    console.log('handleConnectInAppWallet called with:', { email, accountId });
+  const handleConnectInAppWallet = async (email: string, password: string) => {
+    console.log('handleConnectInAppWallet called with:', { email });
     try {
+        // Step 1: Register user first
         const response = await fetch('/api/auth/in-app-wallet', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 email,
                 password,
-                accountId
             }),
         });
         
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.message || 'Failed to connect wallet');
+            throw new Error(error.message || 'Failed to register user');
         }
         
         const data = await response.json();

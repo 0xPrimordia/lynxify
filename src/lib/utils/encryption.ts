@@ -1,4 +1,5 @@
-import { TextEncoder, TextDecoder } from 'util';
+// In-memory storage for temporary key material
+const keyMaterialStore = new Map<string, CryptoKey>();
 
 export async function encrypt(data: string, password: string): Promise<string> {
     const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -76,27 +77,42 @@ export async function decrypt(encryptedData: string, password: string): Promise<
     return new TextDecoder().decode(decrypted);
 }
 
-// Utility function for key material generation
-export async function getOrGenerateKeyMaterial(): Promise<CryptoKey> {
-    const key = localStorage.getItem('keyMaterial');
-    if (key) {
-        return crypto.subtle.importKey(
-            'raw',
-            new TextEncoder().encode(key),
-            'PBKDF2',
-            false,
-            ['deriveBits', 'deriveKey']
-        );
+export async function getOrGenerateKeyMaterial(salt: Uint8Array): Promise<CryptoKey> {
+    const keyId = Array.from(salt).join(',');
+    
+    // Check in-memory store first
+    const existingKey = keyMaterialStore.get(keyId);
+    if (existingKey) {
+        return existingKey;
     }
 
-    const newKey = crypto.getRandomValues(new Uint8Array(32));
-    localStorage.setItem('keyMaterial', btoa(String.fromCharCode(...newKey)));
-    
-    return crypto.subtle.importKey(
+    // Generate new key material if none exists
+    const keyMaterial = await window.crypto.subtle.importKey(
         'raw',
-        newKey,
-        'PBKDF2',
+        new TextEncoder().encode(process.env.NEXT_PUBLIC_ENCRYPTION_KEY),
+        { name: 'PBKDF2' },
         false,
         ['deriveBits', 'deriveKey']
+    );
+
+    // Store in memory
+    keyMaterialStore.set(keyId, keyMaterial);
+    return keyMaterial;
+}
+
+export async function getEncryptionKey(salt: Uint8Array, password: string): Promise<CryptoKey> {
+    const keyMaterial = await getOrGenerateKeyMaterial(salt);
+    
+    return window.crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: 100000,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
     );
 } 

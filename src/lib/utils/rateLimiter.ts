@@ -35,23 +35,34 @@ export async function rateLimit(
     const now = Date.now();
     const windowStart = Math.floor(now / config.windowMs) * config.windowMs;
     
-    const pipeline = redis.pipeline();
-    pipeline.incr(key);
-    pipeline.pexpire(key, config.windowMs);
-    
-    const [count] = (await pipeline.exec()) as [number];
-    
-    // First request in window
-    if (count === 1) {
-        await redis.pexpire(key, config.windowMs);
-    }
+    try {
+        const pipeline = redis.pipeline();
+        pipeline.incr(key);
+        pipeline.pexpire(key, config.windowMs);
+        
+        const [count] = (await pipeline.exec()) as [number];
+        
+        // First request in window
+        if (count === 1) {
+            await redis.pexpire(key, config.windowMs);
+        }
 
-    return {
-        success: count <= config.maxRequests,
-        limit: config.maxRequests,
-        remaining: Math.max(0, config.maxRequests - count),
-        reset: windowStart + config.windowMs,
-    };
+        return {
+            success: count <= config.maxRequests,
+            limit: config.maxRequests,
+            remaining: Math.max(0, config.maxRequests - count),
+            reset: windowStart + config.windowMs,
+        };
+    } catch (error) {
+        console.error('Rate limit error:', error);
+        // On error, allow the request
+        return {
+            success: true,
+            limit: config.maxRequests,
+            remaining: config.maxRequests,
+            reset: windowStart + config.windowMs,
+        };
+    }
 }
 
 export const rateLimitAttempt = async (key: string, maxAttempts = 5) => {
@@ -60,4 +71,16 @@ export const rateLimitAttempt = async (key: string, maxAttempts = 5) => {
         await redis.expire(key, 60); // Reset after 60 seconds
     }
     return attempts <= maxAttempts;
+}
+
+export async function resetRateLimits(ip: string) {
+    if (process.env.NODE_ENV !== 'test') {
+        throw new Error('Rate limit reset only available in test environment');
+    }
+    
+    const keys = await redis.keys(`rate-limit:*:${ip}`);
+    if (keys.length > 0) {
+        await redis.del(...keys);
+    }
+    return true;
 } 

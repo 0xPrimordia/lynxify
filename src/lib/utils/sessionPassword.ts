@@ -1,4 +1,4 @@
-import { encrypt, decrypt } from '@/app/lib/utils/encryption';
+import { encrypt, decrypt, getOrGenerateKeyMaterial } from './encryption';
 
 // Stores password temporarily in memory (not persisted)
 class SessionPasswordManager {
@@ -15,7 +15,7 @@ class SessionPasswordManager {
                 throw new Error('Password does not meet security requirements');
             }
 
-            this.password = await encrypt(password);
+            this.password = await encrypt(password, process.env.ENCRYPTION_KEY || 'default-key');
             
             if (this.timeout) {
                 clearTimeout(this.timeout);
@@ -30,10 +30,26 @@ class SessionPasswordManager {
     }
     
     static async getPassword(): Promise<string | null> {
-        if (!this.password) return null;
-        
-        const decrypted = await decrypt(this.password);
-        return decrypted;
+        if (this.isLockedOut()) {
+            const remainingTime = this.getLockoutTimeRemaining();
+            throw new Error(`Account is locked out. Try again in ${remainingTime} seconds`);
+        }
+
+        try {
+            if (!this.password) return null;
+            
+            const decrypted = await decrypt(this.password, process.env.ENCRYPTION_KEY || 'default-key');
+            this.attempts = 0; // Reset attempts on success
+            return decrypted;
+        } catch (error) {
+            this.attempts++;
+            if (this.attempts >= this.MAX_ATTEMPTS) {
+                this.setLockout();
+                const remainingTime = this.getLockoutTimeRemaining();
+                throw new Error(`Account is locked out. Try again in ${remainingTime} seconds`);
+            }
+            throw error;
+        }
     }
 
     static async clearPassword() {
@@ -63,7 +79,30 @@ class SessionPasswordManager {
 
     private static getLockoutTimeRemaining(): number {
         if (!this.lockoutEnd) return 0;
-        return Math.ceil((this.lockoutEnd - Date.now()) / 1000);
+        return Math.max(0, Math.ceil((this.lockoutEnd - Date.now()) / 1000));
+    }
+
+    // Expose these for testing
+    static _isPasswordStrong(password: string): boolean {
+        return this.isPasswordStrong(password);
+    }
+
+    static _isLockedOut(): boolean {
+        return this.isLockedOut();
+    }
+
+    static _setLockout(): void {
+        this.setLockout();
+    }
+
+    static _getLockoutTimeRemaining(): number {
+        return this.getLockoutTimeRemaining();
+    }
+
+    // For test cleanup
+    static _resetLockout(): void {
+        this.attempts = 0;
+        this.lockoutEnd = null;
     }
 }
 

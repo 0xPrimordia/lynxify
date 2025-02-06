@@ -86,5 +86,6 @@ describe.skip('Auth Flow', () => {
             console.error('Test failed:', error);
             throw error;
         }
+        //@ts-ignore
     }, 60000); // Individual test timeout
 }); 

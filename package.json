@@ -42,6 +42,7 @@
     "chart.js": "^4.4.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "cross-fetch": "^4.1.0",
     "crypto": "npm:crypto-browserify",
     "crypto-browserify": "^3.12.0",
     "crypto-js": "^4.2.0",
@@ -64,7 +65,8 @@
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.7",
     "viem": "^2.9.26",
-    "webpack": "^5.92.1"
+    "webpack": "^5.92.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@babel/core": "^7.26.7",
@@ -94,6 +96,7 @@
     "eslint": "^8",
     "eslint-config-next": "14.2.3",
     "ethers": "^6.13.4",
+    "fake-indexeddb": "^6.0.0",
     "hardhat": "^2.22.17",
     "hardhat-gas-reporter": "^1.0.10",
     "jest-environment-jsdom": "^29.7.0",

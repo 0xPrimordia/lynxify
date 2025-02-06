@@ -20,20 +20,12 @@ export async function rateLimiterMiddleware(
             headers.set('Retry-After', retryAfter.toString());
             
             return NextResponse.json(
-                { 
-                    error: 'Too many requests',
-                    retryAfter,
-                    type 
-                },
-                { 
-                    status: 429,
-                    headers
-                }
+                { error: 'Too many requests', retryAfter, type },
+                { status: 429, headers }
             );
         }
 
         const response = NextResponse.next();
-        // Add headers to successful response
         headers.forEach((value, key) => {
             response.headers.set(key, value);
         });

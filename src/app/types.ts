@@ -86,10 +86,10 @@ export type Token = {
     isFeeOnTransferToken: boolean;
 }
 
-export type User = {
+export interface User {
     id: string;
-    hederaAccountId: string;
     created_at: string;
+    hederaAccountId?: string;
     isInAppWallet?: boolean;
 }
 

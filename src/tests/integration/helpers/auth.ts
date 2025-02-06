@@ -2,6 +2,7 @@ import { PrivateKey, AccountId } from "@hashgraph/sdk";
 import { fetch } from 'cross-fetch';
 
 export async function authenticateWallet(operatorId: AccountId, operatorKey: PrivateKey) {
+    console.log('Attempting to authenticate with:', { operatorId, operatorKey });
     const message = "Test XP Rewards";
     const signature = await operatorKey.sign(Buffer.from(message));
     const signatureHex = Buffer.from(signature).toString('hex');
