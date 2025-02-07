@@ -32,6 +32,12 @@ const Header = () => {
         // Initial session check
         const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
+            console.log('Header - Session Check:', {
+                hasSession: !!session,
+                sessionData: session,
+                user: session?.user,
+                emailConfirmed: session?.user?.email_confirmed_at
+            });
             setIsSignedIn(!!session);
             if (session?.user) {
                 // Fetch user's Hedera account ID
@@ -40,6 +46,8 @@ const Header = () => {
                     .select('hederaAccountId')
                     .eq('id', session.user.id)
                     .single();
+                
+                console.log('Header - User Data:', userData);
                 
                 if (userData?.hederaAccountId) {
                     setUserAccountId(userData.hederaAccountId);

@@ -1,5 +1,5 @@
 import { TESTNET_REWARDS } from '@/config/rewards';
-import { Session } from '@supabase/supabase-js';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { SessionTypes } from '@walletconnect/types';
 
 export type PriceHistory = {
@@ -98,12 +98,13 @@ export interface SessionState {
   wallet: {
     isConnected: boolean;
     accountId: string | null;
-    session: SessionTypes.Struct | null;
+    session: null;
   };
   auth: {
     isAuthenticated: boolean;
     userId: string | null;
     session: Session | null;
+    user: SupabaseUser | null;
   };
 }
   

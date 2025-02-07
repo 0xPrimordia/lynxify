@@ -5,32 +5,48 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 
 export default function VerifyEmail() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [accountId, setAccountId] = useState<string | null>(null);
     const [privateKey, setPrivateKey] = useState<string | null>(null);
     const [showPrivateKey, setShowPrivateKey] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [hasSession, setHasSession] = useState(false);
+    const [password, setPassword] = useState<string>('');
     
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { supabase } = useSupabase();
     const errorParam = searchParams.get('error');
+    const { supabase } = useSupabase();
+    const { inAppAccount, createWallet } = useInAppWallet();
+    const [isSessionReady, setIsSessionReady] = useState(false);
 
     useEffect(() => {
         const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            setHasSession(!!session);
+            
+            if (!session) {
+                console.log('No session, redirecting to login...');
+                router.push('/auth/login');
+                return;
+            }
+
+            if (session.user.email_confirmed_at) {
+                console.log('Session authenticated and email confirmed');
+                setIsSessionReady(true);
+            } else {
+                console.log('Email not confirmed');
+                setError('Email not confirmed');
+            }
         };
+
         checkSession();
-    }, [supabase]);
+    }, [router, supabase.auth]);
 
     const handleCreateWallet = async () => {
-        if (!hasSession) {
-            setError('Please sign in to create a wallet');
+        if (!isSessionReady || !password) {
+            setError('Please provide a password');
             return;
         }
 
@@ -38,20 +54,13 @@ export default function VerifyEmail() {
         setError(null);
         
         try {
-            const response = await fetch('/api/auth/verify', {
-                method: 'POST',
-                credentials: 'include'  // Important: include cookies
-            });
-            
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to create wallet');
-            }
-            
-            const { accountId: newAccountId, privateKey: newPrivateKey } = await response.json();
-            setAccountId(newAccountId);
-            setPrivateKey(newPrivateKey);
+            const { accountId, privateKey } = await createWallet(password);
+            setPrivateKey(privateKey);
         } catch (err: any) {
+            if (err.message.includes('401') || err.message.includes('authenticated')) {
+                router.push('/auth/login');
+                return;
+            }
             setError(err.message);
         } finally {
             setIsLoading(false);
@@ -66,6 +75,11 @@ export default function VerifyEmail() {
         }
     };
 
+    if (!isSessionReady) {
+        console.log('Session not ready');
+        return <div className="text-center p-4">Loading...</div>;
+    }
+
     return (
         <div className="max-w-md mx-auto mt-8 p-6 bg-gray-800 rounded-lg shadow-xl border border-gray-700">
             {errorParam ? (
@@ -73,15 +87,22 @@ export default function VerifyEmail() {
                     <h1 className="text-2xl font-bold mb-4 text-red-400">Verification Failed</h1>
                     <p className="text-red-300">{errorParam}</p>
                 </div>
-            ) : !accountId ? (
+            ) : !inAppAccount ? (
                 <div className="text-center">
                     <h1 className="text-2xl font-bold mb-4 text-emerald-400">Email Verified!</h1>
                     <p className="text-gray-300 mb-6">
                         Your email has been verified. Click below to create your Hedera account.
                     </p>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter password to encrypt your key"
+                        className="w-full mb-4 p-2 rounded bg-gray-700 text-white"
+                    />
                     <button
                         onClick={handleCreateWallet}
-                        disabled={isLoading || !hasSession}
+                        disabled={!isSessionReady || isLoading}
                         className={`px-4 py-2 bg-[#0159E0] text-white rounded hover:bg-blue-700 
                             disabled:bg-gray-600 disabled:text-gray-300 w-full transition-colors
                             ${isLoading ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -97,7 +118,7 @@ export default function VerifyEmail() {
                     <h1 className="text-2xl font-bold mb-4 text-emerald-400">Wallet Created!</h1>
                     <div className="mb-6">
                         <p className="text-gray-300 mb-2">Your Hedera Account ID:</p>
-                        <p className="font-mono bg-gray-700 p-2 rounded text-gray-100">{accountId}</p>
+                        <p className="font-mono bg-gray-700 p-2 rounded text-gray-100">{inAppAccount}</p>
                     </div>
                     <div className="mb-6">
                         <div className="flex items-center justify-between mb-2">

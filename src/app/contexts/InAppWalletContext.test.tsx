@@ -269,4 +269,52 @@ describe('InAppWalletContext', () => {
             expect(screen.getByTestId('account')).toHaveTextContent('No Account');
         });
     });
+
+    it('should create a wallet with proper return values', async () => {
+        // Mock PrivateKey.generateED25519() first
+        (PrivateKey.generateED25519 as jest.Mock).mockImplementation(() => ({
+            publicKey: { toString: () => "mockPublicKey" },
+            toString: () => "mockPrivateKey"
+        }));
+
+        render(
+            <InAppWalletProvider>
+                <TestComponent />
+            </InAppWalletProvider>
+        );
+
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('create-wallet'));
+        });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('account')).toHaveTextContent('0.0.123456');
+            expect(screen.getByTestId('privateKey')).toHaveTextContent('mockPrivateKey');
+        });
+    });
+
+    it('should handle session expiry during wallet creation', async () => {
+        // Mock fetch to simulate 401
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+            Promise.resolve({
+                ok: false,
+                status: 401,
+                json: () => Promise.resolve({ error: 'Session expired' })
+            })
+        );
+
+        render(
+            <InAppWalletProvider>
+                <TestComponent />
+            </InAppWalletProvider>
+        );
+
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('create-wallet'));
+        });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('error')).toHaveTextContent('Session expired');
+        });
+    });
 }); 

@@ -2,10 +2,14 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import SessionPasswordManager from '@/lib/utils/sessionPassword';
 import { useSupabase } from './useSupabase';
 import { useState, useEffect } from 'react';
+import { encrypt } from '@/lib/utils/encryption';
+import { TestComponent } from './TestComponent';
+import { TestWrapper, updateSessionState, simulateSessionError, resetMocks } from './useAuthSession.setup';
 
 // Mock dependencies
 jest.mock('./useSupabase');
 jest.mock('@/lib/utils/sessionPassword');
+jest.mock('@/lib/utils/encryption');
 
 // Mock session data
 const mockSession = {
@@ -21,27 +25,6 @@ const mockSession = {
 
 // Add state update trigger
 const stateUpdateTrigger = jest.fn();
-
-// Simple test component that only shows session status
-const TestComponent = () => {
-    const { supabase } = useSupabase();
-    const [, setUpdate] = useState(0);
-
-    // Subscribe to password changes
-    useEffect(() => {
-        stateUpdateTrigger.mockImplementation(() => {
-            setUpdate(prev => prev + 1);
-        });
-    }, []);
-
-    return (
-        <div>
-            <div data-testid="session-status">
-                {SessionPasswordManager.getPassword() ? 'Active' : 'Inactive'}
-            </div>
-        </div>
-    );
-};
 
 describe('Auth Session Password Flow', () => {
     beforeEach(() => {
@@ -134,5 +117,98 @@ describe('Auth Session Password Flow', () => {
 
         expect(SessionPasswordManager.clearPassword).toHaveBeenCalled();
         expect(screen.getByTestId('session-status')).toHaveTextContent('Inactive');
+    });
+});
+
+describe('Auth Session Management', () => {
+    beforeEach(() => {
+        resetMocks();
+    });
+
+    it('should render with initial state', () => {
+        render(
+            <TestWrapper>
+                <TestComponent />
+            </TestWrapper>
+        );
+        expect(screen.getByTestId('session-status')).toHaveTextContent('Loading');
+    });
+
+    it('should handle session expiry', async () => {
+        // Mock expired session
+        (useSupabase as jest.Mock).mockReturnValue({
+            supabase: {
+                auth: {
+                    getSession: jest.fn().mockResolvedValue({
+                        data: { session: null },
+                        error: null
+                    })
+                }
+            }
+        });
+
+        await act(async () => {
+            render(<TestComponent />);
+        });
+
+        expect(screen.getByTestId('session-status')).toHaveTextContent('Expired');
+        expect(SessionPasswordManager.clearPassword).toHaveBeenCalled();
+    });
+
+    it('should handle encrypted password storage', async () => {
+        const testPassword = 'test-password';
+        const encryptedPassword = 'encrypted-test-password';
+        (encrypt as jest.Mock).mockResolvedValue(encryptedPassword);
+        
+        await act(async () => {
+            render(<TestComponent />);
+            await SessionPasswordManager.setPassword(testPassword);
+        });
+
+        expect(encrypt).toHaveBeenCalledWith(testPassword, expect.any(String));
+        expect(SessionPasswordManager.getPassword).toHaveBeenCalled();
+    });
+
+    it('should handle 401 errors and clear session', async () => {
+        // Mock 401 error
+        (useSupabase as jest.Mock).mockReturnValue({
+            supabase: {
+                auth: {
+                    getSession: jest.fn().mockRejectedValue({
+                        status: 401,
+                        message: 'Unauthorized'
+                    })
+                }
+            }
+        });
+
+        await act(async () => {
+            render(<TestComponent />);
+        });
+
+        expect(screen.getByTestId('session-status')).toHaveTextContent('Unauthorized');
+        expect(SessionPasswordManager.clearPassword).toHaveBeenCalled();
+    });
+
+    it('should handle rate limiting for password attempts', async () => {
+        // Mock rate limit error
+        (SessionPasswordManager.getPassword as jest.Mock)
+            .mockRejectedValueOnce(new Error('Too many attempts'))
+            .mockRejectedValueOnce(new Error('Too many attempts'))
+            .mockRejectedValueOnce(new Error('Locked out. Try again in 60 seconds'));
+
+        await act(async () => {
+            render(<TestComponent />);
+        });
+
+        // Attempt password retrieval multiple times
+        for (let i = 0; i < 3; i++) {
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('retry-button'));
+            });
+        }
+
+        expect(screen.getByTestId('error-message')).toHaveTextContent('Locked out');
+        expect(screen.getByTestId('countdown')).toBeInTheDocument();
     });
 }); 

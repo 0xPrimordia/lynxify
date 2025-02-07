@@ -2,42 +2,37 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { PrivateKey, AccountId, PublicKey, Transaction, Client, TransactionResponse } from "@hashgraph/sdk";
-import { storePrivateKey, retrievePrivateKey, encrypt, decrypt } from '@/lib/utils/keyStorage';
-import { useSupabase } from '@/app/hooks/useSupabase';
+import { storePrivateKey, retrievePrivateKey } from '@/lib/utils/keyStorage';
+import { encrypt, decrypt } from '@/lib/utils/encryption';
+import { browserClient as supabase } from '@/utils/supabase';
+import { persistSession } from '@/utils/supabase/session';
+import { SessionPasswordModal } from '@/app/components/SessionPasswordModal';
 
 interface InAppWalletContextType {
   inAppAccount: string | null;
   inAppPrivateKey: PrivateKey | null;
   userId: string | null;
-  createWallet: (password: string) => Promise<string>;
+  createWallet: (password: string) => Promise<{ accountId: string; privateKey: string }>;
   loadWallet: (password: string) => Promise<void>;
   signTransaction: (transaction: string, password: string) => Promise<TransactionResponse>;
   isInAppWallet: boolean;
   backupKey: () => Promise<void>;
   recoverKey: (userId: string) => Promise<void>;
+  showPasswordModal: boolean;
+  setShowPasswordModal: React.Dispatch<React.SetStateAction<boolean>>;
+  handlePasswordSubmit: (password: string) => Promise<void>;
+  handlePasswordCancel: () => void;
 }
 
 export const InAppWalletContext = createContext<InAppWalletContextType | null>(null);
 
-async function createHederaAccount(publicKey: PublicKey) {
-  // Call your backend API to create the account
-  const response = await fetch('/api/wallet/create-account', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ publicKey: publicKey.toString() })
-  });
-  
-  if (!response.ok) throw new Error('Failed to create Hedera account');
-  const { accountId } = await response.json();
-  return accountId;
-}
-
-export function InAppWalletProvider({ children }: { children: React.ReactNode }) {
-  const { supabase } = useSupabase();
+export const InAppWalletProvider = ({ children }: { children: React.ReactNode }) => {
   const [inAppAccount, setInAppAccount] = useState<string | null>(null);
   const [inAppPrivateKey, setInAppPrivateKey] = useState<PrivateKey | null>(null);
   const [isInAppWallet, setIsInAppWallet] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pendingSessionRestore, setPendingSessionRestore] = useState(false);
 
   // Initialize IndexedDB
   useEffect(() => {
@@ -64,22 +59,37 @@ export function InAppWalletProvider({ children }: { children: React.ReactNode })
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) throw new Error('No user session');
 
-      // Generate new ED25519 key pair
-      const privateKey = PrivateKey.generateED25519();
-      const publicKey = privateKey.publicKey;
+      console.log('Creating wallet with session:', {
+        hasToken: !!session.access_token,
+        userId: session.user.id
+      });
+
+      // Call API to create account and generate keys
+      const response = await fetch('/api/wallet/create-account', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ password })
+      });
       
-      // Create account on Hedera
-      const accountId = await createHederaAccount(publicKey);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create Hedera account');
+      }
+
+      const { accountId, privateKey } = await response.json();
       
-      // Store encrypted private key using the user's ID and password
-      console.log('Storing private key for user:', session.user.id);
-      await storePrivateKey(session.user.id, privateKey.toString(), password);
-      
+      // Set state with returned values
       setInAppAccount(accountId);
-      setInAppPrivateKey(privateKey);
+      setInAppPrivateKey(PrivateKey.fromString(privateKey));
       setIsInAppWallet(true);
 
-      return accountId;
+      // Persist session with in-app wallet data
+      await persistSession(null, session, true, privateKey);
+
+      return { accountId, privateKey: privateKey.toString() };
     } catch (error) {
       console.error('Error creating wallet:', error);
       throw error;
@@ -203,6 +213,22 @@ export function InAppWalletProvider({ children }: { children: React.ReactNode })
     }
   };
 
+  // Add password handling methods
+  const handlePasswordSubmit = async (password: string) => {
+    try {
+      await loadWallet(password);
+      setShowPasswordModal(false);
+    } catch (error) {
+      console.error('Password submission error:', error);
+      throw error;
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setShowPasswordModal(false);
+    setPendingSessionRestore(false);
+  };
+
   return (
     <InAppWalletContext.Provider value={{
       inAppAccount,
@@ -213,12 +239,22 @@ export function InAppWalletProvider({ children }: { children: React.ReactNode })
       signTransaction,
       isInAppWallet,
       backupKey,
-      recoverKey
+      recoverKey,
+      showPasswordModal,
+      setShowPasswordModal,
+      handlePasswordSubmit,
+      handlePasswordCancel
     }}>
       {children}
+      {showPasswordModal && (
+        <SessionPasswordModal
+          onSubmit={handlePasswordSubmit}
+          onCancel={handlePasswordCancel}
+        />
+      )}
     </InAppWalletContext.Provider>
   );
-}
+};
 
 export const useInAppWallet = () => {
   const context = useContext(InAppWalletContext);

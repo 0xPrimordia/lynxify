@@ -1,41 +1,37 @@
-import { encrypt as encryptData, decrypt as decryptData } from './encryption';
+import { encrypt, decrypt } from './encryption';
 import { openDB } from 'idb';
 
 const DB_NAME = 'wallet_storage';
 const STORE_NAME = 'keys';
 
 export async function storePrivateKey(userId: string, privateKey: string, password: string): Promise<void> {
-    try {
-        const encryptedKey = await encryptData(privateKey, password);
-        const db = await openDB(DB_NAME, 1, {
-            upgrade(db) {
-                db.createObjectStore(STORE_NAME);
-            }
-        });
-        
-        await db.put(STORE_NAME, encryptedKey, userId);
-    } catch (error) {
-        console.error('Failed to store private key:', error);
-        throw new Error('Failed to securely store private key');
-    }
+    const encryptedKey = await encrypt(privateKey, password);
+    const db = await openDB(DB_NAME, 1, {
+        upgrade(db) {
+            db.createObjectStore(STORE_NAME);
+        }
+    });
+    
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    await store.put({ id: userId, key: encryptedKey });
 }
 
 export async function retrievePrivateKey(userId: string, password: string): Promise<string | null> {
-    try {
-        const db = await openDB(DB_NAME, 1);
-        const encryptedKey = await db.get(STORE_NAME, userId);
-        
-        if (!encryptedKey) return null;
-        
-        return await decryptData(encryptedKey, password);
-    } catch (error) {
-        console.error('Failed to retrieve private key:', error);
-        throw new Error('Failed to retrieve private key');
-    }
+    const db = await openDB(DB_NAME, 1);
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const data = await store.get(userId);
+    
+    if (!data?.key) return null;
+    
+    return decrypt(data.key, password);
 }
 
 export async function getStoredKey(userId: string): Promise<boolean> {
     const db = await openDB(DB_NAME, 1);
-    const key = await db.get(STORE_NAME, userId);
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const key = await store.get(userId);
     return !!key;
 } 

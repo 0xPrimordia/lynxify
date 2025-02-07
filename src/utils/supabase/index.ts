@@ -1,5 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { CookieOptions } from '@supabase/ssr';
+
+interface StorageInterface {
+  getItem: (key: string) => string | null | Promise<string | null>;
+  setItem: (key: string, value: string) => void | Promise<void>;
+  removeItem: (key: string) => void | Promise<void>;
+}
 
 // Single browser client instance - safe for client components
 export const browserClient = createClient(
@@ -18,7 +24,10 @@ export const browserClient = createClient(
 export const supabase = browserClient;
 
 // Server-side client creator - only use in server components/actions
-export const createServerSupabase = (cookieStore: any, useServiceRole: boolean = false) => {
+export const createServerSupabase = (
+  cookieStore: { get: (key: string) => { value: string } | undefined; set: (key: string, value: string, options: CookieOptions) => void }, 
+  useServiceRole: boolean = false
+): SupabaseClient => {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY! : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -27,7 +36,7 @@ export const createServerSupabase = (cookieStore: any, useServiceRole: boolean =
         persistSession: true,
         autoRefreshToken: true,
         storage: {
-          getItem: (key: string) => cookieStore.get(key)?.value,
+          getItem: (key: string) => cookieStore.get(key)?.value ?? null,
           setItem: (key: string, value: string) => {
             cookieStore.set(key, value, { 
               path: '/',

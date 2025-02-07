@@ -3,35 +3,59 @@ import { Client, AccountCreateTransaction, Hbar, PublicKey, AccountId, PrivateKe
 import { createServerSupabase } from '@/utils/supabase';
 import { cookies } from 'next/headers';
 import { rateLimiterMiddleware } from '@/middleware/rateLimiter';
+import { storePrivateKey } from '@/lib/utils/keyStorage';
 
 export async function POST(req: NextRequest) {
-    // Apply rate limiting - stricter limits for account creation
+    // Apply rate limiting
     const rateLimitResponse = await rateLimiterMiddleware(req, 'wallet');
     if (rateLimitResponse.status === 429) {
         return rateLimitResponse;
     }
 
-    const cookieStore = cookies();
-    const supabase = createServerSupabase(cookieStore, true);
-    
     try {
-        const { publicKey } = await req.json();
-        
-        if (!publicKey) {
-            return NextResponse.json({ error: 'Public key is required' }, { status: 400 });
+        // Get the authorization header
+        const authHeader = req.headers.get('authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+            return NextResponse.json({ message: 'Missing authorization header' }, { status: 401 });
         }
 
-        // Initialize the Hedera client with treasury account
+        // Extract the token
+        const token = authHeader.split(' ')[1];
+        
+        // Create Supabase client with the token
+        const cookieStore = cookies();
+        const supabase = createServerSupabase(cookieStore);
+        
+        // Set the session manually
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !user) {
+            console.error('Auth error:', authError);
+            return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
+        }
+
+        console.log('Authenticated user:', user.id);
+
+        const { password } = await req.json();
+        if (!password) {
+            return NextResponse.json({ message: 'Password required' }, { status: 400 });
+        }
+
+        // Generate key pair for Hedera account
+        const privateKey = PrivateKey.generateED25519();
+        const publicKey = privateKey.publicKey;
+        
+        // Initialize Hedera client
         const client = Client.forName(process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'testnet');
         const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
         const operatorKey = PrivateKey.fromString(process.env.OPERATOR_KEY!);
         client.setOperator(operatorId, operatorKey);
 
-        // Create new account
+        // Create Hedera account
         const transaction = new AccountCreateTransaction()
-            .setKey(PublicKey.fromString(publicKey))
-            .setInitialBalance(new Hbar(0.5)) // Initial balance for fees
-            .setMaxAutomaticTokenAssociations(10); // Allow some automatic token associations
+            .setKey(publicKey)
+            .setInitialBalance(new Hbar(0.5))
+            .setMaxAutomaticTokenAssociations(10);
 
         const response = await transaction.execute(client);
         const receipt = await response.getReceipt(client);
@@ -41,12 +65,28 @@ export async function POST(req: NextRequest) {
             throw new Error('Failed to get new account ID');
         }
 
-        return NextResponse.json({ accountId: newAccountId.toString() });
+        // Store private key
+        await storePrivateKey(user.id, privateKey.toString(), password);
+
+        // Update Users table with Hedera account ID
+        const { error: dbError } = await supabase
+            .from('Users')
+            .update({ hederaAccountId: newAccountId.toString() })
+            .eq('id', user.id);
+
+        if (dbError) {
+            throw new Error('Failed to update user record');
+        }
+
+        return NextResponse.json({ 
+            accountId: newAccountId.toString(),
+            privateKey: privateKey.toString()
+        });
     } catch (error: any) {
-        console.error('Error creating Hedera account:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to create account' },
-            { status: 500 }
-        );
+        console.error('Create account error:', error);
+        if (error.status === 401) {
+            return NextResponse.json({ error: 'Session expired' }, { status: 401 });
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 } 

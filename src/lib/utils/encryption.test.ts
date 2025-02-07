@@ -41,41 +41,12 @@ describe('Encryption Utilities', () => {
     });
 
     it('should encrypt and decrypt data successfully', async () => {
-        // Setup
-        const testData = 'test secret data';
-        const password = 'test-password-123';
-        
-        console.log('Test setup:', { testData, password });
-        
-        // Mock crypto subtle operations
-        const mockKey = {} as CryptoKey;
-        const mockEncrypted = new Uint8Array([1, 2, 3, 4]);
-        
-        mockCrypto.subtle.importKey.mockResolvedValue(mockKey);
-        mockCrypto.subtle.deriveKey.mockResolvedValue(mockKey);
-        mockCrypto.subtle.encrypt.mockResolvedValue(mockEncrypted);
-        mockCrypto.subtle.decrypt.mockResolvedValue(new TextEncoder().encode(testData));
+        const testData = 'test-private-key';
+        const testPassword = 'test-password';
 
-        // Test
-        const encrypted = await encrypt(testData, password);
-        console.log('Encrypted result:', encrypted);
-        expect(encrypted).toBeDefined();
-        expect(typeof encrypted).toBe('string');
-
-        const decrypted = await decrypt(encrypted, password);
-        console.log('Decrypted result:', decrypted);
+        const encrypted = await encrypt(testData, testPassword);
+        const decrypted = await decrypt(encrypted, testPassword);
         expect(decrypted).toBe(testData);
-
-        // Log all crypto calls
-        console.log('importKey calls:', mockCrypto.subtle.importKey.mock.calls);
-        
-        // Check first call only since encrypt and decrypt both call importKey
-        const firstCall = mockCrypto.subtle.importKey.mock.calls[0];
-        expect(firstCall[0]).toBe('raw');
-        expect(ArrayBuffer.isView(firstCall[1])).toBe(true);  // Better check for TypedArrays
-        expect(firstCall[2]).toBe('PBKDF2');
-        expect(firstCall[3]).toBe(false);
-        expect(firstCall[4]).toEqual(['deriveBits', 'deriveKey']);
     });
 
     it('should handle TextEncoder/TextDecoder correctly', async () => {
@@ -98,20 +69,21 @@ describe('Encryption Utilities', () => {
         expect(decoded).toBe(testString);
     });
 
-    it('should fail gracefully with invalid password', async () => {
-        const testData = 'test secret data';
-        const password = 'correct-password';
-        const wrongPassword = 'wrong-password';
+    it('should fail decryption with wrong password', async () => {
+        const testData = 'test-private-key';
+        const testPassword = 'test-password';
 
-        // Mock crypto to simulate decryption failure
-        mockCrypto.subtle.decrypt.mockRejectedValue(new Error('Decryption failed'));
+        const encrypted = await encrypt(testData, testPassword);
+        await expect(decrypt(encrypted, 'wrong-password'))
+            .rejects.toThrow('Decryption failed');
+    });
 
-        // First encrypt with correct password
-        const encrypted = await encrypt(testData, password);
+    it('should generate different ciphertexts for same data', async () => {
+        const testData = 'test-private-key';
+        const testPassword = 'test-password';
 
-        // Then try to decrypt with wrong password
-        await expect(decrypt(encrypted, wrongPassword))
-            .rejects
-            .toThrow('Decryption failed');
+        const encrypted1 = await encrypt(testData, testPassword);
+        const encrypted2 = await encrypt(testData, testPassword);
+        expect(encrypted1).not.toBe(encrypted2);
     });
 }); 
