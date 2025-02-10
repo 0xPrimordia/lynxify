@@ -1,6 +1,4 @@
 import { TESTNET_REWARDS } from '@/config/rewards';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import { SessionTypes } from '@walletconnect/types';
 
 export type PriceHistory = {
     id: number;
@@ -91,21 +89,6 @@ export interface User {
     created_at: string;
     hederaAccountId?: string;
     isInAppWallet?: boolean;
-}
-
-// Session State Types
-export interface SessionState {
-  wallet: {
-    isConnected: boolean;
-    accountId: string | null;
-    session: null;
-  };
-  auth: {
-    isAuthenticated: boolean;
-    userId: string | null;
-    session: Session | null;
-    user: SupabaseUser | null;
-  };
 }
   
 

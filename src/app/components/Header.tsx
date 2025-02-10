@@ -2,6 +2,7 @@
 import { VT323 } from "next/font/google";
 import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
+import { useInAppWallet } from "../contexts/InAppWalletContext";
 import { useNFTGate } from "../hooks/useNFTGate";
 import { useRewards } from "../hooks/useRewards";
 import PurchaseNFT from "./purchaseNFT";
@@ -16,7 +17,8 @@ import { toast } from 'sonner';
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, account, client, userId, handleDisconnect, error, setError, isConnecting, walletType } = useWalletContext();
+    const { handleConnect, account, client, handleDisconnect, error, setError, isConnecting } = useWalletContext();
+    const { inAppAccount, isInAppWallet } = useInAppWallet();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { fetchAchievements, totalXP } = useRewards();
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -26,52 +28,18 @@ const Header = () => {
     const { supabase } = useSupabase();
     const [isSignedIn, setIsSignedIn] = useState(false);
     const router = useRouter();
-    const [userAccountId, setUserAccountId] = useState<string | null>(null);
 
     useEffect(() => {
         // Initial session check
         const checkSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            console.log('Header - Session Check:', {
-                hasSession: !!session,
-                sessionData: session,
-                user: session?.user,
-                emailConfirmed: session?.user?.email_confirmed_at
-            });
             setIsSignedIn(!!session);
-            if (session?.user) {
-                // Fetch user's Hedera account ID
-                const { data: userData } = await supabase
-                    .from('Users')
-                    .select('hederaAccountId')
-                    .eq('id', session.user.id)
-                    .single();
-                
-                console.log('Header - User Data:', userData);
-                
-                if (userData?.hederaAccountId) {
-                    setUserAccountId(userData.hederaAccountId);
-                }
-            }
         };
         checkSession();
 
         // Listen for auth state changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             setIsSignedIn(!!session);
-            if (session?.user) {
-                const { data: userData } = await supabase
-                    .from('Users')
-                    .select('hederaAccountId')
-                    .eq('id', session.user.id)
-                    .single();
-                
-                if (userData?.hederaAccountId) {
-                    setUserAccountId(userData.hederaAccountId);
-                }
-            } else {
-                setUserAccountId(null);
-            }
         });
 
         return () => {
@@ -79,41 +47,22 @@ const Header = () => {
         };
     }, [supabase]);
 
-    const activeAccount = account || userAccountId;
+    const activeAccount = account || inAppAccount;
     const isConnected = Boolean(activeAccount);
 
     useEffect(() => {
-        console.log('Header - Effect triggered with:', {
-            isConnected,
-            activeAccount,
-            client,
-            walletType
-        });
-
-        if (!isConnected) {
-            console.log('Header - Not connected, skipping balance fetch');
-            return;
-        }
+        if (!isConnected || !client) return;
 
         const fetchBalance = async () => {
             try {
                 if (!activeAccount) return;
-                console.log('Header - Fetching balance for:', {
-                    activeAccount,
-                    walletType,
-                    client: client?.ledgerId?.toString()
-                });
                 const query = new AccountBalanceQuery()
                     .setAccountId(AccountId.fromString(activeAccount));
                 const balance = await query.execute(client);
-                console.log('Header - Balance result:', {
-                    raw: balance.hbars.toString(),
-                    parsed: parseFloat(balance.hbars.toString())
-                });
                 const hbarBalance = parseFloat(balance.hbars.toString());
                 setBalance(hbarBalance.toFixed(2));
             } catch (error) {
-                console.error('Header - Failed to fetch balance:', error);
+                console.error('Failed to fetch balance:', error);
                 setBalance('0.00');
             }
         };
@@ -122,16 +71,6 @@ const Header = () => {
         const interval = setInterval(fetchBalance, 10000);
         return () => clearInterval(interval);
     }, [isConnected, activeAccount, client]);
-
-    useEffect(() => {
-        if (userId && account) {
-            fetchAchievements(userId, account);
-        }
-    }, [userId, account, fetchAchievements]);
-
-    const handleAccessDenied = () => {
-        setShowPurchaseModal(true);
-    };
 
     const handleCopyAccount = async (accountId: string) => {
         try {
@@ -249,9 +188,9 @@ const Header = () => {
                                     <DropdownItem 
                                         key="account" 
                                         className="text-sm cursor-pointer"
-                                        onClick={() => handleCopyAccount(isConnected ? account : userAccountId!)}
+                                        onClick={() => handleCopyAccount(activeAccount!)}
                                     >
-                                        {isConnected ? account : userAccountId!}
+                                        {activeAccount}
                                     </DropdownItem>
                                     <DropdownItem 
                                         key="wallet"
@@ -265,10 +204,10 @@ const Header = () => {
                                         className="text-danger" 
                                         color="danger" 
                                         onPress={async () => {
-                                            if (isConnected) {
+                                            if (account) {
                                                 await handleDisconnect();
                                             }
-                                            if (isSignedIn) {
+                                            if (isInAppWallet || isSignedIn) {
                                                 await supabase.auth.signOut();
                                             }
                                         }}

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client, AccountCreateTransaction, Hbar, PublicKey, AccountId, PrivateKey } from "@hashgraph/sdk";
+import { Client, AccountCreateTransaction, Hbar, PrivateKey, AccountId } from "@hashgraph/sdk";
 import { createServerSupabase } from '@/utils/supabase';
 import { cookies } from 'next/headers';
 import { rateLimiterMiddleware } from '@/middleware/rateLimiter';
-import { storePrivateKey } from '@/lib/utils/keyStorage';
 
 export async function POST(req: NextRequest) {
     // Apply rate limiting
@@ -12,33 +11,19 @@ export async function POST(req: NextRequest) {
         return rateLimitResponse;
     }
 
+    const cookieStore = cookies();
+    const supabase = createServerSupabase(cookieStore, true);
+    
     try {
-        // Get the authorization header
-        const authHeader = req.headers.get('authorization');
-        if (!authHeader?.startsWith('Bearer ')) {
-            return NextResponse.json({ message: 'Missing authorization header' }, { status: 401 });
+        // Get userId from middleware-injected header
+        const userId = req.headers.get('x-user-id');
+        if (!userId) {
+            return NextResponse.json({ error: 'User context not found' }, { status: 401 });
         }
-
-        // Extract the token
-        const token = authHeader.split(' ')[1];
-        
-        // Create Supabase client with the token
-        const cookieStore = cookies();
-        const supabase = createServerSupabase(cookieStore);
-        
-        // Set the session manually
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        
-        if (authError || !user) {
-            console.error('Auth error:', authError);
-            return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
-        }
-
-        console.log('Authenticated user:', user.id);
 
         const { password } = await req.json();
         if (!password) {
-            return NextResponse.json({ message: 'Password required' }, { status: 400 });
+            return NextResponse.json({ error: 'Password is required' }, { status: 400 });
         }
 
         // Generate key pair for Hedera account
@@ -62,31 +47,48 @@ export async function POST(req: NextRequest) {
         const newAccountId = receipt.accountId;
 
         if (!newAccountId) {
-            throw new Error('Failed to get new account ID');
+            throw new Error('Failed to get new account ID from receipt');
         }
 
-        // Store private key
-        await storePrivateKey(user.id, privateKey.toString(), password);
-
-        // Update Users table with Hedera account ID
-        const { error: dbError } = await supabase
+        // Create User record with Hedera account ID
+        const { error: insertError } = await supabase
             .from('Users')
-            .update({ hederaAccountId: newAccountId.toString() })
-            .eq('id', user.id);
+            .insert({
+                id: userId,
+                created_at: new Date().toISOString(),
+                hederaAccountId: newAccountId.toString(),
+                isInAppWallet: true
+            });
 
-        if (dbError) {
-            throw new Error('Failed to update user record');
+        if (insertError) {
+            throw new Error(`Failed to create user record: ${insertError.message}`);
         }
 
-        return NextResponse.json({ 
+        // Update user metadata
+        const { error: metadataError } = await supabase.auth.admin.updateUserById(
+            userId,
+            { 
+                user_metadata: { 
+                    isInAppWallet: true,
+                    hederaAccountId: newAccountId.toString()
+                }
+            }
+        );
+
+        if (metadataError) {
+            throw new Error(`Failed to update user metadata: ${metadataError.message}`);
+        }
+
+        return NextResponse.json({
             accountId: newAccountId.toString(),
             privateKey: privateKey.toString()
         });
+
     } catch (error: any) {
-        console.error('Create account error:', error);
-        if (error.status === 401) {
-            return NextResponse.json({ error: 'Session expired' }, { status: 401 });
-        }
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('Account creation error:', error);
+        return NextResponse.json(
+            { error: error.message || 'Failed to create account' },
+            { status: 500 }
+        );
     }
 } 

@@ -6,6 +6,8 @@ import { useSupabase } from '@/app/hooks/useSupabase';
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
+import { encrypt } from '@/lib/utils/encryption';
+import { persistSession } from '@/utils/supabase/session';
 
 export default function VerifyEmail() {
     const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +21,7 @@ export default function VerifyEmail() {
     const router = useRouter();
     const errorParam = searchParams.get('error');
     const { supabase } = useSupabase();
-    const { inAppAccount, createWallet } = useInAppWallet();
+    const { inAppAccount, setInAppAccount } = useInAppWallet();
     const [isSessionReady, setIsSessionReady] = useState(false);
 
     useEffect(() => {
@@ -54,16 +56,108 @@ export default function VerifyEmail() {
         setError(null);
         
         try {
-            const { accountId, privateKey } = await createWallet(password);
-            setPrivateKey(privateKey);
+            // Get current session
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (!session) {
+                console.log('No session, redirecting to login...');
+                router.push('/auth/login');
+                return;
+            }
+
+            if (session.user.email_confirmed_at) {
+                console.log('Session authenticated and email confirmed');
+                setIsSessionReady(true);
+            } else {
+                console.log('Email not confirmed');
+                setError('Email not confirmed');
+            }
+
+            // Make request with session token
+            const response = await fetch('/api/wallet/create-account', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ password }),
+                credentials: 'include'
+            });
+
+            console.log('Create account response:', {
+                status: response.status,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create account');
+            }
+
+            const { accountId, privateKey } = await response.json();
+            console.log('Account created successfully:', { accountId });
+
+            // Store private key in IndexedDB
+            try {
+                // Encrypt private key before starting transaction
+                const encryptedKey = await encrypt(privateKey, password);
+                
+                const db = await window.indexedDB.open('HederaWallet', 1);
+                
+                db.onerror = () => {
+                    throw new Error('Failed to open IndexedDB');
+                };
+
+                db.onupgradeneeded = (event) => {
+                    const db = (event.target as IDBOpenDBRequest).result;
+                    if (!db.objectStoreNames.contains('keys')) {
+                        db.createObjectStore('keys', { keyPath: 'userId' });
+                    }
+                };
+
+                db.onsuccess = (event) => {
+                    const database = (event.target as IDBOpenDBRequest).result;
+                    const transaction = database.transaction(['keys'], 'readwrite');
+                    const store = transaction.objectStore('keys');
+
+                    const request = store.put({
+                        userId: session.user.id,
+                        encryptedKey
+                    });
+                    
+                    request.onsuccess = async () => {
+                        // Get fresh session with updated metadata
+                        const { data: { session: updatedSession } } = await supabase.auth.getSession();
+                        if (updatedSession) {
+                            setPrivateKey(privateKey);
+                            setInAppAccount(accountId);
+                            // Persist the updated session with accountId
+                            persistSession(
+                                null, // No wallet connect session
+                                updatedSession,
+                                true, // is in-app wallet
+                                null, // Don't store private key in session
+                                accountId // Add this parameter
+                            );
+                        }
+                    };
+                    
+                    request.onerror = () => {
+                        throw new Error('Failed to store key in IndexedDB');
+                    };
+                };
+            } catch (dbError) {
+                console.error('IndexedDB error:', dbError);
+                throw new Error('Failed to store private key securely');
+            } finally {
+                setIsLoading(false);
+            }
         } catch (err: any) {
             if (err.message.includes('401') || err.message.includes('authenticated')) {
                 router.push('/auth/login');
                 return;
             }
             setError(err.message);
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -157,11 +251,11 @@ export default function VerifyEmail() {
                         </p>
                     </div>
                     <button
-                        onClick={() => router.push('/auth/login')}
+                        onClick={() => router.push('/wallet')}
                         className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 
                             transition-colors w-full"
                     >
-                        Continue to Login
+                        Continue to Wallet
                     </button>
                 </div>
             )}

@@ -28,16 +28,17 @@ export const persistSession = (
     walletSession: SessionTypes.Struct | null, 
     authSession: Session | null,
     isInAppWallet: boolean = false,
-    privateKey: PrivateKey | null = null
+    privateKey: PrivateKey | null = null,
+    inAppAccountId: string | null = null
 ) => {
     try {
         const sessionData: SessionState = {
             wallet: {
                 isConnected: !!walletSession || isInAppWallet,
-                accountId: walletSession?.namespaces?.hedera?.accounts?.[0]?.split(':').pop() || null,
+                accountId: inAppAccountId || walletSession?.namespaces?.hedera?.accounts?.[0]?.split(':').pop() || null,
                 session: walletSession,
                 isInAppWallet,
-                privateKey
+                privateKey: null
             },
             auth: {
                 isAuthenticated: !!authSession,

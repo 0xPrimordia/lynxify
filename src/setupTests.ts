@@ -1,7 +1,12 @@
 import '@testing-library/jest-dom';
 import { TextEncoder, TextDecoder } from 'util';
-global.TextEncoder = TextEncoder as typeof global.TextEncoder;
-global.TextDecoder = TextDecoder as typeof global.TextDecoder;
+
+// Setup Next.js request/response globals
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder as any;
+global.Request = jest.fn() as unknown as typeof Request;
+global.Response = jest.fn() as unknown as typeof Response;
+
 global.setImmediate = setTimeout as unknown as typeof global.setImmediate;
 
 // Mock environment variables

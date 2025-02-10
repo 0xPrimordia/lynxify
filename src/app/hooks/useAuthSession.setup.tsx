@@ -1,25 +1,9 @@
 import { ReactNode } from 'react';
 import { WalletContext } from './useWallet';
 import { InAppWalletContext } from '../contexts/InAppWalletContext';
+import { SessionState } from '@/utils/supabase/session';
 
-// Mock context values
-const mockWalletContext = {
-    sessionState: {
-        wallet: {
-            isConnected: false,
-            accountId: null,
-            session: null
-        },
-        auth: {
-            isAuthenticated: false,
-            userId: null,
-            session: null,
-            error: null
-        }
-    },
-    setSessionState: jest.fn(),
-    // ... other required context values
-};
+
 
 const mockInAppWalletContext = {
     inAppAccount: null,
@@ -74,13 +58,15 @@ export function resetMocks() {
         wallet: {
             isConnected: false,
             accountId: null,
-            session: null
+            session: null as SessionTypes.Struct | null,
+            isInAppWallet: false,
+            privateKey: null
         },
         auth: {
             isAuthenticated: false,
             userId: null,
             session: null,
-            error: null
+            user: null
         }
-    };
+    } as SessionState;
 } 
