@@ -17,6 +17,7 @@ export interface SessionState {
         userId: string | null;
         session: Session | null;
         user: User | null;
+        error?: string | null;
     };
 }
 

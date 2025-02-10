@@ -19,7 +19,7 @@ export function TestComponent() {
             <div data-testid="session-status">
                 {!sessionState ? 'Loading' : 
                     sessionState.auth.isAuthenticated ? 'Active' : 
-                    sessionState.auth.error?.includes('401') ? 'Unauthorized' : 'Expired'}
+                    sessionState.auth?.error?.includes('401') ? 'Unauthorized' : 'Expired'}
             </div>
             {inAppAccount && (
                 <div data-testid="account">{inAppAccount}</div>
