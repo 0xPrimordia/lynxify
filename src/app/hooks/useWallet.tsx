@@ -45,6 +45,7 @@ interface WalletContextType {
     sessionState: SessionState;
     handleDisconnect: () => Promise<void>;
     setError: (error: string | null) => void;
+    walletType: string | null;
 }
 
 export const WalletContext = createContext<WalletContextType>({
@@ -77,7 +78,8 @@ export const WalletContext = createContext<WalletContextType>({
         }
     },
     handleDisconnect: async () => {},
-    setError: () => {}
+    setError: () => {},
+    walletType: null,
 });
 
 interface WalletProviderProps {
@@ -642,7 +644,8 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         error,
         sessionState,
         handleDisconnect,
-        setError: setError
+        setError: setError,
+        walletType: null,
       }}
     >
       {children}
