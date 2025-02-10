@@ -13,7 +13,7 @@ interface InAppWalletContextType {
   recoverKey: (userId: string) => Promise<void>;
 }
 
-const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
+export const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
 
 export const InAppWalletProvider = ({ children }: { children: React.ReactNode }) => {
   const [inAppAccount, setInAppAccount] = useState<string | null>(null);
