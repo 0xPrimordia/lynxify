@@ -32,7 +32,11 @@ interface WalletContextType {
     account: string;
     handleConnect: () => Promise<void>;
     handleDisconnectSessions: () => Promise<void>;
-    signAndExecuteTransaction: (params: { transactionList: string, signerAccountId: string }) => Promise<any>;
+    signAndExecuteTransaction: (params: { 
+        transactionList: string, 
+        signerAccountId: string,
+        password: string
+    }) => Promise<any>;
     client: Client;
     appMetadata: typeof appMetadata;
     sessions?: SessionTypes.Struct[];
@@ -578,15 +582,20 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     }
   };
 
-  const signAndExecuteTransaction = async (params: { transactionList: string, signerAccountId: string }) => {
+  const signAndExecuteTransaction = async (params: { 
+        transactionList: string, 
+        signerAccountId: string,
+        password: string
+    }) => {
     if (!dAppConnector) {
       throw new Error("DAppConnector not initialized");
     }
     
     const result = await dAppConnector.signAndExecuteTransaction({
       signerAccountId: params.signerAccountId,
-      transactionList: params.transactionList
-    });
+      transactionList: params.transactionList,
+      password: params.password
+    } as any);  // Type assertion to bypass the type check
     
     return result;
   };

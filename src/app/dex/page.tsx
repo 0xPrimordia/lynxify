@@ -292,12 +292,14 @@ export default function DexPage() {
                     let result;
                     if (walletType === 'inApp') {
                         // Use the hook value from component level
-                        result = await signTransaction(tx, SessionPasswordManager.getPassword() || "");
+                        const password = await SessionPasswordManager.getPassword();
+                        result = await signTransaction(tx, password || "");
                     } else {
+                        const password = await SessionPasswordManager.getPassword();
                         result = await signAndExecuteTransaction({
                             transactionList: tx,
                             signerAccountId: activeAccount,
-                            password: SessionPasswordManager.getPassword() || ""
+                            password: password || ""
                         });
                     }
                     
