@@ -10,6 +10,7 @@ interface InAppWalletContextType {
   loadWallet: (password: string) => Promise<void>;
   signTransaction: (transaction: any, password: string) => Promise<any>;
   setInAppAccount: (accountId: string) => void;
+  recoverKey: (userId: string) => Promise<void>;
 }
 
 const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
@@ -40,13 +41,18 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     // Implementation for signing transactions
   };
 
+  const recoverKey = async (userId: string) => {
+    // Implementation for recovering key
+  };
+
   return (
     <InAppWalletContext.Provider value={{
       inAppAccount,
       isInAppWallet,
       loadWallet,
       signTransaction,
-      setInAppAccount
+      setInAppAccount,
+      recoverKey
     }}>
       {children}
     </InAppWalletContext.Provider>
