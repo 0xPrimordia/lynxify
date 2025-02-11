@@ -22,8 +22,9 @@
     },
     "declaration": true,
     "typeRoots": [
+      "./node_modules/@types",
       "./src/types",
-      "./node_modules/@types"
+      "./src/app/types"
     ],
     "resolveJsonModule": true,
     "noEmit": true,
@@ -35,6 +36,10 @@
       {
         "name": "next"
       }
+    ],
+    "types": [
+      "jest",
+      "node"
     ]
   },
   "include": [
@@ -42,7 +47,9 @@
     ".next/types/**/*.ts",
     "test/**/*",
     "hardhat.config.ts",
-    "scripts/**/*"
+    "scripts/**/*",
+    "src/types/**/*",
+    "src/app/types.ts"
   ],
   "exclude": [
     "node_modules",

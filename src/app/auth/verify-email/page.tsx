@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
@@ -9,7 +9,7 @@ import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { encrypt } from '@/lib/utils/encryption';
 import { persistSession } from '@/utils/supabase/session';
 
-export default function VerifyEmail() {
+function VerifyEmailPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [privateKey, setPrivateKey] = useState<string | null>(null);
@@ -260,5 +260,13 @@ export default function VerifyEmail() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function VerifyEmailWrapper() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <VerifyEmailPage />
+        </Suspense>
     );
 } 
