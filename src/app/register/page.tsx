@@ -3,10 +3,11 @@
 import { ConnectWallet } from '../components/ConnectWallet';
 import { useSearchParams } from 'next/navigation';
 import { VT323 } from "next/font/google";
+import { Suspense } from 'react';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 
-export default function RegisterPage() {
+function RegisterContent() {
     const searchParams = useSearchParams();
     const campaignId = searchParams.get('c');
 
@@ -17,5 +18,17 @@ export default function RegisterPage() {
                 <ConnectWallet campaignId={campaignId} />
             </div>
         </div>
+    );
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-black flex items-start justify-center pt-20">
+            <div className="w-[450px] bg-black rounded-lg border border-gray-800 shadow-xl p-8 mx-4">
+                <h1 className={`text-4xl font-bold mb-6 text-white text-center ${vt323.className}`}>Loading...</h1>
+            </div>
+        </div>}>
+            <RegisterContent />
+        </Suspense>
     );
 } 
