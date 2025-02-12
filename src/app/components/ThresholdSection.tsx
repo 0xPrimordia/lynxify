@@ -111,7 +111,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                 const result = await signAndExecuteTransaction({
                     transactionList: associateTx,
                     signerAccountId: account!,
-                    password: password || ""
+                    //password: password || "" we need to get thresholds working for in-app wallet
                 });
                 // Wait for association to complete
                 await new Promise(resolve => setTimeout(resolve, 3000));
