@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
 import { TextEncoder, TextDecoder } from 'util';
+require('dotenv').config({ path: '.env.local' });
 
 // Setup Next.js request/response globals
 global.TextEncoder = TextEncoder;
@@ -21,4 +22,27 @@ jest.mock('@supabase/supabase-js', () => ({
             getUser: jest.fn()
         }
     }))
-})); 
+}));
+
+// Mock next/font
+jest.mock('next/font/google', () => ({
+  VT323: () => ({
+    className: 'mocked-font',
+    style: { fontFamily: 'mocked-font' },
+  }),
+}));
+
+// Mock next/navigation
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    refresh: jest.fn(),
+    back: jest.fn(),
+  }),
+}));
+
+// Global fetch mock
+global.fetch = jest.fn();
+
+// Mock IndexedDB
+require('fake-indexeddb/auto'); 

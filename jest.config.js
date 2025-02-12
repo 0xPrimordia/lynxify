@@ -13,6 +13,9 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
+  transformIgnorePatterns: [
+    '/node_modules/(?!(@hashgraph/sdk|@hashgraph/hedera-wallet-connect)/)'
+  ],
   testMatch: ['**/*.test.tsx', '**/*.test.ts'],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node']
 }; 

@@ -12,15 +12,20 @@ export async function GET(req:any, { params }:{params:any;}) {
     }
 
     const apiUrl = `${process.env.NEXT_PUBLIC_SAUCERSWAP_API}/tokens/prices/${tokenId}?from=${from}&to=${to}&interval=${interval}`;
+    console.log('Fetching from SaucerSwap API:', apiUrl);
 
     try {
         const response = await fetch(apiUrl);
+        const data = await response.json(); // Get the actual error message
+        
         if (!response.ok) {
-          throw new Error('Failed to fetch token price history');
+            console.error('SaucerSwap API error:', data);
+            throw new Error(data.error || 'Failed to fetch token price history');
         }
-        const data = await response.json();
+        
         return NextResponse.json(data);
-      } catch (error:any) {
+    } catch (error:any) {
+        console.error('Price fetch error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+    }
 }

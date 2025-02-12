@@ -116,3 +116,13 @@ export type Pool = {
     tickCurrent: number;
     liquidity: string;
 }
+
+export interface PasswordModalContext {
+    isOpen: boolean;
+    description: string;
+    transaction: string | null;
+    transactionPromise?: {
+        resolve: (value: any) => void;
+        reject: (reason?: any) => void;
+    } | null;
+}

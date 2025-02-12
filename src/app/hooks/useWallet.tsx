@@ -34,8 +34,7 @@ interface WalletContextType {
     handleDisconnectSessions: () => Promise<void>;
     signAndExecuteTransaction: (params: { 
         transactionList: string, 
-        signerAccountId: string,
-        password: string
+        signerAccountId: string
     }) => Promise<any>;
     client: Client;
     appMetadata: typeof appMetadata;
@@ -71,8 +70,6 @@ export const WalletContext = createContext<WalletContextType>({
             isConnected: false,
             accountId: null,
             session: null as SessionTypes.Struct | null,
-            isInAppWallet: false,
-            privateKey: null
         },
         auth: {
             isAuthenticated: false,
@@ -105,8 +102,6 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       isConnected: false,
       accountId: null,
       session: null as SessionTypes.Struct | null,
-      isInAppWallet: false,
-      privateKey: null
     },
     auth: {
       isAuthenticated: false,
@@ -192,9 +187,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
                     wallet: {
                       isConnected: true,
                       accountId: storedSession.wallet.accountId,
-                      session: matchingSession || null,
-                      isInAppWallet: false,
-                      privateKey: null
+                      session: matchingSession || null
                     },
                     auth: {
                       isAuthenticated: true,
@@ -583,21 +576,17 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
   };
 
   const signAndExecuteTransaction = async (params: { 
-        transactionList: string, 
-        signerAccountId: string,
-        password: string
+        transactionList: string;
+        signerAccountId: string;
     }) => {
     if (!dAppConnector) {
-      throw new Error("DAppConnector not initialized");
+        throw new Error("DAppConnector not initialized");
     }
     
-    const result = await dAppConnector.signAndExecuteTransaction({
-      signerAccountId: params.signerAccountId,
-      transactionList: params.transactionList,
-      password: params.password
-    } as any);  // Type assertion to bypass the type check
-    
-    return result;
+    return await dAppConnector.signAndExecuteTransaction({
+        signerAccountId: params.signerAccountId,
+        transactionList: params.transactionList
+    });
   };
 
   const handleDisconnect = useCallback(async () => {

@@ -17,8 +17,21 @@ import { toast } from 'sonner';
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const Header = () => {
-    const { handleConnect, account, client, handleDisconnect, error, setError, isConnecting } = useWalletContext();
-    const { inAppAccount, isInAppWallet } = useInAppWallet();
+    const { 
+        handleConnect, 
+        account,
+        client: extensionClient,
+        handleDisconnect,
+        error: extensionError,
+        setError 
+    } = useWalletContext();
+    
+    const { 
+        inAppAccount,
+        isInAppWallet,
+        client: inAppClient,
+        error: inAppError
+    } = useInAppWallet();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { fetchAchievements, totalXP } = useRewards();
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -28,6 +41,17 @@ const Header = () => {
     const { supabase } = useSupabase();
     const [isSignedIn, setIsSignedIn] = useState(false);
     const router = useRouter();
+
+    console.log('Wallet state:', {
+        extensionAccount: account,
+        inAppAccount,
+        extensionClient: !!extensionClient,
+        inAppClient: !!inAppClient,
+        isInAppWallet
+    });
+
+    // Combine errors from both contexts
+    const error = isInAppWallet ? inAppError : extensionError;
 
     useEffect(() => {
         // Initial session check
@@ -51,15 +75,21 @@ const Header = () => {
     const isConnected = Boolean(activeAccount);
 
     useEffect(() => {
-        if (!isConnected || !client) return;
+        if (!isConnected) return;
+        
+        const client = isInAppWallet ? inAppClient : extensionClient;
+        if (!client) return;
 
         const fetchBalance = async () => {
             try {
                 if (!activeAccount) return;
+                
+                console.log('Fetching balance for:', activeAccount);
                 const query = new AccountBalanceQuery()
                     .setAccountId(AccountId.fromString(activeAccount));
                 const balance = await query.execute(client);
                 const hbarBalance = parseFloat(balance.hbars.toString());
+                console.log('Fetched balance:', hbarBalance);
                 setBalance(hbarBalance.toFixed(2));
             } catch (error) {
                 console.error('Failed to fetch balance:', error);
@@ -70,7 +100,7 @@ const Header = () => {
         fetchBalance();
         const interval = setInterval(fetchBalance, 10000);
         return () => clearInterval(interval);
-    }, [isConnected, activeAccount, client]);
+    }, [isConnected, activeAccount, isInAppWallet, inAppClient, extensionClient]);
 
     const handleCopyAccount = async (accountId: string) => {
         try {
@@ -321,7 +351,7 @@ const Header = () => {
                         <PurchaseNFT 
                             apiUrl="/api/nft"
                             tokenId={process.env.NEXT_PUBLIC_ACCESS_NFT_TOKEN_ID || ""}
-                            client={client}
+                            client={extensionClient}
                         />
                     </ModalBody>
                 </ModalContent>

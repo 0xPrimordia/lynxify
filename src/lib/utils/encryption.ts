@@ -49,20 +49,35 @@ export async function encrypt(data: string, password: string): Promise<string> {
 }
 
 export async function decrypt(encryptedData: string, password: string): Promise<string> {
+    console.log('Starting decryption with data length:', encryptedData.length);
     const data = Buffer.from(encryptedData, 'base64');
+    console.log('Decoded buffer length:', data.length);
+    
     const salt = data.slice(0, 16);
     const iv = data.slice(16, 28);
     const encrypted = data.slice(28);
     
+    console.log('Extracted parts:', {
+        saltLength: salt.length,
+        ivLength: iv.length,
+        encryptedLength: encrypted.length
+    });
+    
     const key = await generateKey(password, salt);
+    console.log('Generated key successfully');
     
-    const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encrypted
-    );
-    
-    return new TextDecoder().decode(decrypted);
+    try {
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv },
+            key,
+            encrypted
+        );
+        console.log('Decryption successful, result length:', decrypted.byteLength);
+        return new TextDecoder().decode(decrypted);
+    } catch (error) {
+        console.error('Decryption failed:', error);
+        throw error;
+    }
 }
 
 export async function getOrGenerateKeyMaterial(salt: Uint8Array): Promise<CryptoKey> {

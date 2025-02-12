@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { useRouter } from 'next/navigation';
 import { AccountId, Client, AccountBalanceQuery } from '@hashgraph/sdk';
+import { useSaucerSwapContext } from "../hooks/useTokens";
+import { Token } from "@/app/types";
 
 interface TokenBalance {
     token: string;
@@ -21,6 +23,7 @@ export default function WalletPortfolio() {
     const [totalValue, setTotalValue] = useState<number>(0);
     const { supabase } = useSupabase();
     const router = useRouter();
+    const { tokens } = useSaucerSwapContext();
 
     useEffect(() => {
         async function fetchBalances() {
@@ -48,33 +51,81 @@ export default function WalletPortfolio() {
                     .setAccountId(accountId);
                 const balance = await query.execute(client);
 
-                // Get HBAR balance using SDK method
+                // Set HBAR balance first
                 const hbarBalance = balance.hbars.toString();
                 const cleanBalance = hbarBalance.replace('ℏ', '').trim();
-                console.log('HBAR Balance:', cleanBalance, typeof cleanBalance);
-
-                // TODO: Fetch HBAR price from an API
                 const hbarPrice = 0.07; // Placeholder price
-                console.log('HBAR Price:', hbarPrice, typeof hbarPrice);
-                
                 const hbarValue = Number(cleanBalance) * hbarPrice;
-                console.log('HBAR Value:', hbarValue, typeof hbarValue);
 
-                setBalances([
-                    {
-                        token: 'Hedera',
-                        symbol: 'HBAR',
-                        balance: hbarBalance,
-                        value_usd: hbarValue
-                    }
-                ]);
+                // Clear existing balances and set HBAR first
+                setBalances([{
+                    token: 'Hedera',
+                    symbol: 'HBAR',
+                    balance: hbarBalance,
+                    value_usd: hbarValue
+                }]);
 
-                setTotalValue(hbarValue);
-                
-                // TODO: Add token balances when available
+                // Add token balances
                 if (balance.tokens && balance.tokens.size > 0) {
-                    // Handle token balances
-                    console.log('Token balances:', balance.tokens);
+                    console.log('Initial tokens:', Array.from(balance.tokens._map.entries()));
+                    
+                    const tokenPromises = Array.from(balance.tokens._map.entries()).map(async ([tokenId, amount]) => {
+                        console.log('Processing token:', tokenId.toString(), amount.toString());
+                        
+                        // Skip HBAR token since we already added it
+                        if (tokenId.toString() === '0.0.15058') {
+                            console.log('Skipping WHBAR token');
+                            return null;
+                        }
+
+                        try {
+                            const response = await fetch(
+                                `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? '' : 'testnet.'}mirrornode.hedera.com/api/v1/tokens/${tokenId}`
+                            );
+                            const tokenData = await response.json();
+                            console.log('Token data:', tokenData);
+                            
+                            const tokenBalance = Number(amount) / Math.pow(10, tokenData.decimals);
+                            console.log('Calculated balance:', tokenBalance);
+                            
+                            let valueUsd = 0;
+                            try {
+                                // Get token price from SaucerSwap tokens
+                                const saucerToken = tokens?.find((t: Token) => t.id === tokenId.toString());
+                                if (saucerToken?.priceUsd) {
+                                    const priceUsd = Number(saucerToken.priceUsd);
+                                    valueUsd = tokenBalance * priceUsd;
+                                    console.log('Token:', tokenId.toString());
+                                    console.log('Balance:', tokenBalance);
+                                    console.log('Price USD:', priceUsd);
+                                    console.log('Total value:', valueUsd);
+                                }
+                            } catch (priceErr) {
+                                console.warn('Price fetch error:', priceErr);
+                            }
+
+                            return {
+                                token: tokenData.name || tokenId.toString(),
+                                symbol: tokenData.symbol || 'TOKEN',
+                                balance: tokenBalance.toString(),
+                                value_usd: valueUsd
+                            };
+                        } catch (err) {
+                            console.error('Error processing token:', tokenId.toString(), err);
+                            return null;
+                        }
+                    });
+
+                    const tokenBalances = (await Promise.all(tokenPromises)).filter(balance => balance !== null);
+                    
+                    // Replace the entire balances array instead of appending
+                    setBalances(currentBalances => {
+                        // Only update if we still have the initial HBAR balance
+                        if (currentBalances.length === 1 && currentBalances[0].symbol === 'HBAR') {
+                            return [...currentBalances, ...tokenBalances];
+                        }
+                        return currentBalances;
+                    });
                 }
 
             } catch (err: any) {
@@ -86,7 +137,13 @@ export default function WalletPortfolio() {
         }
 
         fetchBalances();
-    }, [supabase, router]);
+    }, [supabase, router, tokens]);
+
+    useEffect(() => {
+        // Calculate total value whenever balances change
+        const total = balances.reduce((sum, token) => sum + token.value_usd, 0);
+        setTotalValue(total);
+    }, [balances]);
 
     if (isLoading) {
         return (

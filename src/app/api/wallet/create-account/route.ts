@@ -11,18 +11,42 @@ export async function POST(req: NextRequest) {
         return rateLimitResponse;
     }
 
-    const cookieStore = cookies();
-    const supabase = createServerSupabase(cookieStore, true);
+    console.log('Creating account with headers:', req.headers);
     
+    const cookieStore = cookies();
+    console.log('Starting wallet creation with cookies:', cookieStore.getAll());
+
     try {
-        // Get userId from middleware-injected header
+        // Log admin mode and client creation attempt
+        console.log('Attempting to create Supabase client with:', {
+            adminMode: true,
+            cookiesPresent: cookieStore.getAll().length > 0
+        });
+
+        const supabase = createServerSupabase(cookieStore, true);
+        
+        // Log successful client creation
+        console.log('Supabase client created successfully:', {
+            isInitialized: !!supabase,
+            hasAuthMethods: !!supabase.auth,
+            hasFromMethod: !!supabase.from
+        });
+
+        // Log user context and headers
         const userId = req.headers.get('x-user-id');
+        console.log('User context:', { 
+            userId,
+            headers: req.headers
+        });
+
         if (!userId) {
+            console.log('No userId found in headers - returning 401');
             return NextResponse.json({ error: 'User context not found' }, { status: 401 });
         }
 
         const { password } = await req.json();
         if (!password) {
+            console.log('No password provided in request body');
             return NextResponse.json({ error: 'Password is required' }, { status: 400 });
         }
 
@@ -36,6 +60,8 @@ export async function POST(req: NextRequest) {
         const operatorKey = PrivateKey.fromString(process.env.OPERATOR_KEY!);
         client.setOperator(operatorId, operatorKey);
 
+        console.log('Creating Hedera account for user:', userId);
+        
         // Create Hedera account
         const transaction = new AccountCreateTransaction()
             .setKey(publicKey)
@@ -47,24 +73,58 @@ export async function POST(req: NextRequest) {
         const newAccountId = receipt.accountId;
 
         if (!newAccountId) {
+            console.error('Failed to get account ID from receipt');
             throw new Error('Failed to get new account ID from receipt');
         }
 
-        // Create User record with Hedera account ID
-        const { error: insertError } = await supabase
+        console.log('Hedera account created:', newAccountId.toString());
+
+        // Before database operation
+        const userRecord = {
+            id: userId,
+            created_at: new Date().toISOString(),
+            hederaAccountId: newAccountId.toString(),
+            isInAppWallet: true
+        };
+        console.log('Attempting database insert with record:', userRecord);
+
+        const { data: insertData, error: insertError } = await supabase
             .from('Users')
-            .insert({
-                id: userId,
-                created_at: new Date().toISOString(),
-                hederaAccountId: newAccountId.toString(),
-                isInAppWallet: true
-            });
+            .insert(userRecord)
+            .select()
+            .single();
+
+        // Detailed database result
+        console.log('Database operation complete:', {
+            success: !insertError,
+            error: insertError,
+            data: insertData,
+            userId,
+            hederaAccountId: newAccountId.toString()
+        });
 
         if (insertError) {
-            throw new Error(`Failed to create user record: ${insertError.message}`);
+            console.error('Failed to create user record:', insertError);
+            console.error('Hedera account created but database insert failed:', newAccountId.toString());
+            throw new Error('Failed to create user record');
         }
 
+        // After insert, verify the record exists
+        console.log('Verifying database record...');
+        const { data: verifyData, error: verifyError } = await supabase
+            .from('Users')
+            .select()
+            .eq('id', userId)
+            .single();
+            
+        console.log('Verification result:', {
+            recordFound: !!verifyData,
+            error: verifyError,
+            data: verifyData
+        });
+
         // Update user metadata
+        console.log('Updating user metadata');
         const { error: metadataError } = await supabase.auth.admin.updateUserById(
             userId,
             { 
@@ -76,19 +136,26 @@ export async function POST(req: NextRequest) {
         );
 
         if (metadataError) {
+            console.error('Failed to update user metadata:', metadataError);
             throw new Error(`Failed to update user metadata: ${metadataError.message}`);
         }
+
+        // Log successful completion
+        console.log('Wallet creation completed successfully:', {
+            userId,
+            hederaAccountId: newAccountId.toString()
+        });
 
         return NextResponse.json({
             accountId: newAccountId.toString(),
             privateKey: privateKey.toString()
         });
-
     } catch (error: any) {
-        console.error('Account creation error:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to create account' },
-            { status: 500 }
-        );
+        console.error('Wallet creation error:', {
+            error,
+            userId: req.headers.get('x-user-id'),
+            stack: error.stack
+        });
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 } 
