@@ -73,7 +73,9 @@ const mockInAppWalletContext = {
     isInAppWallet: false,
     backupKey: jest.fn(),
     recoverKey: jest.fn(),
-    setInAppAccount: jest.fn()
+    setInAppAccount: jest.fn(),
+    client: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet(),
+    error: null
 };
 
 // Wrapper component for providing context in tests
