@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import { passwordSchema, emailSchema } from '@/lib/utils/validation';
 
-export const InAppWalletForm = () => {
+interface InAppWalletFormProps {
+    campaignId?: string | null;
+}
+
+export const InAppWalletForm = ({ campaignId }: InAppWalletFormProps) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -39,7 +43,10 @@ export const InAppWalletForm = () => {
                 email,
                 password,
                 options: {
-                    emailRedirectTo: `${window.location.origin}/auth/verify-email`
+                    emailRedirectTo: `${window.location.origin}/auth/verify-email`,
+                    data: {
+                        campaign_id: campaignId // Store campaign ID in user metadata
+                    }
                 }
             });
 

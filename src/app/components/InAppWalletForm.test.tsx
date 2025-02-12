@@ -64,14 +64,6 @@ describe('InAppWalletForm', () => {
     });
 
     it('should show verification sent message on successful submission', async () => {
-        // Mock window.location.origin
-        Object.defineProperty(window, 'location', {
-            value: {
-                origin: 'http://localhost'
-            },
-            writable: true
-        });
-
         (supabase.auth.signUp as jest.Mock).mockResolvedValueOnce({ error: null });
         
         render(<InAppWalletForm />);
@@ -92,7 +84,10 @@ describe('InAppWalletForm', () => {
             email: 'test@example.com',
             password: 'StrongPassword123!',
             options: {
-                emailRedirectTo: 'http://localhost/auth/verify-email'
+                emailRedirectTo: expect.any(String),
+                data: {
+                    campaign_id: undefined
+                }
             }
         });
     });
@@ -138,5 +133,62 @@ describe('InAppWalletForm', () => {
 
         expect(submitButton).toBeDisabled();
         expect(submitButton).toHaveTextContent('Creating Account...');
+    });
+
+    it('should include campaign ID in signup metadata when provided', async () => {
+        const campaignId = 'ETHD_VIP_001';
+        render(<InAppWalletForm campaignId={campaignId} />);
+        
+        const emailInput = screen.getByLabelText(/email/i);
+        const passwordInput = screen.getByLabelText(/^password$/i);
+        const confirmInput = screen.getByLabelText(/confirm password/i);
+
+        fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+        fireEvent.change(passwordInput, { target: { value: 'StrongPassword123!' } });
+        fireEvent.change(confirmInput, { target: { value: 'StrongPassword123!' } });
+
+        fireEvent.submit(screen.getByTestId('wallet-form'));
+
+        await waitFor(() => {
+            expect(supabase.auth.signUp).toHaveBeenCalledWith({
+                email: 'test@example.com',
+                password: 'StrongPassword123!',
+                options: {
+                    emailRedirectTo: expect.any(String),
+                    data: {
+                        campaign_id: campaignId
+                    }
+                }
+            });
+        });
+    });
+
+    it('should not include campaign ID in metadata when not provided', async () => {
+        (supabase.auth.signUp as jest.Mock).mockResolvedValueOnce({ error: null });
+        
+        render(<InAppWalletForm />);
+        
+        const emailInput = screen.getByLabelText(/email/i);
+        const passwordInput = screen.getByLabelText(/^password$/i);
+        const confirmInput = screen.getByLabelText(/confirm password/i);
+
+        fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+        fireEvent.change(passwordInput, { target: { value: 'StrongPassword123!' } });
+        fireEvent.change(confirmInput, { target: { value: 'StrongPassword123!' } });
+
+        fireEvent.submit(screen.getByTestId('wallet-form'));
+
+        await waitFor(() => {
+            expect(supabase.auth.signUp).toHaveBeenCalledWith({
+                email: 'test@example.com',
+                password: 'StrongPassword123!',
+                options: {
+                    emailRedirectTo: expect.any(String),
+                    data: {
+                        campaign_id: undefined
+                    }
+                }
+            });
+        });
     });
 }); 

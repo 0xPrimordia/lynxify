@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { InAppWalletForm } from './InAppWalletForm';
 
-export const ConnectWallet = () => {
+interface ConnectWalletProps {
+    campaignId?: string | null;
+}
+
+export const ConnectWallet = ({ campaignId }: ConnectWalletProps) => {
     return (
         <div className="w-full max-w-md mx-auto">
-            <InAppWalletForm />
+            <InAppWalletForm campaignId={campaignId} />
         </div>
     );
 }; 
