@@ -1,6 +1,4 @@
 import { TESTNET_REWARDS } from '@/config/rewards';
-import { Session } from '@supabase/supabase-js';
-import { SessionTypes } from '@walletconnect/types';
 
 export type PriceHistory = {
     id: number;
@@ -86,28 +84,11 @@ export type Token = {
     isFeeOnTransferToken: boolean;
 }
 
-export type User = {
+export interface User {
     id: string;
-    hederaAccountId: string;
     created_at: string;
-}
-
-// Session State Types
-export interface WalletState {
-    isConnected: boolean;
-    accountId: string | null;
-    session: SessionTypes.Struct | null;
-}
-
-export interface AuthState {
-    isAuthenticated: boolean;
-    userId: string | null;
-    session: Session | null;
-}
-
-export interface SessionState {
-    wallet: WalletState;
-    auth: AuthState;
+    hederaAccountId?: string;
+    isInAppWallet?: boolean;
 }
   
 
@@ -134,4 +115,14 @@ export type Pool = {
     sqrtRatioX96: string;
     tickCurrent: number;
     liquidity: string;
+}
+
+export interface PasswordModalContext {
+    isOpen: boolean;
+    description: string;
+    transaction: string | null;
+    transactionPromise?: {
+        resolve: (value: any) => void;
+        reject: (reason?: any) => void;
+    } | null;
 }

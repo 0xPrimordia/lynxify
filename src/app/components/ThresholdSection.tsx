@@ -8,6 +8,7 @@ import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
 import { associateToken } from '@/app/lib/utils/tokens';
 import { useWalletContext } from '@/app/hooks/useWallet';
+import SessionPasswordManager from '@/lib/utils/sessionPassword';
 
 const thresholdOptions = [
     { key: 'stopLoss', label: 'Stop Loss', description: 'Sells tokens when the price < threshold' },
@@ -106,9 +107,11 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
             if (needsAssociation && token) {
                 setIsSubmitting(true);
                 const associateTx = await associateToken(account!, token);
-                await signAndExecuteTransaction({
+                const password = await SessionPasswordManager.getPassword();
+                const result = await signAndExecuteTransaction({
                     transactionList: associateTx,
-                    signerAccountId: account!
+                    signerAccountId: account!,
+                    //password: password || "" we need to get thresholds working for in-app wallet
                 });
                 // Wait for association to complete
                 await new Promise(resolve => setTimeout(resolve, 3000));

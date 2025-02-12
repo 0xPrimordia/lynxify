@@ -71,7 +71,11 @@ async function verifyTokenAssociation(accountId: string, tokenId: string, client
 
 // Define the type for the sign and execute function
 type SignAndExecuteTransactionFunction = (
-    params: SignAndExecuteTransactionParams
+    params: { 
+        transactionList: string; 
+        signerAccountId: string;
+        password: string;  // Add password to the type
+    }
 ) => Promise<SignAndExecuteTransactionResult>;
 
 async function associateToken(
@@ -93,7 +97,8 @@ async function associateToken(
         // Sign and execute the association using wallet context
         const response = await signAndExecuteTransaction({
             transactionList: base64Tx,
-            signerAccountId: accountId
+            signerAccountId: accountId,
+            password: ''  // Assuming an empty password for now
         });
 
         // Just return the response - we'll verify the association afterward
@@ -324,7 +329,8 @@ function PurchaseNFT({
             const base64Tx = transactionToBase64String(transaction);
             const response = await signAndExecuteTransaction({
                 transactionList: base64Tx,
-                signerAccountId: account
+                signerAccountId: account,
+                //password: ''  need to get NFT purchase working for in-app wallet
             });
 
             if (response.error) {

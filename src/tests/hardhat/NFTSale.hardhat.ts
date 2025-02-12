@@ -16,6 +16,7 @@ import {
 } from "@hashgraph/sdk";
 import { expect } from "chai";
 import axios from 'axios';
+import { Context } from 'mocha';
 
 interface NFTTransferResponse {
     success: boolean;
@@ -34,7 +35,7 @@ describe("NFTSale", function () {
 
     let client: Client;
 
-    beforeEach(async function() {
+    beforeEach(async function(this: Mocha.Context) {
         this.timeout(30000);
 
         const rpcUrl = process.env.HEDERA_RPC_URL;

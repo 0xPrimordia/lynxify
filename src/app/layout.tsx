@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { SupabaseProvider } from './hooks/useSupabase';
+import { InAppWalletProvider } from './contexts/InAppWalletContext';
 import { WalletProvider } from "./hooks/useWallet";
 import { NextUIProvider } from "@nextui-org/react";
 import Header from "./components/Header";
@@ -9,6 +11,7 @@ import { PoolProvider } from "./hooks/usePools";
 import FeedbackForm from "./components/FeedbackForm";
 import FormspreeProvider from './components/FormspreeProvider';
 import { Providers } from "./providers";
+import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -46,8 +49,8 @@ export default function RootLayout({
   return (
     <html className="dark" lang="en">
       <body className={inter.className + " dark text-foreground bg-background min-h-screen !bg-black"}>
-        <Providers>
-          <FormspreeProvider>
+        <SupabaseProvider>
+          <InAppWalletProvider>
             <WalletProvider>
               <SaucerSwapProvider>
                 <PoolProvider>
@@ -59,8 +62,21 @@ export default function RootLayout({
                 </PoolProvider>
               </SaucerSwapProvider>
             </WalletProvider>
-          </FormspreeProvider>
-        </Providers>
+          </InAppWalletProvider>
+        </SupabaseProvider>
+        <Toaster 
+          richColors 
+          position="top-right"
+          theme="dark"
+          className="!bg-gray-900"
+          toastOptions={{
+            style: {
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              color: 'white',
+            },
+          }}
+        />
       </body>
     </html>
   );

@@ -11,7 +11,7 @@ import {
 } from '@hashgraph/hedera-wallet-connect';
 import { SessionTypes } from '@walletconnect/types';
 import { supabase } from '@/utils/supabase';
-import { SessionState } from '@/app/types';
+import { SessionState } from '@/utils/supabase/session';
 import { persistSession, getStoredSession, clearStoredSession } from '@/utils/supabase/session';
 import { handleDisconnectSessions } from '@/utils/supabase/session';
 
@@ -30,9 +30,12 @@ const appMetadata = {
 
 interface WalletContextType {
     account: string;
-    handleConnect: (extensionId?: string) => Promise<void>;
+    handleConnect: () => Promise<void>;
     handleDisconnectSessions: () => Promise<void>;
-    signAndExecuteTransaction: (params: { transactionList: string, signerAccountId: string }) => Promise<any>;
+    signAndExecuteTransaction: (params: { 
+        transactionList: string, 
+        signerAccountId: string
+    }) => Promise<any>;
     client: Client;
     appMetadata: typeof appMetadata;
     sessions?: SessionTypes.Struct[];
@@ -45,6 +48,7 @@ interface WalletContextType {
     sessionState: SessionState;
     handleDisconnect: () => Promise<void>;
     setError: (error: string | null) => void;
+    walletType: string | null;
 }
 
 export const WalletContext = createContext<WalletContextType>({
@@ -65,16 +69,18 @@ export const WalletContext = createContext<WalletContextType>({
         wallet: {
             isConnected: false,
             accountId: null,
-            session: null
+            session: null as SessionTypes.Struct | null,
         },
         auth: {
             isAuthenticated: false,
             userId: null,
-            session: null
+            session: null,
+            user: null
         }
     },
     handleDisconnect: async () => {},
-    setError: () => {}
+    setError: () => {},
+    walletType: null,
 });
 
 interface WalletProviderProps {
@@ -95,12 +101,13 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     wallet: {
       isConnected: false,
       accountId: null,
-      session: null
+      session: null as SessionTypes.Struct | null,
     },
     auth: {
       isAuthenticated: false,
       userId: null,
-      session: null
+      session: null,
+      user: null
     }
   });
 
@@ -180,12 +187,13 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
                     wallet: {
                       isConnected: true,
                       accountId: storedSession.wallet.accountId,
-                      session: matchingSession
+                      session: matchingSession || null
                     },
                     auth: {
                       isAuthenticated: true,
                       userId: storedSession.auth.userId,
-                      session: data.session
+                      session: data.session,
+                      user: data.session.user
                     }
                   });
                 }
@@ -224,7 +232,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
             wallet: {
               isConnected: true,
               accountId: storedSession.wallet.accountId,
-              session: matchingSession
+              session: matchingSession as SessionTypes.Struct | null
             }
           }));
         } else {
@@ -247,7 +255,8 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
           auth: {
             isAuthenticated: true,
             userId: storedSession.auth.userId,
-            session: data.session
+            session: data.session,
+            user: data.session?.user || null
           }
         }));
       }
@@ -258,7 +267,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       clearStoredSession();
       setSessionState({
         wallet: { isConnected: false, accountId: null, session: null },
-        auth: { isAuthenticated: false, userId: null, session: null }
+        auth: { isAuthenticated: false, userId: null, session: null, user: null }
       });
       return false;
     }
@@ -313,7 +322,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         }
 
         if (!dAppConnector) {
-            throw new Error("Unable to initialize wallet connection. Please try again.");
+            throw new Error("DApp Connector not initiated");
         }
 
         // Clear any existing sessions first
@@ -322,42 +331,14 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
             await handleDisconnectSessions();
         }
 
-        let session;
-        try {
-            // Get session through modal or extension
-            session = extensionId ? 
-                await dAppConnector.connectExtension(extensionId) : 
-                await dAppConnector.openModal();
-        } catch (connError: any) {
-            // Handle specific connection errors
-            if (connError.message?.includes('User rejected')) {
-                throw new Error('Connection cancelled by user');
-            }
-            throw new Error('Failed to connect to wallet. Please try again.');
-        }
+        // Get session through modal or extension
+        const session = extensionId ? 
+            await dAppConnector.connectExtension(extensionId) : 
+            await dAppConnector.openModal();
 
-        // Validate session structure with specific error messages
-        if (!session) {
-            throw new Error('No connection received from wallet');
-        }
-
-        if (!session.namespaces) {
-            throw new Error('Invalid wallet connection response');
-        }
-
-        if (!session.namespaces.hedera) {
-            throw new Error('This wallet does not support Hedera network');
-        }
-
-        if (!session.namespaces.hedera.accounts || 
-            !Array.isArray(session.namespaces.hedera.accounts) || 
-            session.namespaces.hedera.accounts.length === 0) {
-            throw new Error('No Hedera account found in wallet. Please make sure you have an account set up.');
-        }
-
-        const accountId = session.namespaces.hedera.accounts[0].split(':').pop();
+        const accountId = session.namespaces?.hedera?.accounts?.[0]?.split(':').pop();
         if (!accountId) {
-            throw new Error('Invalid account format received from wallet');
+            throw new Error('No account ID in session');
         }
 
         // Set wallet state
@@ -484,11 +465,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
 
     } catch (error: any) {
         console.error('Connection error:', error);
-        // Set a user-friendly error message
-        setError(
-            error.message || 
-            'Unable to connect to wallet. Please check if HashPack is installed and try again.'
-        );
+        setError(error.message);
         clearStoredSession();
     } finally {
         setIsConnecting(false);
@@ -574,7 +551,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         setUserId(null);
         setSessionState({
             wallet: { isConnected: false, accountId: null, session: null },
-            auth: { isAuthenticated: false, userId: null, session: null }
+            auth: { isAuthenticated: false, userId: null, session: null, user: null }
         });
 
         // Clear stored session last
@@ -591,76 +568,61 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         setUserId(null);
         setSessionState({
             wallet: { isConnected: false, accountId: null, session: null },
-            auth: { isAuthenticated: false, userId: null, session: null }
+            auth: { isAuthenticated: false, userId: null, session: null, user: null }
         });
         localStorage.removeItem('lynxify_session');
         throw error;
     }
   };
 
-  const signAndExecuteTransaction = async (params: { transactionList: string, signerAccountId: string }) => {
+  const signAndExecuteTransaction = async (params: { 
+        transactionList: string;
+        signerAccountId: string;
+    }) => {
     if (!dAppConnector) {
-      throw new Error("DAppConnector not initialized");
+        throw new Error("DAppConnector not initialized");
     }
     
-    const result = await dAppConnector.signAndExecuteTransaction({
-      signerAccountId: params.signerAccountId,
-      transactionList: params.transactionList
+    return await dAppConnector.signAndExecuteTransaction({
+        signerAccountId: params.signerAccountId,
+        transactionList: params.transactionList
     });
-    
-    return result;
   };
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = useCallback(async () => {
     try {
-        setIsConnecting(true); // Prevent multiple clicks
-        
-        if (dAppConnector && sessions?.length > 0) {
-            // Disconnect each session in parallel with error handling for each
-            await Promise.all(
-                sessions.map(async (session) => {
-                    try {
-                        await dAppConnector.disconnect(session.topic);
-                    } catch (error: any) {
-                        // Ignore specific errors about already disconnected sessions
-                        if (!error.message?.includes('Missing or invalid') && 
-                            !error.message?.includes('already disconnected') &&
-                            !error.message?.includes('Record was recently deleted')) {
-                            console.error('[ERROR] Disconnect error:', error);
-                        }
-                    }
-                })
-            );
+        if (dAppConnector && sessions) {
+            // Disconnect WalletConnect sessions
+            for (const session of sessions) {
+                await dAppConnector.disconnect(session.topic);
+            }
         }
-
-        // Clear local state regardless of disconnect success
-        setSessions([]);
-        setAccount("");
+        
+        // Clear stored session and Supabase auth
+        await clearStoredSession();
+        
+        // Reset local state
+        setAccount('');
         setUserId(null);
-        
-        // Clear stored session
-        try {
-            await clearStoredSession();
-        } catch (error) {
-            console.error('[ERROR] Failed to clear stored session:', error);
-        }
-
-        // Force clear any remaining WalletConnect state
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('walletconnect');
-            localStorage.removeItem('WALLETCONNECT_DEEPLINK_CHOICE');
-        }
-
+        setSessions([]);
+        setSessionState({
+            wallet: {
+                isConnected: false,
+                accountId: null,
+                session: null
+            },
+            auth: {
+                isAuthenticated: false,
+                userId: null,
+                session: null,
+                user: null
+            }
+        });
     } catch (error) {
-        console.error('[ERROR] Disconnect failed:', error);
-        // Still attempt to clear local state even if disconnect fails
-        setSessions([]);
-        setAccount("");
-        setUserId(null);
-    } finally {
-        setIsConnecting(false);
+        console.error('Error disconnecting:', error);
+        setError(error instanceof Error ? error.message : 'Failed to disconnect');
     }
-  };
+  }, [dAppConnector, sessions]);
 
   return (
     <WalletContext.Provider
@@ -680,7 +642,8 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         error,
         sessionState,
         handleDisconnect,
-        setError
+        setError: setError,
+        walletType: null,
       }}
     >
       {children}
