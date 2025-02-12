@@ -94,24 +94,14 @@ describe('Key Storage Flow', () => {
             console.log('Setting up test...');
             // Clear the mock IndexedDB
             indexedDB = new IDBFactory();
-            // Create store
+            // Create store with proper keyPath
             const request = indexedDB.open('wallet_storage', 1);
             request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
                 const db = (event.target as IDBOpenDBRequest).result;
                 if (!db.objectStoreNames.contains('keys')) {
                     console.log('Creating keys store...');
-                    const store = db.createObjectStore('keys');
-                    // Add logging for store operations
-                    const originalAdd = store.add.bind(store);
-                    store.add = (...args) => {
-                        console.log('Store.add called with:', args);
-                        return originalAdd(...args);
-                    };
-                    const originalGet = store.get.bind(store);
-                    store.get = (...args) => {
-                        console.log('Store.get called with:', args);
-                        return originalGet(...args);
-                    };
+                    // Use userId as the key directly
+                    const store = db.createObjectStore('keys', { keyPath: 'id' });
                     console.log('Store created:', store);
                 }
             };
@@ -133,18 +123,18 @@ describe('Key Storage Flow', () => {
 
     it('should store and retrieve a private key', async () => {
         const testKey = PrivateKey.generateED25519();
-        const accountId = '0.0.123456';
+        const userId = '0.0.123456';
         const password = 'testPassword123!';
         
-        console.log('Storing key for account:', accountId);
-        await storePrivateKey(accountId, testKey.toString(), password);
+        console.log('Storing key for account:', userId);
+        await storePrivateKey(userId, testKey.toString(), password);
         
         console.log('Checking if key exists');
-        const hasKey = await getStoredKey(accountId);
+        const hasKey = await getStoredKey(userId);
         expect(hasKey).toBe(true);
         
         console.log('Retrieving stored key');
-        const retrievedKey = await retrievePrivateKey(accountId, password);
+        const retrievedKey = await retrievePrivateKey(userId, password);
         expect(retrievedKey).toBe('mockDecryptedKey');
     });
 
@@ -159,22 +149,22 @@ describe('Key Storage Flow', () => {
 
     it('should prevent unauthorized access', async () => {
         const testKey = PrivateKey.generateED25519();
-        const accountId = '0.0.123456';
+        const userId = '0.0.123456';
         const password = 'testPassword123!';
         
-        await storePrivateKey(accountId, testKey.toString(), password);
+        await storePrivateKey(userId, testKey.toString(), password);
         
-        await expect(retrievePrivateKey(accountId, 'wrongpassword'))
+        await expect(retrievePrivateKey(userId, 'wrongpassword'))
             .rejects.toThrow('Failed to retrieve private key');
     });
 
     it('should handle encryption/decryption correctly', async () => {
         const testKey = PrivateKey.generateED25519();
-        const accountId = '0.0.123456';
+        const userId = '0.0.123456';
         const password = 'testPassword123!';
         
-        await storePrivateKey(accountId, testKey.toString(), password);
-        const retrievedKey = await retrievePrivateKey(accountId, password);
+        await storePrivateKey(userId, testKey.toString(), password);
+        const retrievedKey = await retrievePrivateKey(userId, password);
         
         expect(retrievedKey).toBe('mockDecryptedKey');
     });

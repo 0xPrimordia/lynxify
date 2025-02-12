@@ -1160,6 +1160,35 @@ export default function DexPage() {
         );
     };
 
+    const handleThresholdInputFocus = (event: React.FocusEvent) => {
+        if (event.target instanceof HTMLInputElement) {
+            event.target.select();
+        }
+    };
+
+    const adjustThresholdPrice = (type: 'stopLoss' | 'buyOrder' | 'sellOrder', percent: number) => {
+        switch(type) {
+            case 'stopLoss':
+                const currentStopPrice = parseFloat(stopLossPrice);
+                if (!isNaN(currentStopPrice)) {
+                    setStopLossPrice((currentStopPrice * (1 - percent)).toFixed(8));
+                }
+                break;
+            case 'buyOrder':
+                const currentBuyPrice = parseFloat(buyOrderPrice);
+                if (!isNaN(currentBuyPrice)) {
+                    setBuyOrderPrice((currentBuyPrice * (1 - percent)).toFixed(8));
+                }
+                break;
+            case 'sellOrder':
+                const currentSellPrice = parseFloat(sellOrderPrice);
+                if (!isNaN(currentSellPrice)) {
+                    setSellOrderPrice((currentSellPrice * (1 + percent)).toFixed(8));
+                }
+                break;
+        }
+    };
+
     return (    
         <div className="fixed inset-0 flex flex-col w-full pt-24">
             <div className="relative">
@@ -1444,6 +1473,7 @@ export default function DexPage() {
                                 {renderTradeButton()}
                             </div>
                             <ThresholdSection
+                                mode="buy"
                                 selectedThresholdType={selectedThresholdType}
                                 setSelectedThresholdType={setSelectedThresholdType}
                                 currentPool={currentPool}
@@ -1459,7 +1489,6 @@ export default function DexPage() {
                                 buyOrderSlippage={buyOrderSlippage}
                                 sellOrderSlippage={sellOrderSlippage}
                                 isSubmitting={isSubmitting}
-                                setIsSubmitting={setIsSubmitting}
                                 setStopLossPrice={setStopLossPrice}
                                 setStopLossCap={setStopLossCap}
                                 setBuyOrderPrice={setBuyOrderPrice}
@@ -1470,14 +1499,28 @@ export default function DexPage() {
                                 setBuyOrderSlippage={setBuyOrderSlippage}
                                 setSellOrderSlippage={setSellOrderSlippage}
                                 handleInputFocus={handleInputFocus}
-                                adjustStopLossPrice={adjustStopLossPrice}
-                                adjustSellOrderPrice={adjustSellOrderPrice}
-                                hanndleMaxClickStopLoss={handleMaxClickStopLoss}
+                                adjustStopLossPrice={(percent) => adjustThresholdPrice('stopLoss', percent)}
+                                adjustSellOrderPrice={(percent) => adjustThresholdPrice('sellOrder', percent)}
+                                adjustBuyOrderPrice={(percent) => adjustThresholdPrice('buyOrder', percent)}
+                                hanndleMaxClickStopLoss={handleMaxClick}
                                 handleMaxClickSellOrder={handleMaxClickSellOrder}
                                 saveThresholds={saveThresholds}
-                                resetThresholdForm={resetThresholdForm}
-                                adjustBuyOrderPrice={adjustBuyOrderPrice}
-                                mode="buy"
+                                resetThresholdForm={() => {
+                                    setStopLossPrice(currentToken.priceUsd.toString());
+                                    setSellOrderPrice(currentToken.priceUsd.toString());
+                                    setBuyOrderPrice(currentToken.priceUsd.toString());
+                                    setStopLossCap("0.0");
+                                    setBuyOrderCap("0.0");
+                                    setSellOrderCap("0.0");
+                                }}
+                                setIsSubmitting={setIsSubmitting}
+                                setError={(error) => setAlertState({
+                                    isVisible: true,
+                                    message: error,
+                                    type: 'danger'
+                                })}
+                                executeTransaction={executeTransaction}
+                                activeAccount={activeAccount || ''}
                             />
                         </Tab>
                         <Tab 
@@ -1591,6 +1634,7 @@ export default function DexPage() {
                                 {renderTradeButton()}
                             </div>
                             <ThresholdSection
+                                mode="sell"
                                 selectedThresholdType={selectedThresholdType}
                                 setSelectedThresholdType={setSelectedThresholdType}
                                 currentPool={currentPool}
@@ -1606,7 +1650,6 @@ export default function DexPage() {
                                 buyOrderSlippage={buyOrderSlippage}
                                 sellOrderSlippage={sellOrderSlippage}
                                 isSubmitting={isSubmitting}
-                                setIsSubmitting={setIsSubmitting}
                                 setStopLossPrice={setStopLossPrice}
                                 setStopLossCap={setStopLossCap}
                                 setBuyOrderPrice={setBuyOrderPrice}
@@ -1617,14 +1660,28 @@ export default function DexPage() {
                                 setBuyOrderSlippage={setBuyOrderSlippage}
                                 setSellOrderSlippage={setSellOrderSlippage}
                                 handleInputFocus={handleInputFocus}
-                                adjustStopLossPrice={adjustStopLossPrice}
-                                adjustSellOrderPrice={adjustSellOrderPrice}
-                                hanndleMaxClickStopLoss={handleMaxClickStopLoss}
+                                adjustStopLossPrice={(percent) => adjustThresholdPrice('stopLoss', percent)}
+                                adjustSellOrderPrice={(percent) => adjustThresholdPrice('sellOrder', percent)}
+                                adjustBuyOrderPrice={(percent) => adjustThresholdPrice('buyOrder', percent)}
+                                hanndleMaxClickStopLoss={handleMaxClick}
                                 handleMaxClickSellOrder={handleMaxClickSellOrder}
                                 saveThresholds={saveThresholds}
-                                resetThresholdForm={resetThresholdForm}
-                                adjustBuyOrderPrice={adjustBuyOrderPrice}
-                                mode="sell"
+                                resetThresholdForm={() => {
+                                    setStopLossPrice(currentToken.priceUsd.toString());
+                                    setSellOrderPrice(currentToken.priceUsd.toString());
+                                    setBuyOrderPrice(currentToken.priceUsd.toString());
+                                    setStopLossCap("0.0");
+                                    setBuyOrderCap("0.0");
+                                    setSellOrderCap("0.0");
+                                }}
+                                setIsSubmitting={setIsSubmitting}
+                                setError={(error) => setAlertState({
+                                    isVisible: true,
+                                    message: error,
+                                    type: 'danger'
+                                })}
+                                executeTransaction={executeTransaction}
+                                activeAccount={activeAccount || ''}
                             />
                         </Tab>
                     </Tabs>

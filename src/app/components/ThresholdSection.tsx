@@ -7,16 +7,8 @@ import { ThresholdSlippageSelector } from './ThresholdSlippageSelector';
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
 import { associateToken } from '@/app/lib/utils/tokens';
-import { useWalletContext } from '@/app/hooks/useWallet';
-import SessionPasswordManager from '@/lib/utils/sessionPassword';
 
-const thresholdOptions = [
-    { key: 'stopLoss', label: 'Stop Loss', description: 'Sells tokens when the price < threshold' },
-    { key: 'buyOrder', label: 'Buy Order', description: 'Buys tokens when the price < threshold' },
-    { key: 'sellOrder', label: 'Sell Order', description: 'Sells tokens when the price > threshold' }
-];
-
-interface ThresholdSectionProps {
+export interface ThresholdSectionProps {
     mode: 'buy' | 'sell';
     selectedThresholdType: 'stopLoss' | 'buyOrder' | 'sellOrder' | null;
     setSelectedThresholdType: (type: 'stopLoss' | 'buyOrder' | 'sellOrder' | null) => void;
@@ -51,6 +43,9 @@ interface ThresholdSectionProps {
     saveThresholds: (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => void;
     resetThresholdForm: () => void;
     setIsSubmitting: (isSubmitting: boolean) => void;
+    setError: (error: string) => void;
+    executeTransaction: (tx: string, description: string) => Promise<any>;
+    activeAccount: string;
 }
 
 export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
@@ -87,9 +82,11 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     handleMaxClickSellOrder,
     saveThresholds,
     resetThresholdForm,
-    setIsSubmitting
+    setIsSubmitting,
+    setError,
+    executeTransaction,
+    activeAccount,
 }) => {
-    const { signAndExecuteTransaction, account } = useWalletContext();
     const [isLimitExpanded, setIsLimitExpanded] = useState(false);
     const [isLimitUsdInput, setIsLimitUsdInput] = useState(false);
     const [limitUsdAmount, setLimitUsdAmount] = useState("0.0");
@@ -98,7 +95,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     const handleSaveThreshold = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
         try {
             const { needsAssociation, token } = await verifyThresholdTokens(
-                account!,
+                activeAccount,
                 currentToken.id,
                 tradeToken?.id || '',
                 type === 'buyOrder'
@@ -106,25 +103,41 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
 
             if (needsAssociation && token) {
                 setIsSubmitting(true);
-                const associateTx = await associateToken(account!, token);
-                const password = await SessionPasswordManager.getPassword();
-                const result = await signAndExecuteTransaction({
-                    transactionList: associateTx,
-                    signerAccountId: account!,
-                    //password: password || "" we need to get thresholds working for in-app wallet
-                });
-                // Wait for association to complete
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                setIsSubmitting(false);
+                setError(''); // Clear any previous errors
+                
+                try {
+                    const associateTx = await associateToken(activeAccount, token);
+                    const result = await executeTransaction(
+                        associateTx,
+                        `Associate ${token} token`
+                    );
+
+                    if (result.status === 'ERROR') {
+                        throw new Error(result.error || 'Token association failed');
+                    }
+                } catch (error) {
+                    console.error('Token association error:', error);
+                    setError(error instanceof Error ? error.message : 'Failed to associate token');
+                    setIsSubmitting(false);
+                    return;
+                }
             }
 
             // Now that association is complete (if needed), create the threshold
             setIsSubmitting(true);
-            await saveThresholds(type);
-            resetThresholdForm();
-            setSelectedThresholdType(null);
+            setError(''); // Clear any previous errors
+            
+            try {
+                await saveThresholds(type);
+                resetThresholdForm();
+                setSelectedThresholdType(null);
+            } catch (error) {
+                console.error('Failed to save threshold:', error);
+                setError(error instanceof Error ? error.message : 'Failed to save threshold');
+            }
         } catch (error) {
-            console.error('Failed to save threshold:', error);
+            console.error('Threshold operation failed:', error);
+            setError(error instanceof Error ? error.message : 'Failed to complete threshold operation');
         } finally {
             setIsSubmitting(false);
         }
@@ -134,9 +147,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     if (mode === 'buy') {
         return (
             <div className="w-full flex flex-col gap-4 pb-8">
-                <div 
-                    className="flex items-center justify-between cursor-pointer" 
-                >
+                <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <span>Limit</span>
                         <Tooltip 
@@ -152,13 +163,16 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         variant="light"
                         className="min-w-unit-8 text-xl border border-gray-800"
                         onPress={() => setIsLimitExpanded(!isLimitExpanded)}
+                        aria-expanded={isLimitExpanded}
+                        aria-controls="limit-section"
+                        aria-label={isLimitExpanded ? "Collapse limit section" : "Expand limit section"}
                     >
                         {isLimitExpanded ? "−" : "+"}
                     </Button>
                 </div>
 
                 {isLimitExpanded && (
-                    <div className="w-full flex flex-col gap-4">
+                    <div id="limit-section" className="w-full flex flex-col gap-4">
                         <p>Buy Price (usd)</p>
                         <Input 
                             type="number"
