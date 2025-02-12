@@ -330,7 +330,7 @@ function PurchaseNFT({
             const response = await signAndExecuteTransaction({
                 transactionList: base64Tx,
                 signerAccountId: account,
-                password: ''  // Assuming an empty password for now
+                //password: ''  need to get NFT purchase working for in-app wallet
             });
 
             if (response.error) {
