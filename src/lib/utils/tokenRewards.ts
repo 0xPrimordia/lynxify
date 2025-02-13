@@ -1,5 +1,4 @@
-import { AccountId, Client, TokenId, TransferTransaction, TokenAssociateTransaction } from "@hashgraph/sdk";
-import { AccountInfoQuery } from "@hashgraph/sdk";
+import { AccountId, Client, TokenId, TransferTransaction, TokenAssociateTransaction, AccountInfoQuery } from "@hashgraph/sdk";
 
 const SAUCE_TOKEN_ID = "0.0.1183558"; // From your test files
 
@@ -28,30 +27,13 @@ export async function rewardNewWallet(
         console.log('Token associated successfully');
     }
 
-    // Fetch current SAUCE price from SaucerSwap API
-    const priceResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SAUCERSWAP_API}/tokens/${SAUCE_TOKEN_ID}`
-    );
-    
-    if (!priceResponse.ok) {
-        throw new Error('Failed to fetch SAUCE token data');
-    }
-
-    const tokenData = await priceResponse.json();
-    
-    // After fetching price data but before calculating amount
-    if (!tokenData.priceUsd || tokenData.priceUsd <= 0) {
-        throw new Error('Invalid token price');
-    }
-
-    // Calculate amount of SAUCE for $5 USD
-    const usdAmount = 5;
-    const sauceAmount = Math.floor((usdAmount / Number(tokenData.priceUsd)) * Math.pow(10, tokenData.decimals));
+    // Fixed amount of 100 SAUCE (with 6 decimals)
+    const sauceAmount = 100 * Math.pow(10, 6);
 
     console.log('Rewarding new wallet:', {
         recipientId,
         sauceAmount,
-        usdEquivalent: usdAmount
+        tokenAmount: 100
     });
 
     // Create transfer transaction
