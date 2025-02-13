@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 const redis = isDevelopment ? null : new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
+    url: `https://${process.env.UPSTASH_REDIS_REST_URL}`,
     token: process.env.UPSTASH_REDIS_REST_TOKEN
 });
 
