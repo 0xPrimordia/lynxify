@@ -6,7 +6,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const redis = isDevelopment ? null : new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN // Changed from UPSTASH_REDIS_PASSWORD
+    token: process.env.UPSTASH_REDIS_REST_TOKEN
 });
 
 interface RateLimitConfig {
@@ -23,15 +23,23 @@ const RATE_LIMIT_CONFIGS: { [key: string]: RateLimitConfig } = {
     'sign': { maxRequests: 20, windowMs: 60 * 1000 }         // 20 signing requests per minute
 };
 
-// Add a mock implementation for development
+// Add pipeline support to mock
 const mockRedis = {
     incr: async () => 1,
     expire: async () => true,
-    get: async () => null
+    pexpire: async () => true,
+    get: async () => null,
+    keys: async () => [] as string[],
+    del: async (...keys: string[]) => 1,
+    pipeline: () => ({
+        incr: () => mockRedis,
+        pexpire: () => mockRedis,
+        exec: async () => [1]
+    })
 };
 
 // Export the Redis instance or mock based on environment
-export const getRedisInstance = () => isDevelopment ? mockRedis : redis;
+export const getRedisInstance = () => isDevelopment ? mockRedis : (redis || mockRedis);
 
 export async function rateLimit(
     req: NextRequest,
