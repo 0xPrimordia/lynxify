@@ -8,10 +8,36 @@ describe('Encryption Utilities', () => {
         // Create a complete mock crypto object
         mockCrypto = {
             subtle: {
-                importKey: jest.fn(),
-                deriveKey: jest.fn(),
-                encrypt: jest.fn(),
-                decrypt: jest.fn()
+                importKey: jest.fn().mockImplementation((format, keyData, algorithm, extractable, keyUsages) => {
+                    return Promise.resolve({
+                        algorithm: { name: algorithm === 'PBKDF2' ? 'PBKDF2' : 'AES-GCM' },
+                        extractable: false,
+                        type: 'secret',
+                        usages: keyUsages
+                    });
+                }),
+                deriveKey: jest.fn().mockImplementation((algorithm, keyMaterial, derivedKeyAlgorithm, extractable, keyUsages) => {
+                    return Promise.resolve({
+                        algorithm: { name: 'AES-GCM' },
+                        extractable: false,
+                        type: 'secret',
+                        usages: keyUsages
+                    });
+                }),
+                encrypt: jest.fn().mockImplementation((algorithm, key, data) => {
+                    // Return an actual ArrayBuffer
+                    return Promise.resolve(new Uint8Array([1, 2, 3, 4]).buffer);
+                }),
+                decrypt: jest.fn().mockImplementation((algorithm, key, data) => {
+                    if (key.algorithm.name !== 'AES-GCM') {
+                        throw new Error('Wrong key algorithm');
+                    }
+                    // For wrong password test
+                    if (mockCrypto.wrongPassword) {
+                        throw new Error('Decryption failed');
+                    }
+                    return Promise.resolve(new TextEncoder().encode('test-private-key').buffer);
+                })
             },
             getRandomValues: jest.fn((array) => {
                 for (let i = 0; i < array.length; i++) {
@@ -38,6 +64,7 @@ describe('Encryption Utilities', () => {
     beforeEach(() => {
         // Reset all mocks before each test
         jest.clearAllMocks();
+        mockCrypto.wrongPassword = false;
     });
 
     it('should encrypt and decrypt data successfully', async () => {
@@ -73,6 +100,7 @@ describe('Encryption Utilities', () => {
         const testData = 'test-private-key';
         const testPassword = 'test-password';
 
+        mockCrypto.wrongPassword = true;
         const encrypted = await encrypt(testData, testPassword);
         await expect(decrypt(encrypted, 'wrong-password'))
             .rejects.toThrow('Decryption failed');

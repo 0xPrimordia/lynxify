@@ -1,9 +1,12 @@
 import { Redis } from '@upstash/redis';
 import { NextRequest } from 'next/server';
 
-const redis = new Redis({
+// Check if we're in development mode
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+const redis = isDevelopment ? null : new Redis({
     url: `https://${process.env.UPSTASH_REDIS_REST_URL}`,
-    token: process.env.UPSTASH_REDIS_PASSWORD
+    token: process.env.UPSTASH_REDIS_REST_TOKEN
 });
 
 interface RateLimitConfig {
@@ -19,6 +22,24 @@ const RATE_LIMIT_CONFIGS: { [key: string]: RateLimitConfig } = {
     'backup': { maxRequests: 5, windowMs: 60 * 1000 },       // 5 backup attempts per minute
     'sign': { maxRequests: 20, windowMs: 60 * 1000 }         // 20 signing requests per minute
 };
+
+// Add pipeline support to mock
+const mockRedis = {
+    incr: async () => 1,
+    expire: async () => true,
+    pexpire: async () => true,
+    get: async () => null,
+    keys: async () => [] as string[],
+    del: async (...keys: string[]) => 1,
+    pipeline: () => ({
+        incr: () => mockRedis,
+        pexpire: () => mockRedis,
+        exec: async () => [1]
+    })
+};
+
+// Export the Redis instance or mock based on environment
+export const getRedisInstance = () => isDevelopment ? mockRedis : (redis || mockRedis);
 
 export async function rateLimit(
     req: NextRequest,
@@ -36,7 +57,7 @@ export async function rateLimit(
     const windowStart = Math.floor(now / config.windowMs) * config.windowMs;
     
     try {
-        const pipeline = redis.pipeline();
+        const pipeline = getRedisInstance().pipeline();
         pipeline.incr(key);
         pipeline.pexpire(key, config.windowMs);
         
@@ -44,7 +65,7 @@ export async function rateLimit(
         
         // First request in window
         if (count === 1) {
-            await redis.pexpire(key, config.windowMs);
+            await getRedisInstance().pexpire(key, config.windowMs);
         }
 
         return {
@@ -66,9 +87,9 @@ export async function rateLimit(
 }
 
 export const rateLimitAttempt = async (key: string, maxAttempts = 5) => {
-    const attempts = await redis.incr(key);
+    const attempts = await getRedisInstance().incr(key);
     if (attempts === 1) {
-        await redis.expire(key, 60); // Reset after 60 seconds
+        await getRedisInstance().expire(key, 60); // Reset after 60 seconds
     }
     return attempts <= maxAttempts;
 }
@@ -78,9 +99,9 @@ export async function resetRateLimits(ip: string) {
         throw new Error('Rate limit reset only available in test environment');
     }
     
-    const keys = await redis.keys(`rate-limit:*:${ip}`);
+    const keys = await getRedisInstance().keys(`rate-limit:*:${ip}`);
     if (keys.length > 0) {
-        await redis.del(...keys);
+        await getRedisInstance().del(...keys);
     }
     return true;
 } 
