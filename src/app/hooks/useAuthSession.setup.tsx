@@ -60,6 +60,7 @@ const mockWalletContext = {
     handleDisconnect: jest.fn(),
     setError: jest.fn(),
     walletType: null,
+    setAccount: jest.fn(),
     setSessionState: jest.fn()
 };
 
