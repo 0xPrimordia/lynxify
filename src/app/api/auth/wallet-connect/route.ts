@@ -29,10 +29,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { accountId, signature, message } = body;
+    console.log('Received request:', { accountId, hasSignature: !!signature, message });
 
     const email = `${accountId.replace(/\./g, '-')}@hedera.example.com`;
+    console.log('Generated email:', email);
     
     // Try to sign in first
+    console.log('Attempting initial sign in...');
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password: createPasswordHash(signature)
@@ -43,6 +46,80 @@ export async function POST(req: NextRequest) {
       errorDetails: signInError,
       userData: signInData?.user
     });
+
+    // If sign in fails, try to create user
+    if (signInError?.message?.includes('Invalid login credentials')) {
+      console.log('Sign in failed, attempting user creation...');
+      
+      const { data: createUserData, error: createUserError } = await supabase.auth.admin.createUser({
+        email,
+        password: createPasswordHash(signature),
+        email_confirm: true,
+        user_metadata: {
+          hederaAccountId: accountId,
+          hedera_signature: signature,
+          signed_message: message
+        }
+      });
+      console.log('User creation attempt:', {
+        success: !!createUserData?.user,
+        error: createUserError?.message,
+        userId: createUserData?.user?.id
+      });
+
+      if (createUserError?.message?.includes('already been registered')) {
+        console.log('User exists, searching through users...');
+        let user = null;
+        let page = 1;
+        
+        while (!user) {
+          const { data: pageData, error: pageError } = await supabase.auth.admin
+            .listUsers({ page });
+            
+          if (pageError) throw new Error('Failed to list users');
+          if (!pageData.users.length) break; // No more users to check
+          
+          console.log(`Checking page ${page}, found ${pageData.users.length} users`);
+          user = pageData.users.find(u => u.email === email);
+          page++;
+        }
+
+        if (!user) {
+          console.error('User not found after checking all pages');
+          throw new Error('User not found');
+        }
+
+        // Update password for the found user
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+          user.id,
+          { password: createPasswordHash(signature) }
+        );
+
+        if (updateError) {
+          console.error('Failed to update user password:', updateError);
+          throw new Error('Failed to update authentication');
+        }
+
+        // Try signing in with new password
+        const { data: retrySignInData, error: retrySignInError } = await supabase.auth.signInWithPassword({
+          email,
+          password: createPasswordHash(signature)
+        });
+
+        if (retrySignInError) {
+          console.error('Failed to sign in after password update:', retrySignInError);
+          throw new Error('Authentication failed after password update');
+        }
+
+        return NextResponse.json(
+            { session: retrySignInData.session },
+            { status: 200 }
+        );
+      }
+      
+      console.error('Auth user creation error:', createUserError);
+      throw new Error(`Failed to create auth user: ${createUserError?.message || 'Unknown error'}`);
+    }
 
     // If sign in succeeds, check/create DB record
     if (!signInError && signInData.session) {
@@ -87,113 +164,6 @@ export async function POST(req: NextRequest) {
       // Return session regardless of DB operation result
       return NextResponse.json(
         { session: signInData.session },
-        { status: 200 }
-      );
-    }
-
-    // Handle new user creation
-    if (signInError?.message?.includes('Invalid login credentials')) {
-
-      
-      const { data: createUserData, error: createUserError } = await supabase.auth.admin.createUser({
-        email,
-        password: createPasswordHash(signature),
-        email_confirm: true,
-        user_metadata: {
-          hederaAccountId: accountId,
-          hedera_signature: signature,
-          signed_message: message
-        }
-      });
-
-      if (createUserError) {
-        // If user exists but creation failed, try updating password and signing in again
-        if (createUserError.message.includes('already been registered')) {
-
-          
-          // Find existing user by email first
-          const { data: existingUser, error: userLookupError } = await supabase.auth.admin
-            .listUsers();
-
-          if (userLookupError) {
-            console.error('Failed to look up existing users:', userLookupError);
-            throw new Error('Failed to look up user');
-          }
-
-          const user = existingUser.users.find(u => u.email === email);
-          if (!user) {
-            console.error('User not found after creation attempt');
-            throw new Error('User not found');
-          }
-
-          // Update password for the found user
-          const { error: updateError } = await supabase.auth.admin.updateUserById(
-            user.id,
-            { password: createPasswordHash(signature) }
-          );
-
-          if (updateError) {
-            console.error('Failed to update user password:', updateError);
-            throw new Error('Failed to update authentication');
-          }
-
-          // Try signing in with new password
-          const { data: retrySignInData, error: retrySignInError } = await supabase.auth.signInWithPassword({
-            email,
-            password: createPasswordHash(signature)
-          });
-
-          if (retrySignInError) {
-            console.error('Failed to sign in after password update:', retrySignInError);
-            throw new Error('Authentication failed after password update');
-          }
-
-          return NextResponse.json(
-              { session: retrySignInData.session },
-              { status: 200 }
-          );
-        }
-        
-        console.error('Auth user creation error:', createUserError);
-        throw new Error(`Failed to create auth user: ${createUserError.message}`);
-      }
-
-      console.log('Auth user created successfully:', createUserData?.user?.id);
-
-      // Create DB record for new user
-      const newUser: User = {
-        id: createUserData.user.id,
-        hederaAccountId: accountId,
-        created_at: new Date().toISOString()
-      };
-
-      console.log('Attempting to insert new user record:', newUser);
-      const { error: insertError } = await supabase
-        .from('Users')
-        .insert(newUser);
-
-      if (insertError) {
-        console.error('DB insert error details:', insertError);
-        throw new Error(`Failed to create user record: ${insertError.message}`);
-      }
-
-      console.log('Successfully created DB record');
-
-      // Sign in new user
-      const { data: newSignInData, error: newSignInError } = await supabase.auth.signInWithPassword({
-        email,
-        password: createPasswordHash(signature)
-      });
-
-      if (newSignInError || !newSignInData.session) {
-        console.error('Error signing in new user:', newSignInError);
-        throw new Error('Failed to sign in new user');
-      }
-
-      console.log('Successfully signed in new user');
-      
-      return NextResponse.json(
-        { session: newSignInData.session },
         { status: 200 }
       );
     }

@@ -8,7 +8,7 @@ import { useRewards } from "../hooks/useRewards";
 import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
 import { AccountBalanceQuery, AccountId } from "@hashgraph/sdk";
-import { handleDisconnectSessions } from '@/utils/supabase/session';
+import { handleDisconnectSessions, clearStoredSession } from '@/utils/supabase/session';
 import { ConnectWallet } from './ConnectWallet';
 import { useSupabase } from "../hooks/useSupabase";
 import { useRouter } from "next/navigation";
@@ -108,6 +108,30 @@ const Header = () => {
             toast.success('Account ID copied to clipboard');
         } catch (err) {
             toast.error('Failed to copy account ID');
+        }
+    };
+
+    const handleSignOut = async () => {
+        try {
+            // First clear any stored session data
+            clearStoredSession();
+            
+            // Then handle auth and wallet disconnection in parallel
+            const promises = [];
+            if (account) {
+                promises.push(handleDisconnect());
+            }
+            if (isInAppWallet || isSignedIn) {
+                promises.push(supabase.auth.signOut());
+            }
+            
+            await Promise.all(promises);
+            
+            // Force a router refresh after all operations complete
+            router.refresh();
+        } catch (error) {
+            console.error('Sign out error:', error);
+            toast.error('Failed to sign out. Please try again.');
         }
     };
 
@@ -233,14 +257,7 @@ const Header = () => {
                                         key="logout" 
                                         className="text-danger" 
                                         color="danger" 
-                                        onPress={async () => {
-                                            if (account) {
-                                                await handleDisconnect();
-                                            }
-                                            if (isInAppWallet || isSignedIn) {
-                                                await supabase.auth.signOut();
-                                            }
-                                        }}
+                                        onPress={handleSignOut}
                                     >
                                         Sign Out
                                     </DropdownItem>
@@ -378,15 +395,16 @@ const Header = () => {
 
             {error && (
                 <div className="fixed top-4 right-4 z-50">
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                        <strong className="font-bold">Error: </strong>
-                        <span className="block sm:inline">{error}</span>
+                    <div className="bg-red-900/50 border border-red-800 text-red-200 px-6 py-4 rounded-lg shadow-lg flex items-center justify-between gap-4" role="alert">
+                        <div>
+                            <strong className="font-bold">Error: </strong>
+                            <span>{error}</span>
+                        </div>
                         <button 
-                            className="absolute top-0 right-0 px-4 py-3"
+                            className="text-red-200 hover:text-red-100"
                             onClick={() => setError(null)}
                         >
-                            <span className="sr-only">Close</span>
-                            <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                            <svg className="h-5 w-5" viewBox="0 0 20 20">
                                 <path 
                                     fillRule="evenodd" 
                                     d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" 
