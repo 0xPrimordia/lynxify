@@ -13,8 +13,55 @@ import { ConnectWallet } from './ConnectWallet';
 import { useSupabase } from "../hooks/useSupabase";
 import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
+import { Subject } from 'rxjs';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
+
+const balanceSubject = new Subject<void>();
+let lastFetch = 0;
+const FETCH_COOLDOWN = 5000; // 5s minimum between fetches
+
+export const useBalance = (accountId: string, client: any) => {
+    const [balance, setBalance] = useState('0.00');
+    
+    useEffect(() => {
+        if (!accountId || !client) return;
+        
+        const fetchBalance = async () => {
+            // Prevent too frequent updates
+            if (Date.now() - lastFetch < FETCH_COOLDOWN) return;
+            lastFetch = Date.now();
+            
+            try {
+                const query = new AccountBalanceQuery()
+                    .setAccountId(AccountId.fromString(accountId));
+                const result = await query.execute(client);
+                setBalance(parseFloat(result.hbars.toString()).toFixed(2));
+            } catch (error) {
+                console.error('Balance fetch failed:', error);
+            }
+        };
+
+        // Set up polling (every 30s)
+        const pollId = setInterval(fetchBalance, 30000);
+        
+        // Set up subscription for immediate updates
+        const subscription = balanceSubject.subscribe(fetchBalance);
+        
+        // Initial fetch
+        fetchBalance();
+
+        return () => {
+            clearInterval(pollId);
+            subscription.unsubscribe();
+        };
+    }, [accountId, client]);
+
+    return {
+        balance,
+        refreshBalance: () => balanceSubject.next()
+    };
+};
 
 const Header = () => {
     const { 
@@ -35,7 +82,7 @@ const Header = () => {
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { fetchAchievements, totalXP } = useRewards();
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-    const [balance, setBalance] = useState<string>("0");
+    const { balance, refreshBalance } = useBalance(account || inAppAccount || '', isInAppWallet ? inAppClient : extensionClient);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [showConnectModal, setShowConnectModal] = useState(false);
     const { supabase } = useSupabase();
@@ -75,32 +122,10 @@ const Header = () => {
     const isConnected = Boolean(activeAccount);
 
     useEffect(() => {
-        if (!isConnected) return;
-        
-        const client = isInAppWallet ? inAppClient : extensionClient;
-        if (!client) return;
-
-        const fetchBalance = async () => {
-            try {
-                if (!activeAccount) return;
-                
-                console.log('Fetching balance for:', activeAccount);
-                const query = new AccountBalanceQuery()
-                    .setAccountId(AccountId.fromString(activeAccount));
-                const balance = await query.execute(client);
-                const hbarBalance = parseFloat(balance.hbars.toString());
-                console.log('Fetched balance:', hbarBalance);
-                setBalance(hbarBalance.toFixed(2));
-            } catch (error) {
-                console.error('Failed to fetch balance:', error);
-                setBalance('0.00');
-            }
-        };
-
-        fetchBalance();
-        const interval = setInterval(fetchBalance, 10000);
-        return () => clearInterval(interval);
-    }, [isConnected, activeAccount, isInAppWallet, inAppClient, extensionClient]);
+        if (isConnected || isSignedIn) {
+            refreshBalance();
+        }
+    }, [isConnected, isSignedIn]);
 
     const handleCopyAccount = async (accountId: string) => {
         try {
@@ -113,25 +138,37 @@ const Header = () => {
 
     const handleSignOut = async () => {
         try {
-            // First clear any stored session data
+            console.log('Starting sign out process...', { isInAppWallet, account, isSignedIn });
+            
+            // Clear stored session first
             clearStoredSession();
             
-            // Then handle auth and wallet disconnection in parallel
             const promises = [];
-            if (account) {
+            
+            // Handle extension wallet
+            if (account && !isInAppWallet) {
+                console.log('Disconnecting extension wallet...');
                 promises.push(handleDisconnect());
             }
+            
+            // For in-app wallet or any signed in user, sign out of Supabase
             if (isInAppWallet || isSignedIn) {
+                console.log('Signing out of Supabase...');
                 promises.push(supabase.auth.signOut());
             }
             
+            // Execute all promises
             await Promise.all(promises);
+            console.log('Sign out promises completed');
             
-            // Force a router refresh after all operations complete
+            setIsMenuOpen(false);
+            router.push('/');
             router.refresh();
+            
         } catch (error) {
-            console.error('Sign out error:', error);
+            console.error('Detailed sign out error:', error);
             toast.error('Failed to sign out. Please try again.');
+            throw error;
         }
     };
 

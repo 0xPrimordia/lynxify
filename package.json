@@ -59,6 +59,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^18",
     "react-dom": "^18",
+    "rxjs": "^7.8.1",
     "sonner": "^1.7.4",
     "stream": "npm:stream-browserify",
     "stream-browserify": "^3.0.0",

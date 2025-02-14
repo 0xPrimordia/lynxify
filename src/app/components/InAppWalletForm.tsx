@@ -43,7 +43,7 @@ export const InAppWalletForm = ({ campaignId }: InAppWalletFormProps) => {
                 email,
                 password,
                 options: {
-                    emailRedirectTo: `${window.location.origin}/auth/verify-email`,
+                    emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email`,
                     data: {
                         campaign_id: campaignId // Store campaign ID in user metadata
                     }
