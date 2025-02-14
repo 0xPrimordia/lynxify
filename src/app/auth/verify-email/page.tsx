@@ -8,7 +8,7 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { encrypt } from '@/lib/utils/encryption';
 import { persistSession } from '@/utils/supabase/session';
-import { validatePassword } from '@/lib/utils/validation';
+import { passwordSchema } from '@/lib/utils/validation';
 
 function VerifyEmailPage() {
     const [isLoading, setIsLoading] = useState(false);
@@ -53,9 +53,9 @@ function VerifyEmailPage() {
         if (!isSessionReady) return;
         
         // Validate password
-        const validationResult = validatePassword(password);
-        if (!validationResult.isValid) {
-            setPasswordError(validationResult.error || 'Invalid password');
+        const validationResult = passwordSchema.safeParse(password);
+        if (!validationResult.success) {
+            setPasswordError('Password must be at least 12 characters');
             return;
         }
 

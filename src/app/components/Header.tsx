@@ -70,14 +70,16 @@ const Header = () => {
         client: extensionClient,
         handleDisconnect,
         error: extensionError,
-        setError 
+        setError,
+        setAccount
     } = useWalletContext();
     
     const { 
         inAppAccount,
         isInAppWallet,
         client: inAppClient,
-        error: inAppError
+        error: inAppError,
+        setInAppAccount
     } = useInAppWallet();
     const { hasAccess, isLoading: nftLoading } = useNFTGate(account);
     const { fetchAchievements, totalXP } = useRewards();
@@ -140,8 +142,9 @@ const Header = () => {
         try {
             console.log('Starting sign out process...', { isInAppWallet, account, isSignedIn });
             
-            // Clear stored session first
+            // Clear all stored sessions and states
             clearStoredSession();
+            localStorage.removeItem('walletconnect');  // Clear WalletConnect data
             
             const promises = [];
             
@@ -151,17 +154,20 @@ const Header = () => {
                 promises.push(handleDisconnect());
             }
             
-            // For in-app wallet or any signed in user, sign out of Supabase
+            // For in-app wallet or any signed in user
             if (isInAppWallet || isSignedIn) {
                 console.log('Signing out of Supabase...');
                 promises.push(supabase.auth.signOut());
             }
             
-            // Execute all promises
             await Promise.all(promises);
             console.log('Sign out promises completed');
             
+            // Force clear all wallet states
+            setInAppAccount("");  // Clear in-app account
+            setAccount("");      // Clear extension account
             setIsMenuOpen(false);
+            
             router.push('/');
             router.refresh();
             
