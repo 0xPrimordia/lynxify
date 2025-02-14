@@ -121,6 +121,12 @@ const Header = () => {
     const activeAccount = account || inAppAccount;
     const isConnected = Boolean(activeAccount);
 
+    useEffect(() => {
+        if (isConnected || isSignedIn) {
+            refreshBalance();
+        }
+    }, [isConnected, isSignedIn]);
+
     const handleCopyAccount = async (accountId: string) => {
         try {
             await navigator.clipboard.writeText(accountId);
@@ -132,25 +138,37 @@ const Header = () => {
 
     const handleSignOut = async () => {
         try {
-            // First clear any stored session data
+            console.log('Starting sign out process...', { isInAppWallet, account, isSignedIn });
+            
+            // Clear stored session first
             clearStoredSession();
             
-            // Then handle auth and wallet disconnection in parallel
             const promises = [];
-            if (account) {
+            
+            // Handle extension wallet
+            if (account && !isInAppWallet) {
+                console.log('Disconnecting extension wallet...');
                 promises.push(handleDisconnect());
             }
+            
+            // For in-app wallet or any signed in user, sign out of Supabase
             if (isInAppWallet || isSignedIn) {
+                console.log('Signing out of Supabase...');
                 promises.push(supabase.auth.signOut());
             }
             
+            // Execute all promises
             await Promise.all(promises);
+            console.log('Sign out promises completed');
             
-            // Force a router refresh after all operations complete
+            setIsMenuOpen(false);
+            router.push('/');
             router.refresh();
+            
         } catch (error) {
-            console.error('Sign out error:', error);
+            console.error('Detailed sign out error:', error);
             toast.error('Failed to sign out. Please try again.');
+            throw error;
         }
     };
 
