@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { createServerSupabase } from '@/utils/supabase';
 import { NextRequest } from 'next/server';
 import { Client, AccountCreateTransaction, Hbar, PrivateKey, AccountId } from "@hashgraph/sdk";
+import { rewardNewWallet } from '@/lib/utils/tokenRewards';
 
 // Mock cookies
 jest.mock('next/headers', () => ({
@@ -104,6 +105,15 @@ jest.mock('@/utils/supabase', () => ({
                 updateUserById: jest.fn().mockResolvedValue({ error: null })
             }
         }
+    })
+}));
+
+// Mock token rewards
+jest.mock('@/lib/utils/tokenRewards', () => ({
+    rewardNewWallet: jest.fn().mockResolvedValue({
+        success: true,
+        amount: 50000000,
+        tokenId: "0.0.1183558"
     })
 }));
 
@@ -495,5 +505,240 @@ describe('POST /api/wallet/create-account', () => {
                 message: expect.stringContaining('permission denied')
             })
         );
+    });
+
+    it('should handle successful wallet creation with rewards', async () => {
+        // Setup specific mock for this test
+        const mockFrom = jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ 
+                        error: null, 
+                        data: {
+                            id: 'test-user-id',
+                            hederaAccountId: '0.0.123456',
+                            isInAppWallet: true
+                        }
+                    })
+                })
+            })
+        });
+
+        (createServerSupabase as jest.Mock).mockReturnValue({
+            from: mockFrom,
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                }),
+                admin: {
+                    updateUserById: jest.fn().mockResolvedValue({ error: null })
+                }
+            }
+        });
+
+        const headers = new Headers();
+        headers.set('x-user-id', 'test-user-id');
+        headers.set('Content-Type', 'application/json');
+
+        const req = {
+            method: 'POST',
+            headers,
+            json: () => Promise.resolve({ password: 'test-password' })
+        } as NextRequest;
+
+        const response = await POST(req);
+        expect(response.status).toBe(200);
+        
+        expect(rewardNewWallet).toHaveBeenCalledWith(
+            expect.any(Object), // client
+            '0.0.123456',      // matches mock account ID
+            process.env.NEXT_PUBLIC_OPERATOR_ID,
+            process.env.OPERATOR_KEY
+        );
+
+        const data = await response.json();
+        expect(data).toHaveProperty('accountId');
+        expect(data).toHaveProperty('privateKey');
+    });
+
+    it('should store reward metadata after successful reward', async () => {
+        const mockUpdateUserById = jest.fn().mockResolvedValue({ error: null });
+        const mockFrom = jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ 
+                        error: null, 
+                        data: {
+                            id: 'test-user-id',
+                            hederaAccountId: '0.0.123456',
+                            isInAppWallet: true
+                        }
+                    })
+                })
+            })
+        });
+
+        (createServerSupabase as jest.Mock).mockReturnValue({
+            from: mockFrom,
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                }),
+                admin: {
+                    updateUserById: mockUpdateUserById
+                }
+            }
+        });
+
+        const headers = new Headers();
+        headers.set('x-user-id', 'test-user-id');
+        headers.set('Content-Type', 'application/json');
+
+        const req = {
+            method: 'POST',
+            headers,
+            json: () => Promise.resolve({ password: 'test-password' })
+        } as NextRequest;
+
+        const response = await POST(req);
+        expect(response.status).toBe(200);
+
+        // Verify metadata update
+        expect(mockUpdateUserById).toHaveBeenCalledWith(
+            'test-user-id',
+            expect.objectContaining({
+                user_metadata: expect.objectContaining({
+                    initialReward: expect.objectContaining({
+                        amount: 50000000,
+                        tokenId: "0.0.1183558",
+                        timestamp: expect.any(String)
+                    })
+                })
+            })
+        );
+    });
+
+    it('should complete wallet creation even if reward fails', async () => {
+        // Mock reward failure
+        (rewardNewWallet as jest.Mock).mockRejectedValueOnce(new Error('Reward failed'));
+
+        const mockFrom = jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ 
+                        error: null, 
+                        data: {
+                            id: 'test-user-id',
+                            hederaAccountId: '0.0.123456',
+                            isInAppWallet: true
+                        }
+                    })
+                })
+            })
+        });
+
+        (createServerSupabase as jest.Mock).mockReturnValue({
+            from: mockFrom,
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                }),
+                admin: {
+                    updateUserById: jest.fn().mockResolvedValue({ error: null })
+                }
+            }
+        });
+
+        const headers = new Headers();
+        headers.set('x-user-id', 'test-user-id');
+        headers.set('Content-Type', 'application/json');
+
+        const req = {
+            method: 'POST',
+            headers,
+            json: () => Promise.resolve({ password: 'test-password' })
+        } as NextRequest;
+
+        const response = await POST(req);
+        
+        // Wallet creation should still succeed
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        expect(data).toHaveProperty('accountId');
+        expect(data).toHaveProperty('privateKey');
+    });
+
+    it('should handle price fetch failure gracefully', async () => {
+        // Mock specific reward failure due to price fetch
+        (rewardNewWallet as jest.Mock).mockRejectedValueOnce(new Error('Failed to fetch SAUCE token data'));
+
+        const mockFrom = jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+            }),
+            insert: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    single: jest.fn().mockResolvedValue({ 
+                        error: null, 
+                        data: {
+                            id: 'test-user-id',
+                            hederaAccountId: '0.0.123456',
+                            isInAppWallet: true
+                        }
+                    })
+                })
+            })
+        });
+
+        (createServerSupabase as jest.Mock).mockReturnValue({
+            from: mockFrom,
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                }),
+                admin: {
+                    updateUserById: jest.fn().mockResolvedValue({ error: null })
+                }
+            }
+        });
+
+        const headers = new Headers();
+        headers.set('x-user-id', 'test-user-id');
+        headers.set('Content-Type', 'application/json');
+
+        const req = {
+            method: 'POST',
+            headers,
+            json: () => Promise.resolve({ password: 'test-password' })
+        } as NextRequest;
+
+        const response = await POST(req);
+        
+        // Wallet creation should still succeed
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        expect(data).toHaveProperty('accountId');
+        expect(data).toHaveProperty('privateKey');
     });
 }); 

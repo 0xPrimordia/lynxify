@@ -6,12 +6,15 @@ import { useRouter } from 'next/navigation';
 import { AccountId, Client, AccountBalanceQuery } from '@hashgraph/sdk';
 import { useSaucerSwapContext } from "../hooks/useTokens";
 import { Token } from "@/app/types";
+import { Image } from "@nextui-org/react";
+import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 
 interface TokenBalance {
     token: string;
     symbol: string;
     balance: string;
     value_usd: number;
+    icon?: string;
 }
 
 const client = Client.forTestnet(); // or forMainnet() depending on your environment
@@ -58,11 +61,13 @@ export default function WalletPortfolio() {
                 const hbarValue = Number(cleanBalance) * hbarPrice;
 
                 // Clear existing balances and set HBAR first
+                const whbarToken = tokens?.find((t: Token) => t.id === "0.0.15058");
                 setBalances([{
                     token: 'Hedera',
                     symbol: 'HBAR',
                     balance: hbarBalance,
-                    value_usd: hbarValue
+                    value_usd: hbarValue,
+                    icon: whbarToken?.icon || '/images/tokens/WHBAR.png'
                 }]);
 
                 // Add token balances
@@ -88,10 +93,9 @@ export default function WalletPortfolio() {
                             const tokenBalance = Number(amount) / Math.pow(10, tokenData.decimals);
                             console.log('Calculated balance:', tokenBalance);
                             
+                            const saucerToken = tokens?.find((t: Token) => t.id === tokenId.toString());
                             let valueUsd = 0;
                             try {
-                                // Get token price from SaucerSwap tokens
-                                const saucerToken = tokens?.find((t: Token) => t.id === tokenId.toString());
                                 if (saucerToken?.priceUsd) {
                                     const priceUsd = Number(saucerToken.priceUsd);
                                     valueUsd = tokenBalance * priceUsd;
@@ -108,7 +112,8 @@ export default function WalletPortfolio() {
                                 token: tokenData.name || tokenId.toString(),
                                 symbol: tokenData.symbol || 'TOKEN',
                                 balance: tokenBalance.toString(),
-                                value_usd: valueUsd
+                                value_usd: valueUsd,
+                                icon: saucerToken?.icon || tokenData.icon || ''
                             };
                         } catch (err) {
                             console.error('Error processing token:', tokenId.toString(), err);
@@ -208,7 +213,17 @@ export default function WalletPortfolio() {
                                     balances.map((balance, index) => (
                                         <tr key={index}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                                                {balance.token} ({balance.symbol})
+                                                <div className="flex items-center">
+                                                    <Image
+                                                        width={30}
+                                                        height={30}
+                                                        alt={balance.symbol}
+                                                        src={getTokenImageUrl(balance.icon ?? '')}
+                                                        className="mr-4"
+                                                    />
+                                                    <span className="text-gray-400 mx-2 inline-block">{balance.symbol}</span>
+                                                    {balance.token}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-right">
                                                 {balance.balance}

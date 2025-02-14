@@ -3,6 +3,7 @@ import { Client, AccountCreateTransaction, Hbar, PrivateKey, AccountId } from "@
 import { createServerSupabase } from '@/utils/supabase';
 import { cookies } from 'next/headers';
 import { rateLimiterMiddleware } from '@/middleware/rateLimiter';
+import { rewardNewWallet } from '@/lib/utils/tokenRewards';
 
 export async function POST(req: NextRequest) {
     // Apply rate limiting
@@ -125,19 +126,58 @@ export async function POST(req: NextRequest) {
 
         // Update user metadata
         console.log('Updating user metadata');
+        const updatedMetadata = {
+            isInAppWallet: true,
+            hederaAccountId: newAccountId.toString(),
+            initialReward: {
+                amount: 0,
+                tokenId: '',
+                timestamp: new Date().toISOString()
+            }
+        };
+
         const { error: metadataError } = await supabase.auth.admin.updateUserById(
             userId,
-            { 
-                user_metadata: { 
-                    isInAppWallet: true,
-                    hederaAccountId: newAccountId.toString()
-                }
-            }
+            { user_metadata: updatedMetadata }
         );
 
         if (metadataError) {
             console.error('Failed to update user metadata:', metadataError);
-            throw new Error(`Failed to update user metadata: ${metadataError.message}`);
+        }
+
+        // After successful account creation
+        try {
+            const rewardResult = await rewardNewWallet(
+                client,
+                newAccountId.toString(),
+                process.env.NEXT_PUBLIC_OPERATOR_ID!,
+                process.env.OPERATOR_KEY!
+            );
+
+            console.log('Initial reward result:', rewardResult);
+
+            // Update user metadata to include reward info
+            const updatedMetadata = {
+                isInAppWallet: true,
+                hederaAccountId: newAccountId.toString(),
+                initialReward: {
+                    amount: rewardResult.amount,
+                    tokenId: rewardResult.tokenId,
+                    timestamp: new Date().toISOString()
+                }
+            };
+
+            const { error: rewardMetadataError } = await supabase.auth.admin.updateUserById(
+                userId,
+                { user_metadata: updatedMetadata }
+            );
+
+            if (rewardMetadataError) {
+                console.error('Failed to update reward metadata:', rewardMetadataError);
+            }
+        } catch (rewardError) {
+            // Log error but don't fail wallet creation
+            console.error('Failed to send initial reward:', rewardError);
         }
 
         // Log successful completion
