@@ -29,14 +29,22 @@ export default function WalletPortfolio() {
     const { tokens } = useSaucerSwapContext();
 
     useEffect(() => {
+        // Check session immediately
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                router.push('/auth/login');
+                return;
+            }
+        };
+        checkSession();
+    }, [supabase, router]);
+
+    useEffect(() => {
         async function fetchBalances() {
             try {
-                // Get user session
                 const { data: { session } } = await supabase.auth.getSession();
-                if (!session) {
-                    router.push('/auth/login');
-                    return;
-                }
+                if (!session) return; // Skip fetching if no session
 
                 // Get user's Hedera account ID from Supabase
                 const { data: userData, error: userError } = await supabase

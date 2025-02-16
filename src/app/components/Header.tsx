@@ -18,7 +18,7 @@ import { Subject } from 'rxjs';
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
 const balanceSubject = new Subject<void>();
-let lastFetch = 0;
+export let lastFetch = 0;
 const FETCH_COOLDOWN = 5000; // 5s minimum between fetches
 
 export const useBalance = (accountId: string, client: any) => {
@@ -62,6 +62,8 @@ export const useBalance = (accountId: string, client: any) => {
         refreshBalance: () => balanceSubject.next()
     };
 };
+
+export const resetLastFetch = () => { lastFetch = 0; };
 
 const Header = () => {
     const { 
