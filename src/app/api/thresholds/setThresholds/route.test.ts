@@ -7,7 +7,10 @@ import { Client, AccountId, PrivateKey, ContractId } from '@hashgraph/sdk';
 // Mock dependencies
 jest.mock('@/utils/supabase');
 jest.mock('next/headers', () => ({
-    cookies: jest.fn()
+    cookies: jest.fn().mockReturnValue({
+        get: jest.fn(),
+        set: jest.fn()
+    })
 }));
 
 // Mock Hedera SDK
@@ -71,14 +74,51 @@ const createRequest = (body: any) => {
 describe('setThresholds API', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-    });
-
-    it('should return 404 when user is not found', async () => {
+        
+        // Mock Supabase with complete CRUD operations
         (createServerSupabase as jest.Mock).mockReturnValue({
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                })
+            },
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
                     eq: jest.fn().mockReturnValue({
-                        single: jest.fn().mockResolvedValue({ data: null, error: null })
+                        single: jest.fn()
+                    })
+                }),
+                insert: jest.fn().mockReturnValue({
+                    select: jest.fn().mockReturnValue({
+                        single: jest.fn()
+                    })
+                }),
+                update: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        select: jest.fn()
+                    })
+                })
+            })
+        });
+    });
+
+    it('should return 401 when user is not found', async () => {
+        // Mock user lookup to return null
+        (createServerSupabase as jest.Mock).mockReturnValue({
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                })
+            },
+            from: jest.fn().mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        single: jest.fn().mockResolvedValue({ 
+                            data: null,
+                            error: null 
+                        })
                     })
                 })
             })
@@ -90,24 +130,29 @@ describe('setThresholds API', () => {
         });
 
         const response = await POST(request);
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(401);
         
         const responseData = await response.json();
         expect(responseData).toEqual({
-            error: 'User not found',
-            hederaAccountId: '0.0.123456',
-            queryError: null,
-            requestBody: { hederaAccountId: '0.0.123456', slippageBasisPoints: 50 }
+            error: 'Unauthorized',
+            details: 'Account not found or unauthorized'
         });
     });
 
     it('should successfully set thresholds for authenticated user', async () => {
+        // Mock successful user lookup and updates
         (createServerSupabase as jest.Mock).mockReturnValue({
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                })
+            },
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
                     eq: jest.fn().mockReturnValue({
                         single: jest.fn().mockResolvedValue({ 
-                            data: { id: 'test-user-id', hederaAccountId: '0.0.123456' }, 
+                            data: { id: 'test-user-id', hedera_account_id: '0.0.123456' }, 
                             error: null 
                         })
                     })
@@ -153,6 +198,12 @@ describe('setThresholds API', () => {
 
     it('should return 500 for database errors', async () => {
         (createServerSupabase as jest.Mock).mockReturnValue({
+            auth: {
+                getSession: jest.fn().mockResolvedValue({
+                    data: { session: { user: { id: 'test-user-id' } } },
+                    error: null
+                })
+            },
             from: jest.fn().mockReturnValue({
                 select: jest.fn().mockReturnValue({
                     eq: jest.fn().mockReturnValue({

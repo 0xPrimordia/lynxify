@@ -467,53 +467,25 @@ export default function DexPage() {
         setTradeToken(null);  // Reset trade token when token changes
     };
 
-    const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
+    const saveThresholds = async (thresholdData: {
+        type: 'stopLoss' | 'buyOrder' | 'sellOrder';
+        price: number;
+        cap: number;
+        hederaAccountId: string;
+        tokenA: string;
+        tokenB: string;
+        fee: number;
+        slippageBasisPoints: number;
+    }) => {
         if (!activeAccount || !userAccountId || !currentPool) {
-            setAlertState({
-                isVisible: true,
-                message: "Missing required data: account, userId, or pool",
-                type: "danger"
-            });
-            return;
+            throw new Error('Missing required data');
         }
 
-        setIsSubmitting(true);
         try {
-            console.log('Sending threshold data:', {
-                type,
-                price: type === 'stopLoss' ? stopLossPrice :
-                       type === 'buyOrder' ? buyOrderPrice :
-                       sellOrderPrice,
-                cap: type === 'stopLoss' ? stopLossCap :
-                     type === 'buyOrder' ? buyOrderCap :
-                     sellOrderCap,
-                hederaAccountId: activeAccount,
-                tokenA: currentPool.tokenA.id,
-                tokenB: currentPool.tokenB.id
-            });
-
-            const response = await fetch('/api/thresholds/setThresholds', {
+            const response: Response = await fetch('/api/thresholds/setThresholds', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type,
-                    price: type === 'stopLoss' ? stopLossPrice :
-                           type === 'buyOrder' ? buyOrderPrice :
-                           sellOrderPrice,
-                    cap: type === 'stopLoss' ? stopLossCap :
-                         type === 'buyOrder' ? buyOrderCap :
-                         sellOrderCap,
-                    hederaAccountId: activeAccount,
-                    tokenA: currentPool.tokenA.id,
-                    tokenB: currentPool.tokenB.id,
-                    fee: currentPool.fee,
-                    userId: userAccountId,
-                    slippageBasisPoints: Math.floor(
-                        (type === 'stopLoss' ? stopLossSlippage :
-                         type === 'buyOrder' ? buyOrderSlippage :
-                         sellOrderSlippage) * 100
-                    )
-                }),
+                body: JSON.stringify(thresholdData),
             });
 
             if (!response.ok) {
@@ -536,8 +508,6 @@ export default function DexPage() {
                 message: error.message || "Failed to create threshold",
                 type: "danger"
             });
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
