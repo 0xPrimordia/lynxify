@@ -6,12 +6,13 @@ jest.mock('@hashgraph/hedera-wallet-connect', () => ({
 }));
 
 import { render, screen, act } from '@testing-library/react';
-import Header from './Header';
+import Header, { lastFetch, resetLastFetch } from './Header';
 import { useWalletContext } from '../hooks/useWallet';
 import { useInAppWallet } from '../contexts/InAppWalletContext';
 import { useNFTGate } from '../hooks/useNFTGate';
 import { useRewards } from '../hooks/useRewards';
 import { useSupabase } from '../hooks/useSupabase';
+import { AccountBalanceQuery } from '@hashgraph/sdk';
 
 // Mock all hooks
 jest.mock('../hooks/useWallet');
@@ -38,6 +39,7 @@ jest.mock('@hashgraph/sdk', () => ({
 describe('Header', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        resetLastFetch();
     });
 
     it('should display extension wallet balance', async () => {
@@ -95,7 +97,16 @@ describe('Header', () => {
     });
 
     it('should display in-app wallet balance', async () => {
-        // Mock extension wallet as not connected
+        // Mock AccountBalanceQuery for this specific test
+        const mockAccountBalanceQuery = jest.fn().mockReturnValue({
+            setAccountId: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({
+                hbars: { toString: () => '100.00' }
+            })
+        });
+        jest.mocked(AccountBalanceQuery).mockImplementation(mockAccountBalanceQuery);
+
+        // Rest of test remains the same
         (useWalletContext as jest.Mock).mockReturnValue({
             account: null,
             client: null,
@@ -105,30 +116,11 @@ describe('Header', () => {
             setError: jest.fn()
         });
 
-        // Mock in-app wallet as active
         (useInAppWallet as jest.Mock).mockReturnValue({
             inAppAccount: '0.0.789012',
             isInAppWallet: true,
             client: { someClient: true },
             error: null
-        });
-
-        // Mock other required hooks same as above
-        (useNFTGate as jest.Mock).mockReturnValue({
-            hasAccess: true,
-            isLoading: false
-        });
-        (useRewards as jest.Mock).mockReturnValue({
-            fetchAchievements: jest.fn(),
-            totalXP: 100
-        });
-        (useSupabase as jest.Mock).mockReturnValue({
-            supabase: {
-                auth: {
-                    getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
-                    onAuthStateChange: jest.fn().mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } })
-                }
-            }
         });
 
         render(<Header />);
@@ -142,6 +134,6 @@ describe('Header', () => {
         });
         const desktopButton = balanceButtons.find(button => button.getAttribute('data-slot') === 'trigger');
         expect(desktopButton).toBeTruthy();
-        expect(desktopButton).toHaveAttribute('data-slot', 'trigger');
+        expect(desktopButton!.textContent).toBe('100.00 ℏ');
     });
 }); 

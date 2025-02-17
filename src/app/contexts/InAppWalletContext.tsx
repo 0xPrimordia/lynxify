@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar } from "@hashgraph/sdk";
 import { supabase } from '@/utils/supabase';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
@@ -10,7 +10,7 @@ interface InAppWalletContextType {
   isInAppWallet: boolean;
   client: Client | null;
   error: string | null;
-  loadWallet: (password: string) => Promise<PrivateKey>;
+  loadWallet: (password: string) => Promise<PrivateKey | null>;
   signTransaction: (transaction: string, password: string) => Promise<any>;
   setInAppAccount: (accountId: string) => void;
   recoverKey: (userId: string) => Promise<void>;
@@ -30,6 +30,9 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     accountId: null,
     privateKey: null
   });
+  
+  // Add ref to track loading state
+  const isLoadingRef = useRef(false);
 
   const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' 
     ? Client.forMainnet() 
@@ -70,78 +73,91 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
   }, []);
 
   const loadWallet = async (password: string) => {
+    // Atomic check and set
+    if (isLoadingRef.current) {
+        console.log('Wallet load already in progress');
+        return null;
+    }
+    isLoadingRef.current = true;
+
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('Session:', session?.user?.id);
+        console.log('Loading wallet for user:', session?.user?.id);
+
         if (!session?.user?.id) throw new Error("No authenticated session");
 
-        // Open IndexedDB
+        // Get all keys to help with debugging
         const db = await new Promise<IDBDatabase>((resolve, reject) => {
             const request = indexedDB.open('HederaWallet', 1);
-            request.onerror = () => reject(new Error('Failed to open IndexedDB'));
+            request.onerror = () => reject(request.error);
             request.onsuccess = () => resolve(request.result);
         });
 
-        // Get encrypted key from store
         const encryptedKey = await new Promise<string>((resolve, reject) => {
             const transaction = db.transaction(['keys'], 'readonly');
             const store = transaction.objectStore('keys');
+            
+            // Log all keys for debugging
+            store.getAllKeys().onsuccess = (event) => {
+                const keys = (event.target as IDBRequest).result;
+                console.log('All stored keys:', keys);
+            };
+            
             const request = store.get(session.user.id);
             
             request.onerror = () => reject(new Error('Failed to retrieve key from IndexedDB'));
             request.onsuccess = () => {
-                console.log('Retrieved from IndexedDB:', request.result);
+                console.log('Key lookup result:', {
+                    userId: session.user.id,
+                    hasResult: !!request.result,
+                    hasEncryptedKey: !!request.result?.encryptedKey
+                });
                 resolve(request.result?.encryptedKey);
             }
         });
 
-        console.log('Encrypted key found:', !!encryptedKey);
-
-        if (!encryptedKey) throw new Error("No stored key found");
+        if (!encryptedKey) {
+            throw new Error("No stored key found");
+        }
 
         // Decrypt the private key
         const decryptedKey = await decrypt(encryptedKey, password);
-        console.log('Decrypted key obtained:', !!decryptedKey);
-        
         const privateKey = PrivateKey.fromString(decryptedKey);
-        console.log('Private key created:', !!privateKey);
         
-        // Set the state and verify it was set
-        setWalletState(prev => {
-            const newState = { ...prev, privateKey };
-            console.log('New wallet state:', !!newState.privateKey);
-            return newState;
-        });
-        
-        // Wait a tick to ensure state is updated
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        console.log('Final wallet state:', !!walletState.privateKey);
-        
+        setWalletState(prev => ({
+            ...prev,
+            privateKey
+        }));
+
         return privateKey;
     } catch (error) {
         console.error('Error in loadWallet:', error);
         throw error;
+    } finally {
+        isLoadingRef.current = false;
     }
   };
 
   const signTransaction = async (transaction: string, password: string) => {
     console.log("Starting signTransaction");
     try {
-        // Load the key and use it directly
-        const privateKey = !walletState.privateKey ? await loadWallet(password) : walletState.privateKey;
+        // Always load a fresh key for signing
+        const privateKey = await loadWallet(password);
+        if (!privateKey) throw new Error("Failed to load private key");
         
         // Convert base64 string back to Transaction object
         const tx = base64StringToTransaction(transaction);
         
-        // Sign the transaction with the private key
+        // Sign and execute
         const signedTx = await tx.sign(privateKey);
-        
-        // Execute the transaction
         const response = await signedTx.execute(client);
-        
-        // Get receipt to confirm success
         const receipt = await response.getReceipt(client);
+        
+        // Clear private key after signing
+        setWalletState(prev => ({
+            ...prev,
+            privateKey: null
+        }));
         
         return {
             status: 'SUCCESS',
@@ -160,17 +176,6 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
 
   const recoverKey = async (userId: string) => {
     // Implementation for recovering key
-  };
-
-  const createAccount = async (privateKey: PrivateKey) => {
-    const transaction = new AccountCreateTransaction()
-        .setKey(privateKey.publicKey)
-        .setInitialBalance(new Hbar(0))
-        .setMaxAutomaticTokenAssociations(-1);  // -1 means unlimited auto-associations
-        
-    const response = await transaction.execute(client);
-    const receipt = await response.getReceipt(client);
-    return receipt.accountId;
   };
 
   return (

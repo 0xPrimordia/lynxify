@@ -3,26 +3,26 @@ import { WalletContext } from './useWallet';
 import { InAppWalletContext } from '../contexts/InAppWalletContext';
 import { SessionState } from '@/utils/supabase/session';
 import { Client } from '@hashgraph/sdk';
-
+import { Session, User } from '@supabase/supabase-js';
 // Define strict mock state type
 type MockSessionState = {
     wallet: {
         isConnected: boolean;
-        accountId: null;
+        accountId: string | null;
         session: null;
         isInAppWallet: boolean;
         privateKey: null;
     };
     auth: {
         isAuthenticated: boolean;
-        userId: null;
-        session: null;
-        user: null;
+        userId: string | null;
+        session: Session | null;
+        user: User | null;
         error: string | null;
     };
 };
 
-const mockWalletContext = {
+export const mockWalletContext = {
     account: "",
     handleConnect: jest.fn(),
     handleDisconnectSessions: jest.fn(),

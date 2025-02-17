@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input, Button, Select, SelectItem, Chip, Tooltip } from "@nextui-org/react";
 import { ArrowRightIcon, QuestionMarkCircleIcon } from "@heroicons/react/16/solid";
 import Image from 'next/image';
@@ -40,7 +40,16 @@ export interface ThresholdSectionProps {
     adjustBuyOrderPrice: (percent: number) => void;
     hanndleMaxClickStopLoss: () => void;
     handleMaxClickSellOrder: () => void;
-    saveThresholds: (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => void;
+    saveThresholds: (data: {
+        type: 'stopLoss' | 'buyOrder' | 'sellOrder';
+        price: number;
+        cap: number;
+        hederaAccountId: string;
+        tokenA: string;
+        tokenB: string;
+        fee: number;
+        slippageBasisPoints: number;
+    }) => void;
     resetThresholdForm: () => void;
     setIsSubmitting: (isSubmitting: boolean) => void;
     setError: (error: string) => void;
@@ -92,49 +101,66 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
     const [limitUsdAmount, setLimitUsdAmount] = useState("0.0");
     const [isStopLimitExpanded, setIsStopLimitExpanded] = useState(false);
 
-    const handleSaveThreshold = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
+    // Initialize buy order price with trade token's price (the token being bought)
+    useEffect(() => {
+        if (mode === 'buy' && tradeToken) {
+            setBuyOrderPrice(tradeToken.priceUsd.toString());
+        }
+    }, [mode, tradeToken, setBuyOrderPrice]);
+
+    const handleSaveThreshold = async () => {
         try {
-            const { needsAssociation, token } = await verifyThresholdTokens(
+            setIsSubmitting(true);
+            
+            if (!tradeToken) {
+                throw new Error('Trade token not selected');
+            }
+
+            // Verify token associations first
+            const verificationResult = await verifyThresholdTokens(
                 activeAccount,
                 currentToken.id,
-                tradeToken?.id || '',
-                type === 'buyOrder'
+                tradeToken.id,
+                process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet'
             );
 
-            if (needsAssociation && token) {
-                setIsSubmitting(true);
-                setError(''); // Clear any previous errors
-                
+            if (verificationResult.needsAssociation) {
+                if (!verificationResult.token) {
+                    throw new Error('Token ID not found');
+                }
                 try {
-                    const associateTx = await associateToken(activeAccount, token);
-                    const result = await executeTransaction(
-                        associateTx,
-                        `Associate ${token} token`
-                    );
-
-                    if (result.status === 'ERROR') {
-                        throw new Error(result.error || 'Token association failed');
+                    const tx = await associateToken(activeAccount, verificationResult.token);
+                    const result = await executeTransaction(tx, `Associate ${verificationResult.token} token`);
+                    
+                    if (result.status !== 'SUCCESS') {
+                        throw new Error(result.error || 'Association failed');
                     }
                 } catch (error) {
                     console.error('Token association error:', error);
                     setError(error instanceof Error ? error.message : 'Failed to associate token');
-                    setIsSubmitting(false);
                     return;
                 }
             }
 
-            // Now that association is complete (if needed), create the threshold
-            setIsSubmitting(true);
-            setError(''); // Clear any previous errors
-            
-            try {
-                await saveThresholds(type);
-                resetThresholdForm();
-                setSelectedThresholdType(null);
-            } catch (error) {
-                console.error('Failed to save threshold:', error);
-                setError(error instanceof Error ? error.message : 'Failed to save threshold');
+            if (!selectedThresholdType) {
+                throw new Error('Threshold type not selected');
             }
+
+            // Save thresholds with complete data
+            await saveThresholds({
+                type: selectedThresholdType,
+                price: parseFloat(selectedThresholdType === 'stopLoss' ? stopLossPrice : 
+                    selectedThresholdType === 'buyOrder' ? buyOrderPrice : sellOrderPrice),
+                cap: parseFloat(selectedThresholdType === 'stopLoss' ? stopLossCap :
+                    selectedThresholdType === 'buyOrder' ? buyOrderCap : sellOrderCap),
+                hederaAccountId: activeAccount,
+                tokenA: currentToken.id,
+                tokenB: tradeToken.id,
+                fee: currentPool.fee,
+                slippageBasisPoints: Math.floor((selectedThresholdType === 'stopLoss' ? stopLossSlippage :
+                    selectedThresholdType === 'buyOrder' ? buyOrderSlippage : sellOrderSlippage) * 100)
+            });
+            resetThresholdForm();
         } catch (error) {
             console.error('Threshold operation failed:', error);
             setError(error instanceof Error ? error.message : 'Failed to complete threshold operation');
@@ -286,7 +312,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         />
                         <Button 
                             className="mb-2" 
-                            onPress={() => handleSaveThreshold('buyOrder').catch(console.error)}
+                            onPress={() => handleSaveThreshold().catch(console.error)}
                             isLoading={isSubmitting}
                             isDisabled={isSubmitting}
                         >
@@ -409,7 +435,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         />
                         <Button 
                             className="mb-2" 
-                            onPress={() => handleSaveThreshold('stopLoss').catch(console.error)}
+                            onPress={() => handleSaveThreshold().catch(console.error)}
                             isLoading={isSubmitting}
                             isDisabled={isSubmitting}
                         >
@@ -527,7 +553,7 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         />
                         <Button 
                             className="mb-2" 
-                            onPress={() => handleSaveThreshold('sellOrder').catch(console.error)}
+                            onPress={() => handleSaveThreshold().catch(console.error)}
                             isLoading={isSubmitting}
                             isDisabled={isSubmitting}
                         >
