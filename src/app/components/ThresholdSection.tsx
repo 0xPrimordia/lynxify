@@ -188,7 +188,12 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         size="sm"
                         variant="light"
                         className="min-w-unit-8 text-xl border border-gray-800"
-                        onPress={() => setIsLimitExpanded(!isLimitExpanded)}
+                        onPress={() => {
+                            setIsLimitExpanded(!isLimitExpanded);
+                            if (!isLimitExpanded) {
+                                setSelectedThresholdType('buyOrder');
+                            }
+                        }}
                         aria-expanded={isLimitExpanded}
                         aria-controls="limit-section"
                         aria-label={isLimitExpanded ? "Collapse limit section" : "Expand limit section"}
@@ -462,7 +467,15 @@ export const ThresholdSection: React.FC<ThresholdSectionProps> = ({
                         size="sm"
                         variant="light"
                         className="min-w-unit-8 text-xl border border-gray-800"
-                        onPress={() => setIsLimitExpanded(!isLimitExpanded)}
+                        onPress={() => {
+                            setIsLimitExpanded(!isLimitExpanded);
+                            if (!isLimitExpanded) {
+                                setSelectedThresholdType(mode === 'sell' ? 'sellOrder' : 'buyOrder');
+                            }
+                        }}
+                        aria-expanded={isLimitExpanded}
+                        aria-controls="limit-section"
+                        aria-label={isLimitExpanded ? "Collapse limit section" : "Expand limit section"}
                     >
                         {isLimitExpanded ? "−" : "+"}
                     </Button>
