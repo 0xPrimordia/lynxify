@@ -7,41 +7,51 @@ import { cookies } from 'next/headers';
 export async function POST(req: NextRequest) {
   try {
     const cookieStore = cookies();
-    // Get the request body first
+    const supabase = createServerSupabase(cookieStore);
+
+    // Get user session first
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error('Auth error:', sessionError);
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Unauthorized', 
+          details: sessionError?.message || 'No active session' 
+        }),
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
     const { hederaAccountId, slippageBasisPoints } = body;
     
     console.log('Received request with body:', body);
     console.log('Looking for user with Hedera ID:', hederaAccountId);
 
-    // Use service client directly to find user by Hedera ID
-    const serviceClient = createServerSupabase(cookieStore, true);
-    
-    // Find user by Hedera account ID first
-    const { data: dbUser, error: userError } = await serviceClient
-      .from('Users')
+    // Verify user owns this Hedera account
+    const { data: user, error: userError } = await supabase
+      .from('users')
       .select('*')
-      .eq('hederaAccountId', hederaAccountId)
+      .eq('hedera_account_id', hederaAccountId)
       .single();
 
-    if (!dbUser) {
-      console.error('User lookup failed:', { error: userError, hederaId: hederaAccountId });
+    if (userError || !user) {
+      console.error('User verification error:', userError);
       return new NextResponse(
         JSON.stringify({ 
-          error: 'User not found',
-          hederaAccountId,
-          queryError: userError,
-          requestBody: body
+          error: 'Unauthorized',
+          details: 'Account not found or unauthorized'
         }),
-        { status: 404 }
+        { status: 401 }
       );
     }
 
     // Create threshold record with slippage
-    const { data: pendingThreshold, error: insertError } = await serviceClient
+    const { data: pendingThreshold, error: insertError } = await supabase
       .from('Thresholds')
       .insert({
-        userId: dbUser.id,
+        userId: user.id,
         ...body,
         slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
         isActive: false,
@@ -127,7 +137,7 @@ export async function POST(req: NextRequest) {
         };
         console.error('Contract transaction failed:', errorDetails);
 
-        await serviceClient
+        await supabase
           .from('Thresholds')
           .update({ 
             status: 'failed',
@@ -162,7 +172,7 @@ export async function POST(req: NextRequest) {
       });
       
       // First verify the threshold exists
-      const { data: verifyData, error: verifyError } = await serviceClient
+      const { data: verifyData, error: verifyError } = await supabase
         .from('Thresholds')
         .select('*')
         .eq('id', pendingThreshold.id)
@@ -175,7 +185,7 @@ export async function POST(req: NextRequest) {
       });
 
       // Then attempt the update
-      const { data: updateData, error: updateError } = await serviceClient
+      const { data: updateData, error: updateError } = await supabase
         .from('Thresholds')
         .update({ 
           isActive: true,
@@ -213,7 +223,7 @@ export async function POST(req: NextRequest) {
       };
       console.error('Unexpected error during contract interaction:', errorDetails);
 
-      await serviceClient
+      await supabase
         .from('Thresholds')
         .update({ 
           status: 'failed',
@@ -232,16 +242,11 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('Error in setThresholds:', error);
+    console.error('Threshold creation error:', error);
     return new NextResponse(
       JSON.stringify({ 
-        error: 'Failed to set thresholds', 
-        details: error.message,
-        debugInfo: {
-          errorName: error.name,
-          errorStack: error.stack,
-          errorMessage: error.message
-        }
+        error: 'Internal Server Error',
+        details: error instanceof Error ? error.message : 'Unknown error'
       }),
       { status: 500 }
     );

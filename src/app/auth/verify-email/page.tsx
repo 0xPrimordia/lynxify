@@ -49,6 +49,13 @@ function VerifyEmailPage() {
         checkSession();
     }, [router, supabase.auth]);
 
+    useEffect(() => {
+        return () => {
+            // Cleanup function to clear private key when component unmounts
+            setPrivateKey(null);
+        };
+    }, []);
+
     const handleCreateWallet = async () => {
         if (!isSessionReady) return;
         
@@ -128,7 +135,7 @@ function VerifyEmailPage() {
                     }
                 };
 
-                db.onsuccess = (event) => {
+                db.onsuccess = async (event) => {
                     const database = (event.target as IDBOpenDBRequest).result;
                     const transaction = database.transaction(['keys'], 'readwrite');
                     const store = transaction.objectStore('keys');
@@ -152,6 +159,13 @@ function VerifyEmailPage() {
                                 null, // Don't store private key in session
                                 accountId // Add this parameter
                             );
+
+                            // After successful private key storage in IndexedDB
+                            const { error: updateError } = await supabase.auth.updateUser({
+                                data: {
+                                    hasStoredPrivateKey: true
+                                }
+                            });
                         }
                     };
                     
@@ -160,6 +174,12 @@ function VerifyEmailPage() {
                     };
                 };
             } catch (dbError) {
+                // If encryption or DB setup fails, ensure flag is set to false
+                await supabase.auth.updateUser({
+                    data: {
+                        hasStoredPrivateKey: false
+                    }
+                });
                 console.error('IndexedDB error:', dbError);
                 throw new Error('Failed to store private key securely');
             } finally {

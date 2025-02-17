@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         const transaction = new AccountCreateTransaction()
             .setKey(publicKey)
             .setInitialBalance(new Hbar(0.5))
-            .setMaxAutomaticTokenAssociations(10);
+            .setMaxAutomaticTokenAssociations(-1);
 
         const response = await transaction.execute(client);
         const receipt = await response.getReceipt(client);

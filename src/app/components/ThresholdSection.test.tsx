@@ -1,7 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ThresholdSection, ThresholdSectionProps } from './ThresholdSection';
 import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
 import { associateToken } from '@/app/lib/utils/tokens';
+import { Token } from '@/app/types';
 
 // Mock Next.js Image component
 jest.mock('next/image', () => ({
@@ -254,5 +255,140 @@ describe('ThresholdSection', () => {
             expect(mockSetIsSubmitting).toHaveBeenCalledWith(false);
             expect(mockResetThresholdForm).not.toHaveBeenCalled();
         });
+    });
+
+    it('should successfully set threshold after token association', async () => {
+        const mockVerifyThresholdTokens = require('@/app/lib/tokens/thresholdAssociation').verifyThresholdTokens;
+        mockVerifyThresholdTokens.mockResolvedValue({
+            needsAssociation: false
+        });
+
+        const mockSaveThresholds = jest.fn().mockResolvedValue(undefined);
+        const setBuyOrderPrice = jest.fn();
+        const setBuyOrderCap = jest.fn();
+
+        const { getByText, getAllByRole } = render(
+            <ThresholdSection 
+                {...defaultProps}
+                selectedThresholdType="buyOrder"
+                saveThresholds={mockSaveThresholds}
+                setBuyOrderPrice={setBuyOrderPrice}
+                setBuyOrderCap={setBuyOrderCap}
+                buyOrderPrice="1.5"  // Set initial values
+                buyOrderCap="100"
+            />
+        );
+
+        // Expand section
+        fireEvent.click(getByText('+'));
+
+        // Get inputs and set values
+        const inputs = getAllByRole('spinbutton');
+        const [priceInput, capInput] = inputs;
+
+        // Set values directly
+        await act(async () => {
+            fireEvent.change(priceInput, { target: { value: '1.5' } });
+            fireEvent.blur(priceInput);
+        });
+
+        await act(async () => {
+            fireEvent.change(capInput, { target: { value: '100' } });
+            fireEvent.blur(capInput);
+        });
+
+        // Submit form
+        await act(async () => {
+            fireEvent.click(getByText('Set Limit Order'));
+        });
+
+        expect(mockSaveThresholds).toHaveBeenCalledWith({
+            type: 'buyOrder',
+            price: 1.5,
+            cap: 100,
+            hederaAccountId: '0.0.123456',
+            tokenA: 'token1',
+            tokenB: 'token2',
+            fee: 3000,
+            slippageBasisPoints: 50
+        });
+    });
+
+    it('should handle API errors when setting threshold', async () => {
+        const mockVerifyThresholdTokens = require('@/app/lib/tokens/thresholdAssociation').verifyThresholdTokens;
+        mockVerifyThresholdTokens.mockResolvedValue({
+            needsAssociation: false
+        });
+
+        const mockSaveThresholds = jest.fn().mockRejectedValue(
+            new Error('API Error: Unauthorized')
+        );
+
+        const { getByText, getAllByRole } = render(
+            <ThresholdSection 
+                {...defaultProps}
+                saveThresholds={mockSaveThresholds}
+            />
+        );
+
+        // Expand section
+        fireEvent.click(getByText('+'));
+
+        // Get inputs by role
+        const inputs = getAllByRole('spinbutton');
+        const [priceInput, capInput] = inputs;
+
+        // Set threshold values
+        await act(async () => {
+            fireEvent.change(priceInput, { target: { value: '1.5' } });
+            fireEvent.change(capInput, { target: { value: '100' } });
+        });
+
+        await act(async () => {
+            fireEvent.click(getByText('Set Limit Order'));
+        });
+
+        expect(defaultProps.setError).toHaveBeenCalledWith('API Error: Unauthorized');
+    });
+
+    it('should validate input values before submission', async () => {
+        const mockSaveThresholds = jest.fn();
+        const mockSetError = jest.fn();
+
+        const { getByText, getAllByRole } = render(
+            <ThresholdSection 
+                {...defaultProps}
+                selectedThresholdType="buyOrder"
+                saveThresholds={mockSaveThresholds}
+                setError={mockSetError}
+            />
+        );
+
+        // Expand section
+        fireEvent.click(getByText('+'));
+
+        // Get inputs and set invalid values
+        const inputs = getAllByRole('spinbutton');
+        const [priceInput, capInput] = inputs;
+
+        // Need to wait for state updates
+        await act(async () => {
+            fireEvent.change(priceInput, { target: { value: '-1' } });
+        });
+        await act(async () => {
+            fireEvent.change(capInput, { target: { value: '0' } });
+        });
+
+        // Mock verifyThresholdTokens to throw error
+        const mockVerifyThresholdTokens = require('@/app/lib/tokens/thresholdAssociation').verifyThresholdTokens;
+        mockVerifyThresholdTokens.mockRejectedValue(new Error('Invalid input values'));
+
+        // Submit form
+        await act(async () => {
+            fireEvent.click(getByText('Set Limit Order'));
+        });
+
+        expect(mockSetError).toHaveBeenCalledWith('Invalid input values');
+        expect(mockSaveThresholds).not.toHaveBeenCalled();
     });
 }); 
