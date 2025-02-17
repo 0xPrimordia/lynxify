@@ -391,4 +391,39 @@ describe('ThresholdSection', () => {
         expect(mockSetError).toHaveBeenCalledWith('Invalid input values');
         expect(mockSaveThresholds).not.toHaveBeenCalled();
     });
+
+    it('should set correct threshold type when expanding section', async () => {
+        const mockSetSelectedThresholdType = jest.fn();
+        
+        const { getByRole } = render(
+            <ThresholdSection 
+                {...defaultProps}
+                mode="sell"
+                selectedThresholdType={null}
+                setSelectedThresholdType={mockSetSelectedThresholdType}
+            />
+        );
+
+        // Click expand button
+        const expandButton = getByRole('button', { 
+            name: 'Expand limit section'
+        });
+        fireEvent.click(expandButton);
+
+        // Verify threshold type was set correctly
+        expect(mockSetSelectedThresholdType).toHaveBeenCalledWith('sellOrder');
+
+        // Test buy mode
+        const { getByRole: getBuyRole } = render(
+            <ThresholdSection 
+                {...defaultProps}
+                mode="buy"
+                selectedThresholdType={null}
+                setSelectedThresholdType={mockSetSelectedThresholdType}
+            />
+        );
+
+        fireEvent.click(getBuyRole('button', { name: 'Expand limit section' }));
+        expect(mockSetSelectedThresholdType).toHaveBeenCalledWith('buyOrder');
+    });
 }); 
