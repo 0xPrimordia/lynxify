@@ -3,25 +3,20 @@ import { createServerSupabase } from '@/utils/supabase';
 import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
 import { cookies } from 'next/headers';
+import { User, Threshold } from '@/app/types';  // Import types
 
 export async function POST(req: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const supabase = createServerSupabase(cookieStore);
-
-    // Get user session first
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session) {
-      console.error('Auth error:', sessionError);
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'Unauthorized', 
-          details: sessionError?.message || 'No active session' 
-        }),
-        { status: 401 }
-      );
+    const userId = req.headers.get('x-user-id');
+    if (!userId) {
+      return NextResponse.json({ 
+        error: 'Unauthorized', 
+        details: 'No user session found' 
+      }, { status: 401 });
     }
+
+    const cookieStore = cookies();
+    const supabase = createServerSupabase(cookieStore, true);
 
     const body = await req.json();
     const { hederaAccountId, slippageBasisPoints } = body;
@@ -29,49 +24,48 @@ export async function POST(req: NextRequest) {
     console.log('Received request with body:', body);
     console.log('Looking for user with Hedera ID:', hederaAccountId);
 
-    // Verify user owns this Hedera account
+    // Type-safe user verification
     const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('hedera_account_id', hederaAccountId)
+      .from('Users')
+      .select<'*', User>('*')  // Specify the type for type-safe queries
+      .eq('id', userId)
+      .eq('hederaAccountId', hederaAccountId)
       .single();
 
     if (userError || !user) {
       console.error('User verification error:', userError);
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'Unauthorized',
-          details: 'Account not found or unauthorized'
-        }),
-        { status: 401 }
-      );
+      return NextResponse.json({ 
+        error: 'Unauthorized',
+        details: 'Account not found or unauthorized'
+      }, { status: 401 });
     }
 
-    // Create threshold record with slippage
+    // Type-safe threshold creation
+    const thresholdData: Partial<Threshold> = {
+      userId: user.id,
+      ...body,
+      slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
+      isActive: false,
+      status: 'pending',
+      testnet: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet',
+      createdAt: new Date().toISOString(),
+      lastChecked: new Date().toISOString(),
+      lastExecutedAt: new Date().toISOString(),
+      lastError: '',
+      txHash: ''
+    };
+
     const { data: pendingThreshold, error: insertError } = await supabase
       .from('Thresholds')
-      .insert({
-        userId: user.id,
-        ...body,
-        slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
-        isActive: false,
-        status: 'pending',
-        testnet: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet',
-        createdAt: new Date().toISOString(),
-        lastChecked: new Date().toISOString(),
-        lastExecutedAt: new Date().toISOString(),
-        lastError: '',
-        txHash: ''
-      })
-      .select()
+      .insert(thresholdData)
+      .select<'*', Threshold>('*')
       .single();
 
     if (insertError) {
       console.error('Failed to create threshold record:', insertError);
-      return new NextResponse(
-        JSON.stringify({ error: `Failed to create threshold record: ${insertError.message}` }),
-        { status: 500 }
-      );
+      return NextResponse.json({ 
+        error: `Failed to create threshold record: ${insertError.message}` 
+      }, { status: 500 });
     }
 
     // Initialize Hedera client
@@ -146,18 +140,15 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', pendingThreshold.id);
 
-        return new NextResponse(
-          JSON.stringify({ 
-            error: `Contract transaction failed`,
-            details: errorDetails,
-            debugInfo: {
-              requestBody: body,
-              contractParams: debugParams,
-              receipt: receipt
-            }
-          }),
-          { status: 500 }
-        );
+        return NextResponse.json({ 
+          error: `Contract transaction failed`,
+          details: errorDetails,
+          debugInfo: {
+            requestBody: body,
+            contractParams: debugParams,
+            receipt: receipt
+          }
+        }, { status: 500 });
       }
 
       // After successful contract execution
@@ -204,14 +195,11 @@ export async function POST(req: NextRequest) {
         thresholdId: pendingThreshold.id
       });
 
-      return new NextResponse(
-        JSON.stringify({
-          message: 'Threshold set successfully',
-          txHash: txResponse.transactionId.toString(),
-          id: pendingThreshold.id
-        }),
-        { status: 200 }
-      );
+      return NextResponse.json({
+        message: 'Threshold set successfully',
+        txHash: txResponse.transactionId.toString(),
+        id: pendingThreshold.id
+      });
 
     } catch (error: any) {
       // Catch and log any unexpected errors during contract interaction
@@ -232,24 +220,18 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', pendingThreshold.id);
 
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'Failed to set threshold',
-          details: errorDetails
-        }),
-        { status: 500 }
-      );
+      return NextResponse.json({ 
+        error: 'Failed to set threshold',
+        details: errorDetails
+      }, { status: 500 });
     }
 
   } catch (error: any) {
     console.error('Threshold creation error:', error);
-    return new NextResponse(
-      JSON.stringify({ 
-        error: 'Internal Server Error',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
