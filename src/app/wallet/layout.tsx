@@ -1,6 +1,8 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useSupabase } from '@/app/hooks/useSupabase';
 import { 
     WalletIcon, 
     ClockIcon, 
@@ -20,6 +22,54 @@ const navigation = [
 export default function WalletLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
+    const { supabase } = useSupabase();
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const checkWalletStatus = async () => {
+            try {
+                if (pathname === '/wallet/setup') {
+                    setIsLoading(false);
+                    return;
+                }
+
+                const { data: { session } } = await supabase.auth.getSession();
+                console.log('WalletLayout - Session:', session);
+                if (!session) {
+                    router.push('/auth/login');
+                    return;
+                }
+
+                const { data: { user } } = await supabase.auth.getUser();
+                console.log('WalletLayout - User metadata:', user?.user_metadata);
+                
+                if (!user?.user_metadata?.hederaAccountId || !user?.user_metadata?.hasStoredPrivateKey) {
+                    console.log('WalletLayout - Missing wallet info:', {
+                        hederaAccountId: user?.user_metadata?.hederaAccountId,
+                        hasStoredPrivateKey: user?.user_metadata?.hasStoredPrivateKey
+                    });
+                    router.push('/wallet/setup');
+                    return;
+                }
+
+                console.log('WalletLayout - Wallet check passed');
+                setIsLoading(false);
+            } catch (error) {
+                console.error('WalletLayout - Error:', error);
+                router.push('/wallet/setup');
+            }
+        };
+
+        checkWalletStatus();
+    }, [supabase, router, pathname]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen w-full bg-black flex items-center justify-center">
+                <div className="text-white">Loading...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen w-full bg-black">

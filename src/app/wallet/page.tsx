@@ -1,6 +1,5 @@
 'use client';
 
-import WalletStatusCheck from '@/app/components/WalletStatusCheck';
 import { useEffect, useState } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { useRouter } from 'next/navigation';
@@ -9,6 +8,7 @@ import { useSaucerSwapContext } from "../hooks/useTokens";
 import { Token } from "@/app/types";
 import { Image } from "@nextui-org/react";
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
+import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 
 interface TokenBalance {
     token: string;
@@ -28,6 +28,7 @@ export default function WalletPage() {
     const { supabase } = useSupabase();
     const router = useRouter();
     const { tokens } = useSaucerSwapContext();
+    const { inAppAccount } = useInAppWallet();
 
     useEffect(() => {
         // Check session immediately
@@ -176,80 +177,88 @@ export default function WalletPage() {
     }
 
     return (
-        <WalletStatusCheck>
-            <div>
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-white">Portfolio</h1>
-                    <p className="mt-2 text-sm text-gray-400">
-                        View and manage your token holdings
-                    </p>
-                </div>
+        <div>
+            <div className="mb-8">
+                <h1 className="text-2xl font-bold text-white">Portfolio</h1>
+                <p className="mt-2 text-sm text-gray-400">
+                    View and manage your token holdings
+                </p>
+            </div>
 
-                {/* Portfolio Summary */}
-                <div className="bg-gray-900 rounded-lg border border-gray-800 mb-6 p-6">
-                    <h2 className="text-lg font-medium text-white mb-4">Portfolio Value</h2>
-                    <div className="text-3xl font-bold text-white">
-                        ${totalValue.toLocaleString()}
+            {/* Portfolio Summary with Account ID */}
+            <div className="bg-gray-900 rounded-lg border border-gray-800 mb-6 p-6">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 className="text-lg font-medium text-white mb-4">Portfolio Value</h2>
+                        <div className="text-3xl font-bold text-white">
+                            ${totalValue.toLocaleString()}
+                        </div>
                     </div>
-                </div>
-
-                {/* Token List */}
-                <div className="bg-gray-900 rounded-lg border border-gray-800">
-                    <div className="px-4 py-5 sm:p-6">
-                        <h3 className="text-lg font-medium text-white mb-4">Token Balances</h3>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-800">
-                                <thead>
-                                    <tr>
-                                        <th className="px-6 py-3 bg-gray-800 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                            Token
-                                        </th>
-                                        <th className="px-6 py-3 bg-gray-800 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                            Balance
-                                        </th>
-                                        <th className="px-6 py-3 bg-gray-800 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                                            Value (USD)
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-800">
-                                    {balances.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-400">
-                                                No tokens found in wallet
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        balances.map((balance, index) => (
-                                            <tr key={index}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                                                    <div className="flex items-center">
-                                                        <Image
-                                                            width={30}
-                                                            height={30}
-                                                            alt={balance.symbol}
-                                                            src={getTokenImageUrl(balance.icon ?? '')}
-                                                            className="mr-4"
-                                                        />
-                                                        <span className="text-gray-400 mx-2 inline-block">{balance.symbol}</span>
-                                                        {balance.token}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-right">
-                                                    {balance.balance}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-right">
-                                                    ${balance.value_usd.toLocaleString()}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                    <div className="text-right">
+                        <h2 className="text-lg font-medium text-white mb-4">Account ID</h2>
+                        <div className="font-mono text-gray-300">
+                            {inAppAccount || 'Loading...'}
                         </div>
                     </div>
                 </div>
             </div>
-        </WalletStatusCheck>
+
+            {/* Token List */}
+            <div className="bg-gray-900 rounded-lg border border-gray-800">
+                <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium text-white mb-4">Token Balances</h3>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-800">
+                            <thead>
+                                <tr>
+                                    <th className="px-6 py-3 bg-gray-800 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                        Token
+                                    </th>
+                                    <th className="px-6 py-3 bg-gray-800 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                        Balance
+                                    </th>
+                                    <th className="px-6 py-3 bg-gray-800 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                        Value (USD)
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-800">
+                                {balances.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-4 text-center text-sm text-gray-400">
+                                            No tokens found in wallet
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    balances.map((balance, index) => (
+                                        <tr key={index}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                                                <div className="flex items-center">
+                                                    <Image
+                                                        width={30}
+                                                        height={30}
+                                                        alt={balance.symbol}
+                                                        src={getTokenImageUrl(balance.icon ?? '')}
+                                                        className="mr-4"
+                                                    />
+                                                    <span className="text-gray-400 mx-2 inline-block">{balance.symbol}</span>
+                                                    {balance.token}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-right">
+                                                {balance.balance}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-right">
+                                                ${balance.value_usd.toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 } 
