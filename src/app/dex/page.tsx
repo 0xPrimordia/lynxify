@@ -482,14 +482,35 @@ export default function DexPage() {
         }
 
         try {
-            const response: Response = await fetch('/api/thresholds/setThresholds', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(thresholdData),
+            const { data: { session }, error } = await supabase.auth.getSession();
+            console.log('Auth check:', {
+                hasSession: !!session,
+                error,
+                accessToken: session?.access_token ? 'present' : 'missing',
+                userId: session?.user?.id
             });
 
+            if (!session) {
+                throw new Error('No active session');
+            }
+
+            console.log('Making request with token:', session.access_token.substring(0, 10) + '...');
+            
+            const response: Response = await fetch('/api/thresholds/setThresholds', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify(thresholdData),
+                credentials: 'include'
+            });
+
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
                 const errorData = await response.json();
+                console.log('Error response:', errorData);
                 throw new Error(`API Error: ${errorData.error || response.statusText}`);
             }
 
