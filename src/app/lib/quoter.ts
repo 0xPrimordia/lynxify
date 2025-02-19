@@ -56,10 +56,18 @@ export const getQuoteExactInput = async (
 
         console.log('Mirror node request:', data);
 
-        const response = await axios.post(url, data, { headers: {'content-type': 'application/json'} });
-        const result = quoterInterface.decodeFunctionResult('quoteExactInput', response.data.result);
-
-        return result.amountOut;
+        try {
+            const response = await axios.post(url, data, { headers: {'content-type': 'application/json'} });
+            console.log('Mirror node response:', response.data);
+            const result = quoterInterface.decodeFunctionResult('quoteExactInput', response.data.result);
+            return result.amountOut;
+        } catch (error: any) {
+            console.error('Mirror node error details:', {
+                response: error.response?.data,
+                status: error.response?.status
+            });
+            throw error;
+        }
     } catch (error) {
         console.error("Error in getQuoteExactInput:", error);
         throw error;

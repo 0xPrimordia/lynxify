@@ -263,16 +263,9 @@ export default function DexPage() {
     };
 
     const handlePasswordSubmit = async () => {
-        console.log('Password submit started with context:', {
-            isOpen: passwordModalContext.isOpen,
-            hasTransaction: !!passwordModalContext.transaction,
-            hasPromise: !!passwordModalContext.transactionPromise
-        });
-
-        if (!passwordModalContext.transaction) {
-            throw new Error("No pending transaction");
-        }
+        if (!passwordModalContext.transaction) return;
         
+        setIsSubmitting(true);
         try {
             console.log('Calling handleInAppPasswordSubmit...');
             const result = await handleInAppPasswordSubmit(
@@ -282,21 +275,15 @@ export default function DexPage() {
                 setPasswordModalContext
             );
             
-            console.log('handleInAppPasswordSubmit result:', result);
-            
             if (result.status === 'ERROR') {
-                console.log('Rejecting promise with error:', result.error);
-                passwordModalContext.transactionPromise?.reject(new Error(result.error || 'Transaction failed'));
+                passwordModalContext.transactionPromise?.reject(new Error(result.error));
             } else {
-                console.log('Resolving promise with result');
                 passwordModalContext.transactionPromise?.resolve(result);
             }
-            
-            console.log('Resetting modal...');
-            resetPasswordModal();
         } catch (error) {
-            console.error('Password submit error:', error);
             passwordModalContext.transactionPromise?.reject(error);
+        } finally {
+            setIsSubmitting(false);
             resetPasswordModal();
         }
     };
@@ -1855,12 +1842,13 @@ export default function DexPage() {
                 </ModalContent>
             </Modal>
 
-            <PasswordModal 
+            <PasswordModal
                 context={passwordModalContext}
                 password={password}
                 setPassword={setPassword}
                 onSubmit={handlePasswordSubmit}
                 setContext={setPasswordModalContext}
+                isSubmitting={isSubmitting}
             />
         </div>
     );
