@@ -3,6 +3,7 @@ import { ThresholdSection, ThresholdSectionProps } from './ThresholdSection';
 import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
 import { associateToken } from '@/app/lib/utils/tokens';
 import { Token } from '@/app/types';
+import Image from 'next/image';
 
 // Mock Next.js Image component
 jest.mock('next/image', () => ({

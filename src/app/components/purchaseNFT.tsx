@@ -13,6 +13,7 @@ import NFTSaleAbi from '../contracts/NFTSale.json';
 import { checkTokenAssociation } from '../lib/utils/tokens';
 import { useRewards } from "../hooks/useRewards";
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 // Helper function from SaucerSwap
 function hexToUint8Array(hex: string): Uint8Array {
@@ -430,10 +431,11 @@ function PurchaseNFT({
             <div className="bg-gray-800 p-4 rounded-lg w-full">
                 <div className="flex justify-center items-center gap-2">
                     <span className="text-white text-xl font-semibold">50</span>
-                    <img 
-                        style={{width:"24px", display:"inline-block"}} 
+                    <Image 
                         src="/images/hedera-hbar-logo.png" 
                         alt="HBAR"
+                        width={24}
+                        height={24}
                     />
                 </div>
             </div>
