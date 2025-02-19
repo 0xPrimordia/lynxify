@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { PhotoIcon } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 
 interface NFT {
     token_id: string;
@@ -97,7 +98,7 @@ export default function NFTsPage() {
                     <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
                     <h3 className="mt-2 text-sm font-semibold text-white">No NFTs</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                        You don't have any NFTs in your wallet yet.
+                        You don&apos;t have any NFTs in your wallet yet.
                     </p>
                 </div>
             </div>
@@ -113,9 +114,11 @@ export default function NFTsPage() {
                         className="bg-gray-800 rounded-lg overflow-hidden"
                     >
                         {nft.image ? (
-                            <img 
+                            <Image 
                                 src={nft.image} 
                                 alt={nft.name || 'NFT'} 
+                                width={400}
+                                height={300}
                                 className="w-full h-48 object-cover"
                             />
                         ) : (

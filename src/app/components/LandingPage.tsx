@@ -35,7 +35,7 @@ const LandingPage = () => {
         if (account && userId) {
             awardXP(userId, account, 'CONNECT_WALLET');
         }
-    }, [account, awardXP]);
+    }, [account, awardXP, userId]);
 
     const handleAccessDenied = () => {
         setShowPurchaseModal(true);

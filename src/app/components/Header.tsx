@@ -14,6 +14,7 @@ import { useSupabase } from "../hooks/useSupabase";
 import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
 import { Subject } from 'rxjs';
+import Image from 'next/image';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] })
 
@@ -129,7 +130,7 @@ const Header = () => {
         if (isConnected || isSignedIn) {
             refreshBalance();
         }
-    }, [isConnected, isSignedIn]);
+    }, [isConnected, isSignedIn, refreshBalance]);
 
     const handleCopyAccount = async (accountId: string) => {
         try {
@@ -228,7 +229,13 @@ const Header = () => {
                             href="/token" 
                             className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         >
-                            <img src="/images/lxy.png" alt="LXY Token" className="w-6 h-6" />
+                            <Image 
+                                src="/images/lxy.png"
+                                alt="LXY Token"
+                                width={24}
+                                height={24}
+                                className="rounded-full"
+                            />
                             <span className="text-sm font-medium">LXY</span>
                         </Link>
                     </NavbarItem>
@@ -371,7 +378,13 @@ const Header = () => {
                             href="/token" 
                             className="flex items-center gap-2 py-2 w-full"
                         >
-                            <img src="/images/lxy.png" alt="LXY Token" className="w-6 h-6" />
+                            <Image 
+                                src="/images/lxy.png"
+                                alt="LXY Token"
+                                width={24}
+                                height={24}
+                                className="rounded-full"
+                            />
                             <span>LXY Token</span>
                         </Link>
                     </NavbarMenuItem>

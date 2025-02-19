@@ -15,7 +15,7 @@ const Thresholds = () => {
             }
         };
         fetchUserId();
-    }, [supabase]);
+    }, []);
 
     useEffect(() => {
         const fetchThresholds = async () => {

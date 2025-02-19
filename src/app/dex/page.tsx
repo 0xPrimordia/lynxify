@@ -155,7 +155,7 @@ export default function DexPage() {
         if (defaultRange) {
             handleTimeRangeChange(defaultRange.value, defaultRange.id);
         }
-    }, []);
+    }, [timeRanges]);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -196,7 +196,7 @@ export default function DexPage() {
         };
 
         fetchThresholds();
-    }, []);
+    }, [supabase.auth]);
 
     useEffect(() => {
         if (!tokens || !tokens.length) return;
@@ -1138,7 +1138,7 @@ export default function DexPage() {
         return () => {
             subscription.unsubscribe();
         };
-    }, [supabase]);
+    }, [supabase.auth]);
 
     const renderTradeButton = () => {
         const hasAccount = Boolean(account || inAppAccount);
