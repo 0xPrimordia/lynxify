@@ -73,49 +73,47 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
   }, []);
 
   const loadWallet = async (password: string) => {
+    console.log('Loading wallet with password length:', password.length);
     try {
-        console.log('Loading wallet with password length:', password.length);
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) throw new Error("No authenticated session");
 
-        const db = await new Promise<IDBDatabase>((resolve, reject) => {
-            const request = indexedDB.open('HederaWallet', 1);
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-        });
-
-        const encryptedKey = await new Promise<string>((resolve, reject) => {
-            const transaction = db.transaction(['keys'], 'readonly');
-            const store = transaction.objectStore('keys');
-            const request = store.get(session.user.id);
-            
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                console.log('Retrieved encrypted key:', {
-                    hasKey: !!request.result?.encryptedKey,
-                    keyLength: request.result?.encryptedKey?.length
-                });
-                resolve(request.result?.encryptedKey);
-            };
-        });
-
-        if (!encryptedKey) throw new Error("No stored key found");
+        // Single DB connection with timeout
+        const db = await Promise.race([
+            new Promise<IDBDatabase>((resolve, reject) => {
+                const request = indexedDB.open('HederaWallet', 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Database connection timeout")), 5000)
+            )
+        ]);
 
         try {
-            const decryptedKey = await decrypt(encryptedKey, password);
-            console.log('Decryption successful, key length:', decryptedKey.length);
-            return PrivateKey.fromString(decryptedKey);
-        } catch (error) {
-            console.error('Decryption error details:', {
-                error,
-                passwordLength: password.length,
-                encryptedKeyLength: encryptedKey.length
+            const encryptedKey = await new Promise<string>((resolve, reject) => {
+                const transaction = (db as IDBDatabase).transaction(['keys'], 'readonly');
+                const store = transaction.objectStore('keys');
+                const request = store.get(session.user.id);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    if (!request.result?.encryptedKey) {
+                        reject(new Error("No key found in store"));
+                        return;
+                    }
+                    resolve(request.result.encryptedKey);
+                };
             });
-            throw error;
+
+            const decryptedKey = await decrypt(encryptedKey, password);
+            return PrivateKey.fromString(decryptedKey);
+        } finally {
+            (db as IDBDatabase).close(); // Ensure DB connection is closed
         }
     } catch (error) {
         console.error('Error in loadWallet:', error);
-        return null;
+        throw error; // Re-throw to propagate to UI
     }
   };
 
