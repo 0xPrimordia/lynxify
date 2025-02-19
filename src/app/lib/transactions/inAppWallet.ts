@@ -1,23 +1,44 @@
 import { PasswordModalContext } from '@/app/types';
+import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
+import { TokenAssociateTransaction, TransferTransaction, ContractExecuteTransaction } from '@hashgraph/sdk';
 
 export const handleInAppTransaction = async (
-    tx: string, 
-    description: string,
-    setPasswordModal: (context: PasswordModalContext | ((prev: PasswordModalContext) => PasswordModalContext)) => void
+    transaction: string,
+    signTransaction: (transaction: string, password: string) => Promise<any>,
+    setContext: (context: PasswordModalContext) => void
 ) => {
-    console.log('handleInAppTransaction called:', {
-        txLength: tx.length,
-        description
-    });
+    // Decode the transaction to determine its type
+    const decodedTransaction = base64StringToTransaction(transaction);
     
-    return new Promise((resolve, reject) => {
-        setPasswordModal({
-            isOpen: true,
-            description,
-            transaction: tx,
-            transactionPromise: { resolve, reject }
-        });
-        console.log('Password modal state set');
+    // Set appropriate description based on transaction type and data
+    let description = "Enter your password to confirm the transaction.";
+    
+    if (decodedTransaction instanceof TokenAssociateTransaction) {
+        description = "Enter your password to associate this token with your account. This is required before you can receive the token.";
+    } else {
+        // Check if this is an approval transaction by looking at the function signature
+        const functionData = (decodedTransaction as ContractExecuteTransaction).functionParameters?.toString() || '';
+        const isApproval = functionData.includes('approve');
+        
+        description = isApproval 
+            ? "Enter your password to approve the token for trading. This is required once before swapping."
+            : "Enter your password to confirm the swap transaction.";
+    }
+
+    // Reset context before setting new one
+    setContext({
+        isOpen: false,
+        transaction: null,
+        description: '',
+        transactionPromise: null
+    });
+
+    // Set the new context
+    setContext({
+        isOpen: true,
+        transaction,
+        description,
+        transactionPromise: null
     });
 };
 

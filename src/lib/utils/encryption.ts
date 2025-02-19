@@ -53,9 +53,9 @@ export async function decrypt(encryptedData: string, password: string): Promise<
     const data = Buffer.from(encryptedData, 'base64');
     console.log('Decoded buffer length:', data.length);
     
-    const salt = data.slice(0, 16);
-    const iv = data.slice(16, 28);
-    const encrypted = data.slice(28);
+    const salt = new Uint8Array(data.slice(0, 16));
+    const iv = new Uint8Array(data.slice(16, 28));
+    const encrypted = new Uint8Array(data.slice(28));
     
     console.log('Extracted parts:', {
         saltLength: salt.length,
