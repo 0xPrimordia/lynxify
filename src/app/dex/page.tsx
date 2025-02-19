@@ -244,17 +244,17 @@ export default function DexPage() {
     }, [slippageTolerance]);
 
     const executeTransaction = async (tx: string, description: string) => {
-        console.log('Execute transaction called:', {
-            walletType,
-            activeAccount,
-            inAppAccount,
-            account
-        });
-
         if (!activeAccount) throw new Error("No active account");
         
         if (walletType === 'inApp') {
-            return handleInAppTransaction(tx, description, setPasswordModalContext);
+            return new Promise((resolve, reject) => {
+                handleInAppTransaction(tx, signTransaction, (context) => {
+                    setPasswordModalContext({
+                        ...context,
+                        transactionPromise: { resolve, reject }
+                    });
+                });
+            });
         } else if (walletType === 'extension') {
             return handleExtensionTransaction(tx, account, signAndExecuteTransaction);
         }
@@ -263,12 +263,18 @@ export default function DexPage() {
     };
 
     const handlePasswordSubmit = async () => {
-        console.log('Password submit started');
+        console.log('Password submit started with context:', {
+            isOpen: passwordModalContext.isOpen,
+            hasTransaction: !!passwordModalContext.transaction,
+            hasPromise: !!passwordModalContext.transactionPromise
+        });
+
         if (!passwordModalContext.transaction) {
             throw new Error("No pending transaction");
         }
         
         try {
+            console.log('Calling handleInAppPasswordSubmit...');
             const result = await handleInAppPasswordSubmit(
                 passwordModalContext.transaction,
                 password,
@@ -276,14 +282,18 @@ export default function DexPage() {
                 setPasswordModalContext
             );
             
-            console.log('Transaction result:', result);
-            resetPasswordModal();
+            console.log('handleInAppPasswordSubmit result:', result);
             
             if (result.status === 'ERROR') {
-                throw new Error(result.error || 'Transaction failed');
+                console.log('Rejecting promise with error:', result.error);
+                passwordModalContext.transactionPromise?.reject(new Error(result.error || 'Transaction failed'));
+            } else {
+                console.log('Resolving promise with result');
+                passwordModalContext.transactionPromise?.resolve(result);
             }
             
-            passwordModalContext.transactionPromise?.resolve(result);
+            console.log('Resetting modal...');
+            resetPasswordModal();
         } catch (error) {
             console.error('Password submit error:', error);
             passwordModalContext.transactionPromise?.reject(error);
@@ -963,12 +973,20 @@ export default function DexPage() {
             availablePools: pools?.map((p: Pool) => ({
                 id: p.id,
                 tokenA: p.tokenA?.symbol,
-                tokenB: p.tokenB?.symbol
+                tokenB: p.tokenB?.symbol,
+                liquidity: p.liquidity
             }))
         });
 
         if (pools && Array.isArray(pools)) {
-            const defaultPool = pools.find(pool => 
+            // Filter out pools with zero liquidity
+            const activePools = pools.filter(pool => 
+                pool.liquidity && BigInt(pool.liquidity) > BigInt(0)
+            );
+
+            console.log('Active pools with liquidity:', activePools.length);
+
+            const defaultPool = activePools.find(pool => 
                 (pool.tokenA?.symbol === 'HBAR' && pool.tokenB?.symbol === 'SAUCE') ||
                 (pool.tokenA?.symbol === 'SAUCE' && pool.tokenB?.symbol === 'HBAR')
             );

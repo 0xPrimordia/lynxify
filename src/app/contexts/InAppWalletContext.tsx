@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar } from "@hashgraph/sdk";
+import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar, TransactionReceipt } from "@hashgraph/sdk";
 import { supabase } from '@/utils/supabase';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import { decrypt } from '@/lib/utils/encryption';
@@ -73,20 +73,11 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
   }, []);
 
   const loadWallet = async (password: string) => {
-    // Atomic check and set
-    if (isLoadingRef.current) {
-        console.log('Wallet load already in progress');
-        return null;
-    }
-    isLoadingRef.current = true;
-
     try {
+        console.log('Loading wallet with password length:', password.length);
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('Loading wallet for user:', session?.user?.id);
-
         if (!session?.user?.id) throw new Error("No authenticated session");
 
-        // Get all keys to help with debugging
         const db = await new Promise<IDBDatabase>((resolve, reject) => {
             const request = indexedDB.open('HederaWallet', 1);
             request.onerror = () => reject(request.error);
@@ -96,64 +87,81 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         const encryptedKey = await new Promise<string>((resolve, reject) => {
             const transaction = db.transaction(['keys'], 'readonly');
             const store = transaction.objectStore('keys');
-            
-            // Log all keys for debugging
-            store.getAllKeys().onsuccess = (event) => {
-                const keys = (event.target as IDBRequest).result;
-                console.log('All stored keys:', keys);
-            };
-            
             const request = store.get(session.user.id);
             
-            request.onerror = () => reject(new Error('Failed to retrieve key from IndexedDB'));
+            request.onerror = () => reject(request.error);
             request.onsuccess = () => {
-                console.log('Key lookup result:', {
-                    userId: session.user.id,
-                    hasResult: !!request.result,
-                    hasEncryptedKey: !!request.result?.encryptedKey
+                console.log('Retrieved encrypted key:', {
+                    hasKey: !!request.result?.encryptedKey,
+                    keyLength: request.result?.encryptedKey?.length
                 });
                 resolve(request.result?.encryptedKey);
-            }
+            };
         });
 
-        if (!encryptedKey) {
-            throw new Error("No stored key found");
+        if (!encryptedKey) throw new Error("No stored key found");
+
+        try {
+            const decryptedKey = await decrypt(encryptedKey, password);
+            console.log('Decryption successful, key length:', decryptedKey.length);
+            return PrivateKey.fromString(decryptedKey);
+        } catch (error) {
+            console.error('Decryption error details:', {
+                error,
+                passwordLength: password.length,
+                encryptedKeyLength: encryptedKey.length
+            });
+            throw error;
         }
-
-        // Decrypt the private key
-        const decryptedKey = await decrypt(encryptedKey, password);
-        const privateKey = PrivateKey.fromString(decryptedKey);
-        
-        setWalletState(prev => ({
-            ...prev,
-            privateKey
-        }));
-
-        return privateKey;
     } catch (error) {
         console.error('Error in loadWallet:', error);
-        throw error;
-    } finally {
-        isLoadingRef.current = false;
+        return null;
     }
   };
 
   const signTransaction = async (transaction: string, password: string) => {
-    console.log("Starting signTransaction");
+    console.log("Starting signTransaction with tx length:", transaction.length);
     try {
-        // Always load a fresh key for signing
+        console.log("Loading wallet...");
         const privateKey = await loadWallet(password);
         if (!privateKey) throw new Error("Failed to load private key");
         
-        // Convert base64 string back to Transaction object
+        console.log("Converting transaction...");
         const tx = base64StringToTransaction(transaction);
         
-        // Sign and execute
+        console.log("Signing transaction...");
         const signedTx = await tx.sign(privateKey);
+        console.log("Executing transaction...");
         const response = await signedTx.execute(client);
-        const receipt = await response.getReceipt(client);
         
-        // Clear private key after signing
+        // Add timeout and detailed error handling for receipt
+        const receiptPromise = response.getReceipt(client);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Transaction receipt timeout")), 30000)
+        );
+        
+        console.log("Getting receipt...");
+        try {
+            const receipt = await Promise.race([receiptPromise, timeoutPromise]) as TransactionReceipt;
+            console.log("Receipt details:", {
+                status: receipt.status.toString(),
+                contractId: receipt.contractId?.toString(),
+                exchangeRate: receipt.exchangeRate,
+                accountId: receipt.accountId?.toString()
+            });
+            
+            if (receipt.status._code !== 22) { // SUCCESS
+                throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
+            }
+        } catch (receiptError) {
+            console.error("Receipt error details:", {
+                error: receiptError,
+                transactionId: response.transactionId.toString()
+            });
+            throw receiptError;
+        }
+        
+        console.log("Transaction complete, clearing key...");
         setWalletState(prev => ({
             ...prev,
             privateKey: null
@@ -165,7 +173,17 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             transactionId: response.transactionId.toString()
         };
     } catch (error) {
-        console.error("Transaction signing error:", error);
+        console.error("Transaction signing error:", {
+            error,
+            message: error instanceof Error ? error.message : 'Unknown error',
+            type: (error as any)?.constructor?.name || 'Unknown type'
+        });
+        
+        setWalletState(prev => ({
+            ...prev,
+            privateKey: null
+        }));
+        
         return {
             status: 'ERROR',
             error: error instanceof Error ? error.message : 'Transaction signing failed',
