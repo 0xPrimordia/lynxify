@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerSupabase } from '@/utils/supabase'
 import { cookies } from 'next/headers'
+import { rateLimiterMiddleware, getRateLimitType } from './middleware/rateLimiter'
 
 // Define protected routes that require session validation
 const PROTECTED_ROUTES = [
@@ -11,7 +12,17 @@ const PROTECTED_ROUTES = [
 ]
 
 export async function middleware(request: NextRequest) {
-  // Skip middleware for non-protected routes
+  // First check if route needs rate limiting
+  const rateLimitType = getRateLimitType(request.nextUrl.pathname);
+  if (rateLimitType) {
+    const rateLimitResult = await rateLimiterMiddleware(request, rateLimitType);
+    // If rate limit was exceeded, return the error response
+    if (rateLimitResult.status === 429 || rateLimitResult.status === 503) {
+      return rateLimitResult;
+    }
+  }
+
+  // Then proceed with session validation for protected routes
   if (!PROTECTED_ROUTES.some(route => request.nextUrl.pathname.startsWith(route))) {
     return NextResponse.next()
   }
@@ -76,8 +87,13 @@ export async function middleware(request: NextRequest) {
 // Configure middleware matching
 export const config = {
   matcher: [
+    // Match all API routes that need rate limiting
+    '/api/auth/:path*',
     '/api/wallet/:path*',
     '/api/thresholds/:path*',
-    '/api/user/:path*'
+    '/api/user/:path*',
+    
+    // Exclude static files and other non-API routes
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ]
 } 
