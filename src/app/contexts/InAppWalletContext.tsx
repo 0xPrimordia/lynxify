@@ -147,10 +147,15 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     };
 
     const signTransaction = async (transaction: string, password: string) => {
-        if (walletState.isOperationInProgress) {
+        if (walletState.isOperationInProgress || walletState.isRecoveryInProgress) {
+            setWalletState(prev => ({ ...prev, error: 'Operation in progress' }));
             return {
                 success: false,
-                error: 'Operation in progress'
+                error: 'Operation in progress',
+                data: {
+                    status: 'ERROR' as const,
+                    transactionId: null
+                }
             };
         }
 
@@ -223,11 +228,21 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     ): Promise<WalletOperationResult<boolean>> => {
         try {
             if (!currentMetadata?.hederaAccountId || !storedMetadata?.hederaAccountId) {
-                throw new Error('Invalid metadata');
+                const error = new Error('Invalid metadata');
+                console.error(error.message, error);
+                return {
+                    success: false,
+                    error: error.message
+                };
             }
             
             if (currentMetadata.hederaAccountId !== storedMetadata.hederaAccountId) {
-                throw new Error('Account metadata mismatch');
+                const error = new Error('Account metadata mismatch');
+                console.error(error.message, error);
+                return {
+                    success: false,
+                    error: error.message
+                };
             }
             
             return {
@@ -236,7 +251,10 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             };
         } catch (error) {
             const handledError = handleError(error);
-            throw handledError; // Re-throw for test expectations
+            return {
+                success: false,
+                error: handledError.message
+            };
         }
     };
 

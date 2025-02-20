@@ -353,8 +353,11 @@ describe('InAppWalletContext', () => {
                 throw new Error('Wallet instance not available');
             }
 
+            // Type assertion to help TypeScript understand walletInstance is defined
+            const wallet = walletInstance as InAppWalletContextType;
+
             await expect(async () => {
-                await walletInstance.verifyMetadataSync(
+                await wallet.verifyMetadataSync(
                     { hederaAccountId: '0.0.123456' },
                     { hederaAccountId: '0.0.789012' }
                 );
@@ -446,6 +449,10 @@ describe('InAppWalletContext', () => {
 
             expect(result.success).toBe(false);
             expect(result.error).toBe('Account metadata mismatch');
+            expect(mockConsoleError).toHaveBeenCalledWith(
+                'Account metadata mismatch',
+                expect.any(Error)
+            );
         });
     });
 }); 
