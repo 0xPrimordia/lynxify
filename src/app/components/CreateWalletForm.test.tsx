@@ -8,6 +8,7 @@ import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { InAppWalletContext } from '@/app/contexts/InAppWalletContext';
 import { Client, PrivateKey } from "@hashgraph/sdk";
 import * as encryption from '@/lib/utils/encryption';
+import { STORAGE_CONFIG } from '@/lib/utils/keyStorage';
 
 // Add structuredClone to global
 global.structuredClone = (val: any) => JSON.parse(JSON.stringify(val));
@@ -63,7 +64,8 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 describe('CreateWalletForm', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        indexedDB.deleteDatabase('HederaWallet');
+        indexedDB.deleteDatabase(STORAGE_CONFIG.PRIMARY_DB);
+        indexedDB.deleteDatabase(STORAGE_CONFIG.BACKUP_DB);
         global.fetch = jest.fn();
 
         // Reset mocks with default successful responses
@@ -95,11 +97,11 @@ describe('CreateWalletForm', () => {
     it('should store private key in IndexedDB after wallet creation', async () => {
         // First, initialize the database
         await new Promise<void>((resolve) => {
-            const request = indexedDB.open('HederaWallet', 1);
+            const request = indexedDB.open(STORAGE_CONFIG.PRIMARY_DB, STORAGE_CONFIG.VERSION);
             request.onupgradeneeded = (event) => {
                 const db = (event.target as IDBOpenDBRequest).result;
-                if (!db.objectStoreNames.contains('keys')) {
-                    db.createObjectStore('keys', { keyPath: 'userId' });
+                if (!db.objectStoreNames.contains(STORAGE_CONFIG.STORE_NAME)) {
+                    db.createObjectStore(STORAGE_CONFIG.STORE_NAME, { keyPath: 'userId' });
                 }
             };
             request.onsuccess = () => {
@@ -135,11 +137,11 @@ describe('CreateWalletForm', () => {
         // Wait for IndexedDB operation to complete
         await waitFor(async () => {
             const result = await new Promise((resolve) => {
-                const request = indexedDB.open('HederaWallet', 1);
+                const request = indexedDB.open(STORAGE_CONFIG.PRIMARY_DB, STORAGE_CONFIG.VERSION);
                 request.onsuccess = () => {
                     const db = request.result;
-                    const transaction = db.transaction(['keys'], 'readonly');
-                    const store = transaction.objectStore('keys');
+                    const transaction = db.transaction([STORAGE_CONFIG.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(STORAGE_CONFIG.STORE_NAME);
                     const getRequest = store.get('test-user-id');
 
                     getRequest.onsuccess = () => {

@@ -13,11 +13,37 @@ global.structuredClone = (val: any) => JSON.parse(JSON.stringify(val));
 
 // Mock console.error
 const mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
 beforeAll(() => {
     mockConsoleError.mockClear();
 });
+
 afterAll(() => {
     mockConsoleError.mockRestore();
+});
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    mockConsoleError.mockClear();
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+        data: {
+            session: {
+                user: {
+                    id: 'test-user-id',
+                    user_metadata: {
+                        isInAppWallet: true,
+                        hederaAccountId: '0.0.123456'
+                    }
+                }
+            },
+            error: null
+        }
+    });
+});
+
+afterEach(() => {
+    // Do not restore mockConsoleError here as we want it to persist between tests
+    jest.clearAllMocks();
 });
 
 // Mock modules
@@ -49,15 +75,10 @@ jest.mock('@/lib/utils/encryption', () => ({
 }));
 
 jest.mock('@/lib/utils/keyStorage', () => ({
+    ...jest.requireActual('@/lib/utils/keyStorage'),
     storePrivateKey: jest.fn(),
     retrievePrivateKey: jest.fn(),
-    attemptRecovery: jest.fn().mockResolvedValue(true),
-    STORAGE_CONFIG: {
-        PRIMARY_DB: 'test_primary',
-        BACKUP_DB: 'test_backup',
-        STORE_NAME: 'keys',
-        VERSION: 1
-    }
+    attemptRecovery: jest.fn().mockResolvedValue(true)
 }));
 
 // Simple test component to display wallet state and actions
@@ -99,29 +120,6 @@ const TestWrapper = ({ children }: { children: (wallet: InAppWalletContextType) 
 };
 
 describe('InAppWalletContext', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        (supabase.auth.getSession as jest.Mock).mockResolvedValue({
-            data: {
-                session: {
-                    user: {
-                        id: 'test-user-id',
-                        user_metadata: {
-                            isInAppWallet: true,
-                            hederaAccountId: '0.0.123456'
-                        }
-                    }
-                }
-            },
-            error: null
-        });
-    });
-
-    afterEach(() => {
-        // Restore console.error
-        mockConsoleError.mockRestore();
-    });
-
     it('should detect existing in-app wallet from session', async () => {
         render(
             <InAppWalletProvider>
@@ -335,35 +333,44 @@ describe('InAppWalletContext', () => {
         });
 
         it('should handle metadata synchronization', async () => {
-            const error = new Error('Account metadata mismatch');
             let walletInstance: InAppWalletContextType | undefined;
             
-            render(
-                <InAppWalletProvider>
-                    <TestWrapper>
-                        {(wallet) => {
-                            walletInstance = wallet;
-                            return <div data-testid="wrapper" />;
-                        }}
-                    </TestWrapper>
-                </InAppWalletProvider>
-            );
+            // Clear mock before test
+            mockConsoleError.mockClear();
+            
+            await act(async () => {
+                render(
+                    <InAppWalletProvider>
+                        <TestWrapper>
+                            {(wallet) => {
+                                walletInstance = wallet;
+                                return <div data-testid="wrapper" />;
+                            }}
+                        </TestWrapper>
+                    </InAppWalletProvider>
+                );
+            });
 
             if (!walletInstance) {
                 throw new Error('Wallet instance not available');
             }
 
-            // Type assertion to help TypeScript understand walletInstance is defined
-            const wallet = walletInstance as InAppWalletContextType;
+            const wallet = walletInstance;
 
-            await expect(async () => {
-                await wallet.verifyMetadataSync(
+            // Wait for any pending state updates
+            await act(async () => {
+                const result = await wallet.verifyMetadataSync(
                     { hederaAccountId: '0.0.123456' },
                     { hederaAccountId: '0.0.789012' }
                 );
-            }).rejects.toThrow('Account metadata mismatch');
 
-            expect(mockConsoleError).toHaveBeenCalledWith(error.message, error);
+                expect(result.success).toBe(false);
+                expect(result.error).toBe('Account metadata mismatch');
+                expect(mockConsoleError).toHaveBeenCalledWith(
+                    'Account metadata mismatch',
+                    expect.any(Error)
+                );
+            });
         });
     });
 
@@ -427,32 +434,42 @@ describe('InAppWalletContext', () => {
         it('should detect metadata mismatches', async () => {
             let walletInstance: InAppWalletContextType | undefined;
             
-            render(
-                <InAppWalletProvider>
-                    <TestWrapper>
-                        {(wallet) => {
-                            walletInstance = wallet;
-                            return <div data-testid="wrapper" />;
-                        }}
-                    </TestWrapper>
-                </InAppWalletProvider>
-            );
+            // Clear mock before test
+            mockConsoleError.mockClear();
+            
+            await act(async () => {
+                render(
+                    <InAppWalletProvider>
+                        <TestWrapper>
+                            {(wallet) => {
+                                walletInstance = wallet;
+                                return <div data-testid="wrapper" />;
+                            }}
+                        </TestWrapper>
+                    </InAppWalletProvider>
+                );
+            });
 
             if (!walletInstance) {
                 throw new Error('Wallet instance not available');
             }
 
-            const result = await walletInstance.verifyMetadataSync(
-                { hederaAccountId: '0.0.123456' },
-                { hederaAccountId: '0.0.789012' }
-            );
+            const wallet = walletInstance;
 
-            expect(result.success).toBe(false);
-            expect(result.error).toBe('Account metadata mismatch');
-            expect(mockConsoleError).toHaveBeenCalledWith(
-                'Account metadata mismatch',
-                expect.any(Error)
-            );
+            // Wait for any pending state updates
+            await act(async () => {
+                const result = await wallet.verifyMetadataSync(
+                    { hederaAccountId: '0.0.123456' },
+                    { hederaAccountId: '0.0.789012' }
+                );
+
+                expect(result.success).toBe(false);
+                expect(result.error).toBe('Account metadata mismatch');
+                expect(mockConsoleError).toHaveBeenCalledWith(
+                    'Account metadata mismatch',
+                    expect.any(Error)
+                );
+            });
         });
     });
 }); 
