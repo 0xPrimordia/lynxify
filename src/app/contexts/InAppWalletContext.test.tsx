@@ -12,12 +12,12 @@ import 'fake-indexeddb/auto';
 global.structuredClone = (val: any) => JSON.parse(JSON.stringify(val));
 
 // Mock console.error
-const originalError = console.error;
+const mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 beforeAll(() => {
-    console.error = jest.fn();
+    mockConsoleError.mockClear();
 });
 afterAll(() => {
-    console.error = originalError;
+    mockConsoleError.mockRestore();
 });
 
 // Mock modules
@@ -69,7 +69,8 @@ const TestComponent = () => {
         signTransaction,
         recoverKey,
         verifyMetadataSync,
-        isRecoveryInProgress 
+        isRecoveryInProgress,
+        error
     } = useInAppWallet();
     
     return (
@@ -79,6 +80,7 @@ const TestComponent = () => {
             <div data-testid="recovery-status">
                 {isRecoveryInProgress ? 'Recovery in progress' : 'No recovery in progress'}
             </div>
+            {error && <div data-testid="error-message">{error}</div>}
             <button onClick={() => loadWallet('test-password')} data-testid="load-wallet">Load Wallet</button>
             <button onClick={() => signTransaction('test-transaction', 'test-password')} data-testid="sign-tx">Sign Transaction</button>
             <button onClick={() => recoverKey('test-user-id')} data-testid="recover-key">Recover Key</button>
@@ -117,7 +119,7 @@ describe('InAppWalletContext', () => {
 
     afterEach(() => {
         // Restore console.error
-        console.error = originalError;
+        mockConsoleError.mockRestore();
     });
 
     it('should detect existing in-app wallet from session', async () => {
@@ -178,33 +180,40 @@ describe('InAppWalletContext', () => {
             const error = new Error('Failed to retrieve private key');
             (retrievePrivateKey as jest.Mock).mockRejectedValue(error);
 
-            const { getByTestId } = render(
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
+                fireEvent.click(screen.getByTestId('load-wallet'));
             });
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            await waitFor(() => {
+                expect(screen.getByTestId('error-message')).toHaveTextContent('Failed to retrieve private key');
+            });
         });
 
         it('should prevent multiple wallet creation attempts', async () => {
-            const error = new Error('Operation in progress');
-            const { getByTestId } = render(
+            (retrievePrivateKey as jest.Mock).mockImplementation(() => 
+                new Promise(resolve => setTimeout(() => resolve('mock-private-key'), 100))
+            );
+
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
-                fireEvent.click(getByTestId('load-wallet'));
+                fireEvent.click(screen.getByTestId('load-wallet'));
+                fireEvent.click(screen.getByTestId('load-wallet'));
             });
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            await waitFor(() => {
+                expect(screen.getByTestId('error-message')).toHaveTextContent('Operation in progress');
+            });
         });
     });
 
@@ -237,23 +246,24 @@ describe('InAppWalletContext', () => {
 
     describe('Recovery Process', () => {
         it('should prevent concurrent recovery attempts', async () => {
-            const error = new Error('Recovery already in progress');
             (attemptRecovery as jest.Mock).mockImplementation(() => 
                 new Promise(resolve => setTimeout(resolve, 100))
             );
 
-            const { getByTestId } = render(
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('recover-key'));
-                fireEvent.click(getByTestId('recover-key'));
+                fireEvent.click(screen.getByTestId('recover-key'));
+                fireEvent.click(screen.getByTestId('recover-key'));
             });
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            await waitFor(() => {
+                expect(screen.getByTestId('error-message')).toHaveTextContent('Recovery already in progress');
+            });
         });
 
         it('should update recovery state during process', async () => {
@@ -261,14 +271,14 @@ describe('InAppWalletContext', () => {
                 new Promise(resolve => setTimeout(resolve, 100))
             );
 
-            const { getByTestId } = render(
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('recover-key'));
+                fireEvent.click(screen.getByTestId('recover-key'));
                 await new Promise(resolve => setTimeout(resolve, 50));
             });
 
@@ -281,17 +291,19 @@ describe('InAppWalletContext', () => {
             const error = new Error('Version mismatch');
             (retrievePrivateKey as jest.Mock).mockRejectedValue(error);
 
-            const { getByTestId } = render(
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
+                fireEvent.click(screen.getByTestId('load-wallet'));
             });
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            await waitFor(() => {
+                expect(screen.getByTestId('error-message')).toHaveTextContent('Version mismatch');
+            });
         });
 
         it('should handle metadata synchronization', async () => {
@@ -311,7 +323,7 @@ describe('InAppWalletContext', () => {
                 );
             }).rejects.toThrow(error);
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            expect(mockConsoleError).toHaveBeenCalledWith(error.message, error);
         });
     });
 
@@ -320,71 +332,69 @@ describe('InAppWalletContext', () => {
             const error = new Error('Storage unavailable');
             (retrievePrivateKey as jest.Mock).mockRejectedValue(error);
 
-            const { getByTestId } = render(
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
+                fireEvent.click(screen.getByTestId('load-wallet'));
             });
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            await waitFor(() => {
+                expect(screen.getByTestId('error-message')).toHaveTextContent('Storage unavailable');
+            });
         });
 
         it('should prevent operations during recovery process', async () => {
-            const error = new Error('Operation in progress');
             (retrievePrivateKey as jest.Mock).mockImplementation(() => 
-                new Promise(resolve => setTimeout(() => resolve(mockPrivateKey.toString()), 1000))
+                new Promise(resolve => setTimeout(() => resolve('mock-private-key'), 1000))
             );
 
-            const { getByTestId } = render(
+            render(
                 <InAppWalletProvider>
                     <TestComponent />
                 </InAppWalletProvider>
             );
 
             await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
-                fireEvent.click(getByTestId('sign-tx'));
+                fireEvent.click(screen.getByTestId('load-wallet'));
+                fireEvent.click(screen.getByTestId('sign-tx'));
             });
 
-            expect(console.error).toHaveBeenCalledWith(error.message, error);
+            await waitFor(() => {
+                expect(screen.getByTestId('error-message')).toHaveTextContent('Operation in progress');
+            });
         });
     });
 
     describe('Metadata Synchronization', () => {
         it('should detect metadata mismatches', async () => {
-            const { getByTestId } = render(
+            let walletInstance: InAppWalletContextType | undefined;
+            
+            render(
                 <InAppWalletProvider>
                     <TestWrapper>
-                        {(wallet) => (
-                            <div>
-                                <button 
-                                    onClick={() => {
-                                        try {
-                                            wallet.verifyMetadataSync(
-                                                { hederaAccountId: '0.0.123456' },
-                                                { hederaAccountId: '0.0.789012' }
-                                            );
-                                        } catch (error) {
-                                            expect(error.message).toBe('Account metadata mismatch');
-                                        }
-                                    }}
-                                    data-testid="verify-button"
-                                >
-                                    Verify
-                                </button>
-                            </div>
-                        )}
+                        {(wallet) => {
+                            walletInstance = wallet;
+                            return <div data-testid="wrapper" />;
+                        }}
                     </TestWrapper>
                 </InAppWalletProvider>
             );
 
-            await act(async () => {
-                fireEvent.click(getByTestId('verify-button'));
-            });
+            if (!walletInstance) {
+                throw new Error('Wallet instance not available');
+            }
+
+            const result = await walletInstance.verifyMetadataSync(
+                { hederaAccountId: '0.0.123456' },
+                { hederaAccountId: '0.0.789012' }
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Account metadata mismatch');
         });
     });
 }); 

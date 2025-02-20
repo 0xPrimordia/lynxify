@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test:monitor": "ts-node scripts/test-price-monitor.ts",
     "test": "hardhat test",
+    "test:jest": "jest",
     "test:verbose": "hardhat test --verbose",
     "deploy:local": "hardhat run scripts/deploy.ts --network local",
     "test:xp": "ts-node src/tests/integration/xp-rewards.test.ts"

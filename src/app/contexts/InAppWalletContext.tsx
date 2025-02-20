@@ -1,42 +1,54 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar, TransactionReceipt } from "@hashgraph/sdk";
 import { supabase } from '@/utils/supabase';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import { decrypt } from '@/lib/utils/encryption';
 import { attemptRecovery, retrievePrivateKey } from '@/lib/utils/keyStorage';
 
-export interface InAppWalletContextType {
-  inAppAccount: string | null;
-  isInAppWallet: boolean;
-  client: Client | null;
-  error: string | null;
-  isRecoveryInProgress: boolean;
-  loadWallet: (password: string) => Promise<PrivateKey | null>;
-  signTransaction: (transaction: string, password: string) => Promise<any>;
-  setInAppAccount: (accountId: string) => void;
-  recoverKey: (userId: string) => Promise<void>;
-  verifyMetadataSync: (currentMetadata: any, storedMetadata: any) => Promise<boolean>;
+export interface WalletOperationResult<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
 }
 
-export const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
+export interface InAppWalletContextType {
+    inAppAccount: string | null;
+    isInAppWallet: boolean;
+    client: Client | null;
+    error: string | null;
+    isRecoveryInProgress: boolean;
+    isOperationInProgress: boolean;
+    loadWallet: (password: string) => Promise<WalletOperationResult<PrivateKey>>;
+    signTransaction: (transaction: string, password: string) => Promise<WalletOperationResult<{
+        status: 'SUCCESS' | 'ERROR';
+        transactionId: string | null;
+    }>>;
+    setInAppAccount: (accountId: string) => void;
+    recoverKey: (userId: string) => Promise<WalletOperationResult<void>>;
+    verifyMetadataSync: (currentMetadata: any, storedMetadata: any) => Promise<WalletOperationResult<boolean>>;
+}
 
-interface InAppWalletState {
+interface WalletState {
     isInAppWallet: boolean;
     inAppAccount: string | null;
     inAppPrivateKey: PrivateKey | null;
     error: string | null;
     isRecoveryInProgress: boolean;
+    isOperationInProgress: boolean;
 }
 
+export const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
+
 export const InAppWalletProvider = ({ children }: { children: React.ReactNode }) => {
-    const [walletState, setWalletState] = useState<InAppWalletState>({
+    const [walletState, setWalletState] = useState<WalletState>({
         isInAppWallet: false,
         inAppAccount: null,
         inAppPrivateKey: null,
         error: null,
-        isRecoveryInProgress: false
+        isRecoveryInProgress: false,
+        isOperationInProgress: false
     });
     
     const operationLock = useRef<boolean>(false);
@@ -68,33 +80,55 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         checkInAppWallet();
     }, []);
 
-    // Define consistent error handling
-    const handleError = (error: Error | string) => {
-        const actualError = error instanceof Error ? error : new Error(error);
-        console.error(actualError.message, actualError);
-        setWalletState(prev => ({ ...prev, error: actualError.message }));
-        throw actualError;
-    };
-
-    const loadWallet = async (password: string): Promise<PrivateKey | null> => {
-        if (operationLock.current || walletState.isRecoveryInProgress) {
-            handleError(new Error('Operation in progress'));
+    // Improved error handling that doesn't throw
+    const handleError = (error: Error | string | unknown): Error => {
+        let actualError: Error;
+        if (error instanceof Error) {
+            actualError = error;
+        } else if (typeof error === 'string') {
+            actualError = new Error(error);
+        } else {
+            actualError = new Error('Unknown error occurred');
         }
         
-        operationLock.current = true;
+        console.error(actualError.message, actualError);
+        setWalletState(prev => ({ ...prev, error: actualError.message }));
+        return actualError;
+    };
+
+    const loadWallet = async (password: string): Promise<WalletOperationResult<PrivateKey>> => {
+        if (walletState.isOperationInProgress) {
+            return {
+                success: false,
+                error: 'Operation in progress'
+            };
+        }
+
+        setWalletState(prev => ({ ...prev, isOperationInProgress: true, error: null }));
+        
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user?.id) throw new Error("No authenticated session");
+            if (!session?.user?.id) {
+                return {
+                    success: false,
+                    error: 'No authenticated session'
+                };
+            }
 
-            // Verify metadata matches before proceeding
             const metadata = session.user.user_metadata;
             if (!metadata?.isInAppWallet || !metadata?.hederaAccountId) {
-                throw new Error("No in-app wallet configured");
+                return {
+                    success: false,
+                    error: 'No in-app wallet configured'
+                };
             }
 
             const decryptedKey = await retrievePrivateKey(session.user.id, password);
             if (!decryptedKey) {
-                throw new Error("Failed to retrieve private key");
+                return {
+                    success: false,
+                    error: 'Failed to retrieve private key'
+                };
             }
 
             const privateKey = PrivateKey.fromString(decryptedKey);
@@ -104,113 +138,154 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
                 error: null
             }));
 
-            return privateKey;
-        } catch (error: any) {
-            handleError(error);
-            return null;
+            return {
+                success: true,
+                data: privateKey
+            };
+        } catch (error) {
+            const handledError = handleError(error);
+            return {
+                success: false,
+                error: handledError.message
+            };
         } finally {
-            operationLock.current = false;
+            setWalletState(prev => ({ ...prev, isOperationInProgress: false }));
         }
     };
 
     const signTransaction = async (transaction: string, password: string) => {
-        console.log("Starting signTransaction with tx length:", transaction.length);
+        if (walletState.isOperationInProgress) {
+            return {
+                success: false,
+                error: 'Operation in progress'
+            };
+        }
+
+        setWalletState(prev => ({ ...prev, isOperationInProgress: true, error: null }));
+        
         try {
-            console.log("Loading wallet...");
-            const privateKey = await loadWallet(password);
-            if (!privateKey) throw new Error("Failed to load private key");
-            
-            console.log("Converting transaction...");
+            const loadResult = await loadWallet(password);
+            if (!loadResult.success || !loadResult.data) {
+                return {
+                    success: false,
+                    error: loadResult.error || 'Failed to load wallet',
+                    data: {
+                        status: 'ERROR' as const,
+                        transactionId: null
+                    }
+                };
+            }
+
             const tx = base64StringToTransaction(transaction);
-            
-            console.log("Signing transaction...");
-            const signedTx = await tx.sign(privateKey);
-            console.log("Executing transaction...");
+            const signedTx = await tx.sign(loadResult.data);
             const response = await signedTx.execute(client);
             
-            // Add timeout and detailed error handling for receipt
             const receiptPromise = response.getReceipt(client);
             const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Transaction receipt timeout")), 30000)
+                setTimeout(() => reject(new Error('Transaction receipt timeout')), 30000)
             );
             
-            console.log("Getting receipt...");
-            try {
-                const receipt = await Promise.race([receiptPromise, timeoutPromise]) as TransactionReceipt;
-                console.log("Receipt details:", {
-                    status: receipt.status.toString(),
-                    contractId: receipt.contractId?.toString(),
-                    exchangeRate: receipt.exchangeRate,
-                    accountId: receipt.accountId?.toString()
-                });
-                
-                if (receipt.status._code !== 22) { // SUCCESS
-                    throw new Error(`Transaction failed with status: ${receipt.status.toString()}`);
-                }
-            } catch (receiptError) {
-                console.error("Receipt error details:", {
-                    error: receiptError,
-                    transactionId: response.transactionId.toString()
-                });
-                throw receiptError;
+            const receipt = await Promise.race([receiptPromise, timeoutPromise]) as TransactionReceipt;
+            
+            if (receipt.status._code !== 22) { // Not SUCCESS
+                return {
+                    success: false,
+                    error: `Transaction failed with status: ${receipt.status.toString()}`,
+                    data: {
+                        status: 'ERROR' as const,
+                        transactionId: response.transactionId.toString()
+                    }
+                };
             }
-            
-            console.log("Transaction complete, clearing key...");
-            setWalletState(prev => ({
-                ...prev,
-                inAppPrivateKey: null
-            }));
-            
+
             return {
-                status: 'SUCCESS',
-                error: null,
-                transactionId: response.transactionId.toString()
+                success: true,
+                data: {
+                    status: 'SUCCESS' as const,
+                    transactionId: response.transactionId.toString()
+                }
             };
         } catch (error) {
-            console.error("Transaction signing error:", {
-                error,
-                message: error instanceof Error ? error.message : 'Unknown error',
-                type: (error as any)?.constructor?.name || 'Unknown type'
-            });
-            
-            setWalletState(prev => ({
-                ...prev,
-                inAppPrivateKey: null
+            const handledError = handleError(error);
+            return {
+                success: false,
+                error: handledError.message,
+                data: {
+                    status: 'ERROR' as const,
+                    transactionId: null
+                }
+            };
+        } finally {
+            setWalletState(prev => ({ 
+                ...prev, 
+                isOperationInProgress: false,
+                inAppPrivateKey: null 
             }));
+        }
+    };
+
+    const verifyMetadataSync = async (
+        currentMetadata: any, 
+        storedMetadata: any
+    ): Promise<WalletOperationResult<boolean>> => {
+        try {
+            if (!currentMetadata?.hederaAccountId || !storedMetadata?.hederaAccountId) {
+                return {
+                    success: false,
+                    error: 'Invalid metadata'
+                };
+            }
+            
+            if (currentMetadata.hederaAccountId !== storedMetadata.hederaAccountId) {
+                return {
+                    success: false,
+                    error: 'Account metadata mismatch'
+                };
+            }
             
             return {
-                status: 'ERROR',
-                error: error instanceof Error ? error.message : 'Transaction signing failed',
-                transactionId: null
+                success: true,
+                data: true
+            };
+        } catch (error) {
+            const handledError = handleError(error);
+            return {
+                success: false,
+                error: handledError.message
             };
         }
     };
 
-    const verifyMetadataSync = async (currentMetadata: any, storedMetadata: any) => {
-        if (!currentMetadata?.hederaAccountId || !storedMetadata?.hederaAccountId) {
-            handleError(new Error('Invalid metadata'));
-        }
-        if (currentMetadata.hederaAccountId !== storedMetadata.hederaAccountId) {
-            handleError(new Error('Account metadata mismatch'));
-        }
-        return true;
-    };
-
-    const recoverKey = async (userId: string): Promise<void> => {
-        if (recoveryLock.current) {
-            handleError(new Error('Recovery already in progress'));
+    const recoverKey = async (userId: string): Promise<WalletOperationResult<void>> => {
+        if (walletState.isRecoveryInProgress || walletState.isOperationInProgress) {
+            return {
+                success: false,
+                error: 'Recovery already in progress'
+            };
         }
         
-        recoveryLock.current = true;
-        setWalletState(prev => ({ ...prev, isRecoveryInProgress: true }));
+        setWalletState(prev => ({ 
+            ...prev, 
+            isRecoveryInProgress: true,
+            isOperationInProgress: true,
+            error: null 
+        }));
         
         try {
             await attemptRecovery(userId);
-        } catch (error: any) {
-            handleError(error);
+            return { success: true };
+        } catch (error) {
+            const handledError = handleError(error);
+            return {
+                success: false,
+                error: handledError.message
+            };
         } finally {
-            recoveryLock.current = false;
-            setWalletState(prev => ({ ...prev, isRecoveryInProgress: false }));
+            setWalletState(prev => ({ 
+                ...prev, 
+                isRecoveryInProgress: false,
+                isOperationInProgress: false 
+            }));
         }
     };
 
@@ -221,9 +296,11 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             client,
             error: walletState.error,
             isRecoveryInProgress: walletState.isRecoveryInProgress,
+            isOperationInProgress: walletState.isOperationInProgress,
             loadWallet,
             signTransaction,
-            setInAppAccount: (accountId: string) => setWalletState(prev => ({ ...prev, inAppAccount: accountId })),
+            setInAppAccount: (accountId: string) => 
+                setWalletState(prev => ({ ...prev, inAppAccount: accountId })),
             recoverKey,
             verifyMetadataSync
         }}>
