@@ -196,9 +196,11 @@ describe('InAppWalletContext', () => {
         });
 
         it('should prevent multiple wallet creation attempts', async () => {
-            (retrievePrivateKey as jest.Mock).mockImplementation(() => 
+            // Mock retrievePrivateKey to be slow but eventually succeed
+            const mockRetrievePrivateKey = jest.fn(() => 
                 new Promise(resolve => setTimeout(() => resolve('mock-private-key'), 100))
             );
+            (retrievePrivateKey as jest.Mock).mockImplementation(mockRetrievePrivateKey);
 
             render(
                 <InAppWalletProvider>
@@ -206,13 +208,25 @@ describe('InAppWalletContext', () => {
                 </InAppWalletProvider>
             );
 
+            // First click should start the operation
             await act(async () => {
-                fireEvent.click(screen.getByTestId('load-wallet'));
                 fireEvent.click(screen.getByTestId('load-wallet'));
             });
 
+            // Second click should be rejected immediately
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('load-wallet'));
+            });
+
+            // Wait for the error message
             await waitFor(() => {
-                expect(screen.getByTestId('error-message')).toHaveTextContent('Operation in progress');
+                const errorElement = screen.getByTestId('error-message');
+                expect(errorElement).toHaveTextContent('Operation in progress');
+            });
+
+            // Wait for the first operation to complete
+            await act(async () => {
+                await new Promise(resolve => setTimeout(resolve, 150));
             });
         });
     });
@@ -246,9 +260,11 @@ describe('InAppWalletContext', () => {
 
     describe('Recovery Process', () => {
         it('should prevent concurrent recovery attempts', async () => {
-            (attemptRecovery as jest.Mock).mockImplementation(() => 
-                new Promise(resolve => setTimeout(resolve, 100))
+            // Mock attemptRecovery to be slow
+            const mockAttemptRecovery = jest.fn(() => 
+                new Promise(resolve => setTimeout(() => resolve(true), 100))
             );
+            (attemptRecovery as jest.Mock).mockImplementation(mockAttemptRecovery);
 
             render(
                 <InAppWalletProvider>
@@ -256,13 +272,25 @@ describe('InAppWalletContext', () => {
                 </InAppWalletProvider>
             );
 
+            // Start first recovery
             await act(async () => {
-                fireEvent.click(screen.getByTestId('recover-key'));
                 fireEvent.click(screen.getByTestId('recover-key'));
             });
 
+            // Attempt second recovery while first is in progress
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('recover-key'));
+            });
+
+            // Verify error message appears
             await waitFor(() => {
-                expect(screen.getByTestId('error-message')).toHaveTextContent('Recovery already in progress');
+                const errorElement = screen.getByTestId('error-message');
+                expect(errorElement).toHaveTextContent('Recovery already in progress');
+            });
+
+            // Wait for the first recovery to complete
+            await act(async () => {
+                await new Promise(resolve => setTimeout(resolve, 150));
             });
         });
 
@@ -308,20 +336,29 @@ describe('InAppWalletContext', () => {
 
         it('should handle metadata synchronization', async () => {
             const error = new Error('Account metadata mismatch');
-            const { getByTestId } = render(
+            let walletInstance: InAppWalletContextType | undefined;
+            
+            render(
                 <InAppWalletProvider>
-                    <TestComponent />
+                    <TestWrapper>
+                        {(wallet) => {
+                            walletInstance = wallet;
+                            return <div data-testid="wrapper" />;
+                        }}
+                    </TestWrapper>
                 </InAppWalletProvider>
             );
 
-            const helpers = JSON.parse(getByTestId('test-helpers').textContent || '{}');
-            
+            if (!walletInstance) {
+                throw new Error('Wallet instance not available');
+            }
+
             await expect(async () => {
-                helpers.verifyMetadataSync(
+                await walletInstance.verifyMetadataSync(
                     { hederaAccountId: '0.0.123456' },
                     { hederaAccountId: '0.0.789012' }
                 );
-            }).rejects.toThrow(error);
+            }).rejects.toThrow('Account metadata mismatch');
 
             expect(mockConsoleError).toHaveBeenCalledWith(error.message, error);
         });
@@ -348,9 +385,11 @@ describe('InAppWalletContext', () => {
         });
 
         it('should prevent operations during recovery process', async () => {
-            (retrievePrivateKey as jest.Mock).mockImplementation(() => 
+            // Mock retrievePrivateKey to be slow
+            const mockRetrievePrivateKey = jest.fn(() => 
                 new Promise(resolve => setTimeout(() => resolve('mock-private-key'), 1000))
             );
+            (retrievePrivateKey as jest.Mock).mockImplementation(mockRetrievePrivateKey);
 
             render(
                 <InAppWalletProvider>
@@ -358,13 +397,25 @@ describe('InAppWalletContext', () => {
                 </InAppWalletProvider>
             );
 
+            // Start a wallet operation
             await act(async () => {
                 fireEvent.click(screen.getByTestId('load-wallet'));
+            });
+
+            // Try to perform another operation while the first is in progress
+            await act(async () => {
                 fireEvent.click(screen.getByTestId('sign-tx'));
             });
 
+            // Verify error message appears
             await waitFor(() => {
-                expect(screen.getByTestId('error-message')).toHaveTextContent('Operation in progress');
+                const errorElement = screen.getByTestId('error-message');
+                expect(errorElement).toHaveTextContent('Operation in progress');
+            });
+
+            // Wait for the operation to complete
+            await act(async () => {
+                await new Promise(resolve => setTimeout(resolve, 1100));
             });
         });
     });

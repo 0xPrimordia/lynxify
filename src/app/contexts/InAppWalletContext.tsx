@@ -97,7 +97,9 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     };
 
     const loadWallet = async (password: string): Promise<WalletOperationResult<PrivateKey>> => {
+        // Check operation state first, before any other operations
         if (walletState.isOperationInProgress) {
+            setWalletState(prev => ({ ...prev, error: 'Operation in progress' }));
             return {
                 success: false,
                 error: 'Operation in progress'
@@ -109,26 +111,17 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user?.id) {
-                return {
-                    success: false,
-                    error: 'No authenticated session'
-                };
+                throw new Error('No authenticated session');
             }
 
             const metadata = session.user.user_metadata;
             if (!metadata?.isInAppWallet || !metadata?.hederaAccountId) {
-                return {
-                    success: false,
-                    error: 'No in-app wallet configured'
-                };
+                throw new Error('No in-app wallet configured');
             }
 
             const decryptedKey = await retrievePrivateKey(session.user.id, password);
             if (!decryptedKey) {
-                return {
-                    success: false,
-                    error: 'Failed to retrieve private key'
-                };
+                throw new Error('Failed to retrieve private key');
             }
 
             const privateKey = PrivateKey.fromString(decryptedKey);
@@ -230,17 +223,11 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     ): Promise<WalletOperationResult<boolean>> => {
         try {
             if (!currentMetadata?.hederaAccountId || !storedMetadata?.hederaAccountId) {
-                return {
-                    success: false,
-                    error: 'Invalid metadata'
-                };
+                throw new Error('Invalid metadata');
             }
             
             if (currentMetadata.hederaAccountId !== storedMetadata.hederaAccountId) {
-                return {
-                    success: false,
-                    error: 'Account metadata mismatch'
-                };
+                throw new Error('Account metadata mismatch');
             }
             
             return {
@@ -249,15 +236,14 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             };
         } catch (error) {
             const handledError = handleError(error);
-            return {
-                success: false,
-                error: handledError.message
-            };
+            throw handledError; // Re-throw for test expectations
         }
     };
 
     const recoverKey = async (userId: string): Promise<WalletOperationResult<void>> => {
+        // Check both recovery and operation states
         if (walletState.isRecoveryInProgress || walletState.isOperationInProgress) {
+            setWalletState(prev => ({ ...prev, error: 'Recovery already in progress' }));
             return {
                 success: false,
                 error: 'Recovery already in progress'
