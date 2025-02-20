@@ -10,6 +10,7 @@ import { passwordSchema } from '@/lib/utils/validation';
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import { VT323 } from "next/font/google";
+import { storePrivateKey } from '@/lib/utils/keyStorage';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 
@@ -75,69 +76,38 @@ export default function CreateWalletForm() {
 
             // Store private key in IndexedDB
             try {
-                // Encrypt private key before starting transaction
-                const encryptedKey = await encrypt(privateKey, password);
-                
-                const db = await window.indexedDB.open('HederaWallet', 1);
-                
-                db.onerror = () => {
-                    throw new Error('Failed to open IndexedDB');
-                };
+                const stored = await storePrivateKey(session.user.id, privateKey, password);
+                if (!stored) {
+                    throw new Error('Failed to store private key securely');
+                }
 
-                db.onupgradeneeded = (event) => {
-                    const db = (event.target as IDBOpenDBRequest).result;
-                    if (!db.objectStoreNames.contains('keys')) {
-                        db.createObjectStore('keys', { keyPath: 'userId' });
-                    }
-                };
+                // Get fresh session with updated metadata
+                const { data: { session: updatedSession } } = await supabase.auth.getSession();
+                if (updatedSession) {
+                    setPrivateKey(privateKey);
+                    setInAppAccount(accountId);
+                    persistSession(
+                        null,
+                        updatedSession,
+                        true,
+                        null,
+                        accountId
+                    );
 
-                db.onsuccess = async (event) => {
-                    const database = (event.target as IDBOpenDBRequest).result;
-                    const transaction = database.transaction(['keys'], 'readwrite');
-                    const store = transaction.objectStore('keys');
-
-                    const request = store.put({
-                        userId: session.user.id,
-                        encryptedKey
-                    });
-                    
-                    request.onsuccess = async () => {
-                        // Get fresh session with updated metadata
-                        const { data: { session: updatedSession } } = await supabase.auth.getSession();
-                        if (updatedSession) {
-                            setPrivateKey(privateKey);
-                            setInAppAccount(accountId);
-                            // Persist the updated session with accountId
-                            persistSession(
-                                null, // No wallet connect session
-                                updatedSession,
-                                true, // is in-app wallet
-                                null, // Don't store private key in session
-                                accountId // Add this parameter
-                            );
-
-                            // After successful private key storage in IndexedDB
-                            const { error: updateError } = await supabase.auth.updateUser({
-                                data: {
-                                    hasStoredPrivateKey: true,
-                                    hederaAccountId: accountId
-                                }
-                            });
+                    const { error: updateError } = await supabase.auth.updateUser({
+                        data: {
+                            hasStoredPrivateKey: true,
+                            hederaAccountId: accountId
                         }
-                    };
-                    
-                    request.onerror = () => {
-                        throw new Error('Failed to store key in IndexedDB');
-                    };
-                };
-            } catch (dbError) {
-                // If encryption or DB setup fails, ensure flag is set to false
+                    });
+                }
+            } catch (error) {
                 await supabase.auth.updateUser({
                     data: {
                         hasStoredPrivateKey: false
                     }
                 });
-                console.error('IndexedDB error:', dbError);
+                console.error('Storage error:', error);
                 throw new Error('Failed to store private key securely');
             }
         } catch (err: any) {

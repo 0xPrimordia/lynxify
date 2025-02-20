@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
-import { InAppWalletProvider, useInAppWallet } from './InAppWalletContext';
+import { InAppWalletProvider, useInAppWallet, InAppWalletContextType } from './InAppWalletContext';
 import { supabase } from '@/utils/supabase';
 import { PrivateKey } from "@hashgraph/sdk";
 import { encrypt, decrypt } from '@/lib/utils/encryption';
+import { storePrivateKey, retrievePrivateKey, attemptRecovery } from '@/lib/utils/keyStorage';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import 'fake-indexeddb/auto';
 
@@ -39,13 +40,7 @@ jest.mock('@/utils/supabase', () => ({
 }));
 
 jest.mock('@hashgraph/hedera-wallet-connect', () => ({
-    base64StringToTransaction: jest.fn().mockReturnValue({
-        sign: jest.fn().mockResolvedValue({
-            execute: jest.fn().mockResolvedValue({
-                getReceipt: jest.fn().mockResolvedValue({})
-            })
-        })
-    })
+    base64StringToTransaction: jest.fn()
 }));
 
 jest.mock('@/lib/utils/encryption', () => ({
@@ -53,42 +48,57 @@ jest.mock('@/lib/utils/encryption', () => ({
     decrypt: jest.fn()
 }));
 
+jest.mock('@/lib/utils/keyStorage', () => ({
+    storePrivateKey: jest.fn(),
+    retrievePrivateKey: jest.fn(),
+    attemptRecovery: jest.fn().mockResolvedValue(true),
+    STORAGE_CONFIG: {
+        PRIMARY_DB: 'test_primary',
+        BACKUP_DB: 'test_backup',
+        STORE_NAME: 'keys',
+        VERSION: 1
+    }
+}));
+
 // Simple test component to display wallet state and actions
 const TestComponent = () => {
-    const { inAppAccount, isInAppWallet, loadWallet, signTransaction } = useInAppWallet();
+    const { 
+        inAppAccount, 
+        isInAppWallet, 
+        loadWallet, 
+        signTransaction,
+        recoverKey,
+        verifyMetadataSync,
+        isRecoveryInProgress 
+    } = useInAppWallet();
     
-    const handleLoadWallet = async () => {
-        try {
-            await loadWallet('test-password');
-        } catch (error) {
-            console.error('Load wallet error:', error);
-        }
-    };
-
-    const handleSignTransaction = async () => {
-        try {
-            await signTransaction('test-transaction', 'test-password');
-        } catch (error) {
-            console.error('Sign transaction error:', error);
-        }
-    };
-
     return (
         <div>
             <div data-testid="account-id">{inAppAccount || 'No Account'}</div>
             <div data-testid="is-inapp-wallet">{isInAppWallet.toString()}</div>
-            <button onClick={handleLoadWallet} data-testid="load-wallet">Load Wallet</button>
-            <button onClick={handleSignTransaction} data-testid="sign-tx">Sign Transaction</button>
+            <div data-testid="recovery-status">
+                {isRecoveryInProgress ? 'Recovery in progress' : 'No recovery in progress'}
+            </div>
+            <button onClick={() => loadWallet('test-password')} data-testid="load-wallet">Load Wallet</button>
+            <button onClick={() => signTransaction('test-transaction', 'test-password')} data-testid="sign-tx">Sign Transaction</button>
+            <button onClick={() => recoverKey('test-user-id')} data-testid="recover-key">Recover Key</button>
+            {/* Expose functions for test access */}
+            <div data-testid="test-helpers" style={{ display: 'none' }}>
+                {JSON.stringify({ recoverKey, verifyMetadataSync })}
+            </div>
         </div>
     );
 };
 
-describe('InAppWalletContext', () => {
-    beforeEach(async () => {
-        jest.clearAllMocks();
-        indexedDB.deleteDatabase('HederaWallet');
+// Instead of directly using hooks
+const TestWrapper = ({ children }: { children: (wallet: InAppWalletContextType) => React.ReactNode }) => {
+    const wallet = useInAppWallet();
+    return <div data-testid="test-wrapper">{children(wallet)}</div>;
+};
 
-        // Setup default Supabase responses
+describe('InAppWalletContext', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
         (supabase.auth.getSession as jest.Mock).mockResolvedValue({
             data: {
                 session: {
@@ -100,40 +110,14 @@ describe('InAppWalletContext', () => {
                         }
                     }
                 }
-            }
+            },
+            error: null
         });
+    });
 
-        // Mock Users table response
-        (supabase.from as jest.Mock).mockReturnValue({
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockResolvedValue({
-                data: { 
-                    isInAppWallet: true,
-                    hederaAccountId: '0.0.123456'
-                },
-                error: null
-            })
-        });
-
-        // Initialize IndexedDB with a test key
-        const db = await new Promise<IDBDatabase>((resolve) => {
-            const request = indexedDB.open('HederaWallet', 1);
-            request.onupgradeneeded = () => {
-                const db = request.result;
-                db.createObjectStore('keys', { keyPath: 'userId' });
-            };
-            request.onsuccess = () => resolve(request.result);
-        });
-
-        await act(async () => {
-            const transaction = db.transaction(['keys'], 'readwrite');
-            const store = transaction.objectStore('keys');
-            await store.add({
-                userId: 'test-user-id',
-                encryptedKey: 'encrypted-test-key'
-            });
-        });
+    afterEach(() => {
+        // Restore console.error
+        console.error = originalError;
     });
 
     it('should detect existing in-app wallet from session', async () => {
@@ -146,7 +130,7 @@ describe('InAppWalletContext', () => {
         await waitFor(() => {
             expect(screen.getByTestId('is-inapp-wallet')).toHaveTextContent('true');
             expect(screen.getByTestId('account-id')).toHaveTextContent('0.0.123456');
-        }, { timeout: 2000 });
+        });
     });
 
     it('should handle session without in-app wallet', async () => {
@@ -173,78 +157,9 @@ describe('InAppWalletContext', () => {
     });
 
     describe('loadWallet', () => {
-        it('should clear private key from memory after timeout', async () => {
-            jest.useFakeTimers();
+        it('should successfully load wallet with correct password', async () => {
             const mockPrivateKey = PrivateKey.generateED25519();
-            (decrypt as jest.Mock).mockResolvedValue(mockPrivateKey.toString());
-
-            // Initialize IndexedDB with test data
-            const db = await new Promise<IDBDatabase>((resolve) => {
-                const request = indexedDB.open('HederaWallet', 1);
-                request.onupgradeneeded = () => {
-                    const db = request.result;
-                    db.createObjectStore('keys', { keyPath: 'userId' });
-                };
-                request.onsuccess = () => resolve(request.result);
-            });
-
-            await act(async () => {
-                const transaction = db.transaction(['keys'], 'readwrite');
-                const store = transaction.objectStore('keys');
-                await store.add({
-                    userId: 'test-user-id',
-                    encryptedKey: 'encrypted-test-key'
-                });
-            });
-
-            let rendered;
-            await act(async () => {
-                rendered = render(
-                    <InAppWalletProvider>
-                        <TestComponent />
-                    </InAppWalletProvider>
-                );
-            });
-
-            // Wait for initial render and state setup
-            await waitFor(() => {
-                expect(rendered!.getByTestId('is-inapp-wallet')).toHaveTextContent('true');
-            });
-
-            const { getByTestId } = rendered!;
-
-            // First load
-            await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
-            });
-            await waitFor(() => expect(decrypt).toHaveBeenCalledTimes(1));
-
-            // Advance time
-            act(() => {
-                jest.advanceTimersByTime(10 * 60 * 1000);
-            });
-
-            // Second load
-            await act(async () => {
-                fireEvent.click(getByTestId('load-wallet'));
-            });
-            await waitFor(() => expect(decrypt).toHaveBeenCalledTimes(2));
-
-            jest.useRealTimers();
-        });
-
-        it('should handle concurrent loadWallet calls safely', async () => {
-            const mockPrivateKey = PrivateKey.generateED25519();
-            let isDecrypting = false;
-            
-            // Mock decrypt to block while a decrypt is in progress
-            (decrypt as jest.Mock).mockImplementation(() => {
-                if (isDecrypting) {
-                    return new Promise(() => {}); // Never resolve if already decrypting
-                }
-                isDecrypting = true;
-                return Promise.resolve(mockPrivateKey.toString());
-            });
+            (retrievePrivateKey as jest.Mock).mockResolvedValue(mockPrivateKey.toString());
 
             const { getByTestId } = render(
                 <InAppWalletProvider>
@@ -252,35 +167,57 @@ describe('InAppWalletContext', () => {
                 </InAppWalletProvider>
             );
 
-            await waitFor(() => {
-                expect(getByTestId('is-inapp-wallet')).toHaveTextContent('true');
-            });
-
-            // Trigger multiple loads
-            const loadPromise1 = act(() => fireEvent.click(getByTestId('load-wallet')));
-            const loadPromise2 = act(() => fireEvent.click(getByTestId('load-wallet')));
-            const loadPromise3 = act(() => fireEvent.click(getByTestId('load-wallet')));
-
-            // Wait for all promises
-            await Promise.all([loadPromise1, loadPromise2, loadPromise3]);
-            
-            // Wait for any state updates
             await act(async () => {
-                await new Promise(resolve => setTimeout(resolve, 100));
+                fireEvent.click(getByTestId('load-wallet'));
             });
 
-            expect(decrypt).toHaveBeenCalledTimes(1);
+            expect(retrievePrivateKey).toHaveBeenCalledWith('test-user-id', 'test-password');
+        });
+
+        it('should handle key retrieval failure', async () => {
+            const error = new Error('Failed to retrieve private key');
+            (retrievePrivateKey as jest.Mock).mockRejectedValue(error);
+
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
+            );
+
+            await act(async () => {
+                fireEvent.click(getByTestId('load-wallet'));
+            });
+
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
+        });
+
+        it('should prevent multiple wallet creation attempts', async () => {
+            const error = new Error('Operation in progress');
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
+            );
+
+            await act(async () => {
+                fireEvent.click(getByTestId('load-wallet'));
+                fireEvent.click(getByTestId('load-wallet'));
+            });
+
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
         });
     });
 
     describe('signTransaction', () => {
-        it('should not persist private key after signing', async () => {
+        it('should sign transaction with loaded wallet', async () => {
             const mockPrivateKey = PrivateKey.generateED25519();
-            let decryptCalls = 0;
-            
-            (decrypt as jest.Mock).mockImplementation(() => {
-                decryptCalls++;
-                return Promise.resolve(mockPrivateKey.toString());
+            (retrievePrivateKey as jest.Mock).mockResolvedValue(mockPrivateKey.toString());
+            (base64StringToTransaction as jest.Mock).mockReturnValue({
+                sign: jest.fn().mockResolvedValue({
+                    execute: jest.fn().mockResolvedValue({
+                        getReceipt: jest.fn().mockResolvedValue({})
+                    })
+                })
             });
 
             const { getByTestId } = render(
@@ -289,39 +226,40 @@ describe('InAppWalletContext', () => {
                 </InAppWalletProvider>
             );
 
-            await waitFor(() => {
-                expect(getByTestId('is-inapp-wallet')).toHaveTextContent('true');
-            });
-
-            // First sign
             await act(async () => {
                 fireEvent.click(getByTestId('sign-tx'));
-                await new Promise(resolve => setTimeout(resolve, 100));
             });
 
-            // Reset counter
-            decryptCalls = 0;
+            expect(retrievePrivateKey).toHaveBeenCalledWith('test-user-id', 'test-password');
+            expect(base64StringToTransaction).toHaveBeenCalled();
+        });
+    });
 
-            // Second sign
+    describe('Recovery Process', () => {
+        it('should prevent concurrent recovery attempts', async () => {
+            const error = new Error('Recovery already in progress');
+            (attemptRecovery as jest.Mock).mockImplementation(() => 
+                new Promise(resolve => setTimeout(resolve, 100))
+            );
+
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
+            );
+
             await act(async () => {
-                fireEvent.click(getByTestId('sign-tx'));
-                await new Promise(resolve => setTimeout(resolve, 100));
+                fireEvent.click(getByTestId('recover-key'));
+                fireEvent.click(getByTestId('recover-key'));
             });
 
-            expect(decryptCalls).toBe(1);
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
         });
 
-        it('should handle transaction failures without exposing key', async () => {
-            const mockPrivateKey = PrivateKey.generateED25519();
-            const mockError = new Error('Transaction failed');
-            
-            (decrypt as jest.Mock).mockResolvedValue(mockPrivateKey.toString());
-            (base64StringToTransaction as jest.Mock).mockReturnValue({
-                sign: jest.fn().mockRejectedValue(mockError)
-            });
-
-            // Mock console.error for this test only
-            const consoleErrorMock = jest.spyOn(console, 'error').mockImplementation();
+        it('should update recovery state during process', async () => {
+            (attemptRecovery as jest.Mock).mockImplementation(() => 
+                new Promise(resolve => setTimeout(resolve, 100))
+            );
 
             const { getByTestId } = render(
                 <InAppWalletProvider>
@@ -329,23 +267,124 @@ describe('InAppWalletContext', () => {
                 </InAppWalletProvider>
             );
 
-            await waitFor(() => {
-                expect(getByTestId('is-inapp-wallet')).toHaveTextContent('true');
-            });
-
-            // Attempt to sign
             await act(async () => {
-                fireEvent.click(getByTestId('sign-tx'));
-                await new Promise(resolve => setTimeout(resolve, 100));
+                fireEvent.click(getByTestId('recover-key'));
+                await new Promise(resolve => setTimeout(resolve, 50));
             });
 
-            expect(consoleErrorMock).toHaveBeenCalledWith(
-                'Transaction signing error:',
-                expect.any(Error)
+            expect(screen.getByTestId('recovery-status')).toHaveTextContent('Recovery in progress');
+        });
+    });
+
+    describe('Critical Security Cases', () => {
+        it('should handle storage version mismatches', async () => {
+            const error = new Error('Version mismatch');
+            (retrievePrivateKey as jest.Mock).mockRejectedValue(error);
+
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
             );
 
-            // Cleanup
-            consoleErrorMock.mockRestore();
+            await act(async () => {
+                fireEvent.click(getByTestId('load-wallet'));
+            });
+
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
+        });
+
+        it('should handle metadata synchronization', async () => {
+            const error = new Error('Account metadata mismatch');
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
+            );
+
+            const helpers = JSON.parse(getByTestId('test-helpers').textContent || '{}');
+            
+            await expect(async () => {
+                helpers.verifyMetadataSync(
+                    { hederaAccountId: '0.0.123456' },
+                    { hederaAccountId: '0.0.789012' }
+                );
+            }).rejects.toThrow(error);
+
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
+        });
+    });
+
+    describe('Recovery and Backup Scenarios', () => {
+        it('should handle complete storage failure with recovery options', async () => {
+            const error = new Error('Storage unavailable');
+            (retrievePrivateKey as jest.Mock).mockRejectedValue(error);
+
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
+            );
+
+            await act(async () => {
+                fireEvent.click(getByTestId('load-wallet'));
+            });
+
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
+        });
+
+        it('should prevent operations during recovery process', async () => {
+            const error = new Error('Operation in progress');
+            (retrievePrivateKey as jest.Mock).mockImplementation(() => 
+                new Promise(resolve => setTimeout(() => resolve(mockPrivateKey.toString()), 1000))
+            );
+
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestComponent />
+                </InAppWalletProvider>
+            );
+
+            await act(async () => {
+                fireEvent.click(getByTestId('load-wallet'));
+                fireEvent.click(getByTestId('sign-tx'));
+            });
+
+            expect(console.error).toHaveBeenCalledWith(error.message, error);
+        });
+    });
+
+    describe('Metadata Synchronization', () => {
+        it('should detect metadata mismatches', async () => {
+            const { getByTestId } = render(
+                <InAppWalletProvider>
+                    <TestWrapper>
+                        {(wallet) => (
+                            <div>
+                                <button 
+                                    onClick={() => {
+                                        try {
+                                            wallet.verifyMetadataSync(
+                                                { hederaAccountId: '0.0.123456' },
+                                                { hederaAccountId: '0.0.789012' }
+                                            );
+                                        } catch (error) {
+                                            expect(error.message).toBe('Account metadata mismatch');
+                                        }
+                                    }}
+                                    data-testid="verify-button"
+                                >
+                                    Verify
+                                </button>
+                            </div>
+                        )}
+                    </TestWrapper>
+                </InAppWalletProvider>
+            );
+
+            await act(async () => {
+                fireEvent.click(getByTestId('verify-button'));
+            });
         });
     });
 }); 

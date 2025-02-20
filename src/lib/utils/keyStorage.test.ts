@@ -1,6 +1,9 @@
-import { storePrivateKey, retrievePrivateKey, getStoredKey } from './keyStorage';
+import { storePrivateKey, retrievePrivateKey, getStoredKey, STORAGE_CONFIG, initializeDB, StoredKey, mockForTesting } from './keyStorage';
 import { PrivateKey } from "@hashgraph/sdk";
 import 'fake-indexeddb/auto';  // This will automatically mock IndexedDB
+import { encrypt, decrypt } from './encryption';
+import { openDB } from 'idb';
+import { attemptRecovery } from './keyStorage';
 
 // Mock the crypto functions with proper key structure
 const mockCrypto = {
@@ -69,103 +72,169 @@ global.TextDecoder = jest.fn().mockImplementation(() => ({
 }));
 
 // Mock the encryption module with password validation
-jest.mock('@/lib/utils/encryption', () => ({
-    encrypt: jest.fn().mockImplementation((data) => {
-        console.log('encryption.encrypt called with:', data);
-        return Promise.resolve('mockEncryptedData');
-    }),
-    decrypt: jest.fn().mockImplementation((data, password) => {
-        console.log('encryption.decrypt called with password:', password);
-        if (password === 'wrongpassword') {
-            throw new Error('Failed to retrieve private key');
-        }
-        return Promise.resolve('mockDecryptedKey');
-    }),
-    generateSalt: jest.fn().mockReturnValue(new Uint8Array(32)),
-    generateIV: jest.fn().mockReturnValue(new Uint8Array(16))
-}));
+jest.mock('./encryption');
 
 // Add structuredClone to global
 global.structuredClone = (val: any) => JSON.parse(JSON.stringify(val));
 
-describe('Key Storage Flow', () => {
-    beforeEach(() => {
-        return (async () => {
-            console.log('Setting up test...');
-            // Clear the mock IndexedDB
-            indexedDB = new IDBFactory();
-            // Create store with proper keyPath
-            const request = indexedDB.open('wallet_storage', 1);
-            request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                if (!db.objectStoreNames.contains('keys')) {
-                    console.log('Creating keys store...');
-                    // Use userId as the key directly
-                    const store = db.createObjectStore('keys', { keyPath: 'id' });
-                    console.log('Store created:', store);
-                }
+describe('Key Storage System', () => {
+    const mockUserId = 'test-user-123';
+    const mockPrivateKey = 'mock-private-key';
+    const mockPassword = 'test-password';
+    const mockEncryptedKey = 'encrypted-key-data';
+
+    beforeEach(async () => {
+        // Clear both DBs before each test
+        await Promise.all([
+            indexedDB.deleteDatabase(STORAGE_CONFIG.PRIMARY_DB),
+            indexedDB.deleteDatabase(STORAGE_CONFIG.BACKUP_DB)
+        ]);
+        
+        // Initialize both DBs
+        await Promise.all([
+            initializeDB(STORAGE_CONFIG.PRIMARY_DB),
+            initializeDB(STORAGE_CONFIG.BACKUP_DB)
+        ]);
+        
+        // Reset all mocks
+        jest.clearAllMocks();
+        (encrypt as jest.Mock).mockResolvedValue(mockEncryptedKey);
+        (decrypt as jest.Mock).mockResolvedValue(mockPrivateKey);
+        
+        // Add proper mock for storePrivateKey
+        jest.spyOn(mockForTesting, 'storePrivateKey').mockImplementation(() => Promise.resolve(true));
+
+        // Mock the storage functions
+        jest.spyOn(mockForTesting, 'getStoredKey');
+        jest.spyOn(mockForTesting, 'retrievePrivateKey');
+    });
+
+    describe('Primary Storage Operations', () => {
+        it('should store and retrieve a private key', async () => {
+            const stored = await storePrivateKey(mockUserId, mockPrivateKey, mockPassword);
+            expect(stored).toBe(true);
+
+            const retrieved = await retrievePrivateKey(mockUserId, mockPassword);
+            expect(retrieved).toBe(mockPrivateKey);
+        });
+
+        it('should handle missing keys gracefully', async () => {
+            const result = await retrievePrivateKey('nonexistent-user', mockPassword);
+            expect(result).toBeNull();
+        });
+
+        it('should prevent unauthorized access', async () => {
+            await storePrivateKey(mockUserId, mockPrivateKey, mockPassword);
+            (decrypt as jest.Mock).mockRejectedValue(new Error('Decryption failed'));
+            
+            await expect(retrievePrivateKey(mockUserId, 'wrong-password'))
+                .rejects.toThrow('Decryption failed');
+        });
+    });
+
+    describe('Backup and Recovery', () => {
+        it('should store key in both primary and backup', async () => {
+            await storePrivateKey(mockUserId, mockPrivateKey, mockPassword);
+            
+            const primaryKey = await getStoredKey(mockUserId, STORAGE_CONFIG.PRIMARY_DB);
+            const backupKey = await getStoredKey(mockUserId, STORAGE_CONFIG.BACKUP_DB);
+            
+            expect(primaryKey?.encryptedKey).toBe(mockEncryptedKey);
+            expect(backupKey?.encryptedKey).toBe(mockEncryptedKey);
+        });
+
+        it('should recover from backup if primary fails', async () => {
+            await storePrivateKey(mockUserId, mockPrivateKey, mockPassword);
+            await indexedDB.deleteDatabase(STORAGE_CONFIG.PRIMARY_DB);
+            
+            const retrieved = await retrievePrivateKey(mockUserId, mockPassword);
+            expect(retrieved).toBe(mockPrivateKey);
+        });
+    });
+
+    describe('Storage Metadata', () => {
+        it('should include proper metadata in stored key', async () => {
+            await storePrivateKey(mockUserId, mockPrivateKey, mockPassword);
+            const storedKey = await getStoredKey(mockUserId);
+            
+            expect(storedKey).toMatchObject({
+                userId: mockUserId,
+                encryptedKey: mockEncryptedKey,
+                createdAt: expect.any(Number),
+                lastVerified: expect.any(Number)
+            });
+        });
+    });
+
+    describe('Version Management', () => {
+        it('should handle version mismatch and migrate keys', async () => {
+            // Store key with old version
+            const oldVersionKey = {
+                userId: mockUserId,
+                encryptedKey: mockEncryptedKey,
+                version: STORAGE_CONFIG.VERSION - 1,
+                createdAt: Date.now(),
+                lastVerified: Date.now()
             };
             
-            await new Promise<void>((resolve, reject) => {
-                request.onerror = (event) => {
-                    console.error('Database error:', event);
-                    reject(request.error);
-                };
-                request.onsuccess = () => {
-                    console.log('Database opened successfully');
-                    resolve();
-                };
-            });
+            const db = await openDB(STORAGE_CONFIG.PRIMARY_DB, STORAGE_CONFIG.VERSION);
+            await db.put(STORAGE_CONFIG.STORE_NAME, oldVersionKey);
             
-            jest.clearAllMocks();
-        })();
+            // Attempt to retrieve should trigger migration
+            const result = await retrievePrivateKey(mockUserId, mockPassword);
+            
+            // Verify migration
+            const migratedKey = await getStoredKey(mockUserId);
+            expect(migratedKey).not.toBeNull();
+            expect(migratedKey!.version).toBe(STORAGE_CONFIG.VERSION);
+            expect(result).toBe(mockPrivateKey);
+        });
+
+        it('should handle failed migrations gracefully', async () => {
+            console.log('Starting failed migration test');
+            // Mock storePrivateKey to fail
+            (encrypt as jest.Mock).mockRejectedValueOnce(new Error('Migration failed'));
+            
+            // Store key with old version
+            const oldVersionKey = {
+                userId: mockUserId,
+                encryptedKey: mockEncryptedKey,
+                version: STORAGE_CONFIG.VERSION - 1,
+                createdAt: Date.now(),
+                lastVerified: Date.now()
+            };
+            console.log('Storing old version key:', oldVersionKey);
+            
+            const db = await openDB(STORAGE_CONFIG.PRIMARY_DB, STORAGE_CONFIG.VERSION);
+            await db.put(STORAGE_CONFIG.STORE_NAME, oldVersionKey);
+            
+            await expect(retrievePrivateKey(mockUserId, mockPassword))
+                .rejects.toThrow('Migration failed');
+        });
     });
 
-    it('should store and retrieve a private key', async () => {
-        const testKey = PrivateKey.generateED25519();
-        const userId = '0.0.123456';
-        const password = 'testPassword123!';
-        
-        console.log('Storing key for account:', userId);
-        await storePrivateKey(userId, testKey.toString(), password);
-        
-        console.log('Checking if key exists');
-        const hasKey = await getStoredKey(userId);
-        expect(hasKey).toBe(true);
-        
-        console.log('Retrieving stored key');
-        const retrievedKey = await retrievePrivateKey(userId, password);
-        expect(retrievedKey).toBe('mockDecryptedKey');
-    });
-
-    it('should handle missing keys gracefully', async () => {
-        const nonExistentAccount = '0.0.999999';
-        const hasKey = await getStoredKey(nonExistentAccount);
-        expect(hasKey).toBe(false);
-        
-        const retrievedKey = await retrievePrivateKey(nonExistentAccount, 'password');
-        expect(retrievedKey).toBeNull();
-    });
-
-    it('should prevent unauthorized access', async () => {
-        const testKey = PrivateKey.generateED25519();
-        const userId = '0.0.123456';
-        const password = 'testPassword123!';
-        
-        await storePrivateKey(userId, testKey.toString(), password);
-        
-        await expect(retrievePrivateKey(userId, 'wrongpassword'))
-            .rejects.toThrow('Failed to retrieve private key');
-    });
-
-    it('should handle encryption/decryption correctly', async () => {
-        const testKey = PrivateKey.generateED25519();
-        const userId = '0.0.123456';
-        const password = 'testPassword123!';
-        
-        await storePrivateKey(userId, testKey.toString(), password);
-        const retrievedKey = await retrievePrivateKey(userId, password);
-        
-        expect(retrievedKey).toBe('mockDecryptedKey');
+    describe('Complete Storage Failure Recovery', () => {
+        it('should attempt backup recovery when primary fails', async () => {
+            // Setup: Store in backup only
+            const keyData: StoredKey = {
+                userId: mockUserId,
+                encryptedKey: mockEncryptedKey,
+                version: STORAGE_CONFIG.VERSION,
+                createdAt: Date.now(),
+                lastVerified: Date.now()
+            };
+            
+            // Delete primary but keep backup
+            await indexedDB.deleteDatabase(STORAGE_CONFIG.PRIMARY_DB);
+            const backupDb = await initializeDB(STORAGE_CONFIG.BACKUP_DB);
+            await backupDb.put(STORAGE_CONFIG.STORE_NAME, keyData);
+            
+            const result = await attemptRecovery(mockUserId);
+            expect(result).toBe(true);
+            
+            // Verify backup was checked
+            const primaryKey = await getStoredKey(mockUserId, STORAGE_CONFIG.PRIMARY_DB);
+            expect(primaryKey).not.toBeNull();
+        });
     });
 }); 
