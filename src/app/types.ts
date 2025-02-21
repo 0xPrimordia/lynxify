@@ -126,3 +126,51 @@ export interface PasswordModalContext {
         reject: (reason?: any) => void;
     } | null;
 }
+
+export interface RateLimitResult {
+    blocked: boolean;
+    limit: number;
+    remaining: number;
+    reset: number;
+}
+
+export interface RateLimitError {
+    message: string;
+    code: string;
+    details?: Record<string, unknown>;
+}
+
+export type RateLimitType = 'auth' | 'wallet' | 'reset' | 'create' | 'backup' | 'sign';
+
+export interface RateLimitConfig {
+    maxRequests: number;
+    windowMs: number;
+    blockDuration?: number;
+    increaseFactor?: number;
+}
+
+export interface RateLimitKey {
+    ip: string;
+    userId?: string;
+    sessionId?: string;
+    type: string;
+}
+
+export const RATE_LIMIT_CONFIGS: { [key: string]: RateLimitConfig } = {
+    'auth': { 
+        maxRequests: 5, 
+        windowMs: 60 * 1000,
+        blockDuration: 15 * 60 * 1000,
+        increaseFactor: 2
+    },
+    'wallet': { 
+        maxRequests: 10, 
+        windowMs: 60 * 1000,
+        blockDuration: 30 * 60 * 1000,
+        increaseFactor: 3
+    },
+    'reset': { maxRequests: 3, windowMs: 60 * 60 * 1000 },
+    'create': { maxRequests: 2, windowMs: 60 * 60 * 1000 },
+    'backup': { maxRequests: 5, windowMs: 60 * 1000 },
+    'sign': { maxRequests: 20, windowMs: 60 * 1000 }
+};

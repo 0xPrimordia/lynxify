@@ -106,42 +106,127 @@ const mockNext = jest.fn().mockImplementation(() => {
 })
 NextResponse.next = mockNext
 
+// Mock NextRequest implementation
+jest.mock('next/server', () => ({
+    ...jest.requireActual('next/server'),
+    NextRequest: jest.fn().mockImplementation((url, init) => ({
+        url,
+        method: init?.method || 'GET',
+        headers: init?.headers || new Headers(),
+        nextUrl: { pathname: new URL(url).pathname },
+        cookies: {
+            get: jest.fn(),
+            getAll: jest.fn().mockReturnValue([])
+        },
+        ip: '127.0.0.1'
+    }))
+}));
+
+// Mock next/headers cookies
+jest.mock('next/headers', () => ({
+    cookies: jest.fn().mockReturnValue({
+        get: jest.fn(),
+        getAll: jest.fn().mockReturnValue([]),
+        has: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+    })
+}));
+
+// Mock createServerSupabase
+jest.mock('@/utils/supabase', () => ({
+    createServerSupabase: jest.fn().mockReturnValue({
+        auth: {
+            getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }),
+            getSession: jest.fn().mockResolvedValue({ 
+                data: { 
+                    session: { 
+                        user: { id: 'test-user' },
+                        access_token: 'test-token'
+                    } 
+                }, 
+                error: null 
+            })
+        }
+    })
+}));
+
 describe('Middleware Integration', () => {
     let mockRedis: jest.Mocked<Redis>
 
     beforeEach(() => {
         mockRedis = {
+            multi: jest.fn().mockReturnValue({
+                get: jest.fn().mockReturnThis(),
+                exec: jest.fn().mockResolvedValue([null])
+            }),
+            pipeline: jest.fn().mockReturnValue({
+                incr: jest.fn().mockReturnThis(),
+                pexpire: jest.fn().mockReturnThis(),
+                get: jest.fn().mockReturnThis(),
+                setex: jest.fn().mockReturnThis(),
+                expire: jest.fn().mockReturnThis(),
+                exec: jest.fn().mockResolvedValue([
+                    [null, 1],
+                    [null, true],
+                    [null, 1],
+                    [null, true],
+                    [null, null],  // block count
+                    [null, true]   // expire result
+                ])
+            }),
             incr: jest.fn(),
             expire: jest.fn(),
             get: jest.fn(),
-            set: jest.fn(),
-            pipeline: jest.fn().mockReturnValue({
-                incr: jest.fn(),
-                expire: jest.fn(),
-                exec: jest.fn().mockResolvedValue([])
-            })
+            set: jest.fn()
         } as unknown as jest.Mocked<Redis>;
         (getRedisInstance as jest.Mock).mockReturnValue(mockRedis);
-
+        
         jest.clearAllMocks();
     })
 
+    // Helper function to create consistent request mocks
+    const createMockRequest = (url: string, method = 'POST') => {
+        const headers = new Headers({
+            'x-user-id': 'test-user',
+            'cookie': ''
+        });
+        
+        // Create URL object first
+        const urlObj = new URL(url);
+        
+        // Create request with explicit method and headers
+        const request = new NextRequest(urlObj, {
+            method: method,  // Explicitly set method
+            headers: headers
+        });
+
+        // Verify the request was created correctly
+        console.log('Created request:', {
+            headers: Object.fromEntries(headers.entries()),
+            method: request.method,
+            url: request.url,
+            pathname: urlObj.pathname
+        });
+
+        return request;
+    };
+
     it('should apply rate limiting to wallet creation endpoint', async () => {
-        const url = new URL('http://localhost/api/wallet/create')
-        const headers = new Headers()
-        headers.set('cookie', '')
+        const req = createMockRequest('http://localhost/api/wallet/create');
+        console.log('Request before middleware:', {
+            headers: Object.fromEntries(req.headers.entries()),
+            method: req.method,
+            url: req.url
+        });
         
-        const req = new NextRequest(url, {
-            method: 'POST',
-            headers
-        })
-        
-        const response = await middleware(req)
-        expect(response.headers.get('X-RateLimit-Limit')).toBeDefined()
-        expect(response.headers.get('X-RateLimit-Remaining')).toBeDefined()
-    })
+        const response = await middleware(req);
+        expect(response.headers.get('X-RateLimit-Limit')).toBeDefined();
+        expect(response.headers.get('X-RateLimit-Remaining')).toBeDefined();
+    });
 
     it('should block requests that exceed rate limit', async () => {
+        const req = createMockRequest('http://localhost/api/wallet/create');
         const rateLimitModule = require('@/lib/utils/rateLimiter');
         rateLimitModule.rateLimit.mockResolvedValueOnce({
             success: false,
@@ -151,16 +236,6 @@ describe('Middleware Integration', () => {
             blocked: true
         });
 
-        const headers = new Headers({
-            'x-user-id': 'test-user',  // Add this to prevent the undefined error
-            'cookie': ''
-        });
-        
-        const req = new NextRequest(new URL('http://localhost/api/wallet/create'), {
-            method: 'POST',
-            headers
-        });
-
         const response = await middleware(req);
         expect(response.status).toBe(429);
         const data = await response.json();
@@ -168,29 +243,20 @@ describe('Middleware Integration', () => {
     });
 
     it('should allow requests within rate limit', async () => {
+        const req = createMockRequest('http://localhost/api/wallet/create');
         mockRedis.get.mockResolvedValueOnce(JSON.stringify({
             count: 2,
             timestamp: Date.now()
         }))
-
-        const req = new NextRequest(new URL('http://localhost/api/wallet/create'), {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer valid-token'
-            }
-        })
 
         const response = await middleware(req)
         expect(response.status).not.toBe(429)
     })
 
     it('should handle rate limiter failures gracefully', async () => {
+        const req = createMockRequest('http://localhost/api/wallet/create');
         const rateLimitModule = require('@/lib/utils/rateLimiter');
         rateLimitModule.rateLimit.mockRejectedValueOnce(new Error('Redis connection failed'));
-
-        const req = new NextRequest(new URL('http://localhost/api/wallet/create'), {
-            method: 'POST'
-        });
 
         const response = await middleware(req);
         expect(response.status).toBe(503);
@@ -208,4 +274,36 @@ describe('Middleware Integration', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('X-RateLimit-Limit')).toBeNull();
     })
+
+    it('should handle Redis connection failures', async () => {
+        const req = createMockRequest('http://localhost/api/wallet/create');
+        (getRedisInstance as jest.Mock).mockImplementation(() => {
+            throw new Error('Redis connection failed');
+        });
+
+        const response = await middleware(req);
+        expect(response.status).toBe(503);
+        
+        const data = await response.json();
+        expect(data.error).toBe('Service temporarily unavailable');
+        expect(data.details.code).toBe('RATE_LIMIT_ERROR');
+    });
+
+    it('should handle rate limit monitoring failures gracefully', async () => {
+        const req = createMockRequest('http://localhost/api/wallet/create');
+        
+        // Mock pipeline to throw error
+        mockRedis.pipeline.mockImplementation(() => {
+            throw new Error('Redis connection failed');
+        });
+
+        // Mock getRedisInstance to ensure error propagates
+        (getRedisInstance as jest.Mock).mockImplementation(() => {
+            throw new Error('Redis connection failed');
+        });
+
+        const response = await middleware(req);
+        expect(response.status).toBe(503);
+        expect(response.headers.get('Retry-After')).toBe('60');
+    });
 }) 

@@ -1,17 +1,27 @@
-import { rateLimit } from './rateLimiter';
+import { rateLimit, getRedisInstance } from './rateLimiter';
 import { NextRequest } from 'next/server';
 import { Redis } from '@upstash/redis';
 
-const MockRedis = Redis as unknown as jest.Mock;
-
+// Mock the Redis client according to Upstash's actual response format
 jest.mock('@upstash/redis', () => ({
     Redis: jest.fn().mockImplementation(() => ({
-        pipeline: jest.fn(() => ({
-            incr: jest.fn(),
-            pexpire: jest.fn(),
-            exec: jest.fn().mockResolvedValue([1])
-        })),
-        pexpire: jest.fn().mockResolvedValue(true)
+        multi: jest.fn().mockReturnValue({
+            get: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([null])
+        }),
+        pipeline: jest.fn().mockReturnValue({
+            incr: jest.fn().mockReturnThis(),
+            pexpire: jest.fn().mockReturnThis(),
+            get: jest.fn().mockReturnThis(),
+            setex: jest.fn().mockReturnThis(),
+            expire: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([
+                [null, 1],
+                [null, true],
+                [null, 1],
+                [null, true]
+            ])
+        })
     }))
 }));
 
@@ -24,64 +34,44 @@ describe('Rate Limiter', () => {
             headers: new Headers()
         } as NextRequest;
         
-        // Clear all mocks before each test
+        // Mock cookies
+        Object.defineProperty(mockRequest, 'cookies', {
+            get: () => new Map([['session', { value: 'test-session' }]])
+        });
+        
         jest.clearAllMocks();
     });
 
     it('should allow requests within limit', async () => {
         const result = await rateLimit(mockRequest, 'auth');
-        
-        expect(result.success).toBe(true);
+        expect(result.blocked).toBe(false);
         expect(result.remaining).toBeGreaterThan(0);
-        expect(result.limit).toBe(5); // auth limit from config
+        expect(result.limit).toBe(5);
     });
 
     it('should block requests over limit', async () => {
-        // Reset Redis mock first
-        jest.resetModules();
-        jest.clearAllMocks();
-        
-        // Mock Redis to return count above the auth limit (which is 5)
-        console.log('Setting up mock with over-limit count');
-        const mockPipeline = {
-            incr: jest.fn(),
-            pexpire: jest.fn(),
-            exec: jest.fn(() => {
-                console.log('Pipeline exec called');
-                return Promise.resolve([6]);  // Should trigger rate limit
-            })
-        };
-        console.log('Created pipeline mock:', mockPipeline);
+        // Get the singleton Redis instance
+        const redis = getRedisInstance();
 
-        const mockRedisInstance = {
-            pipeline: jest.fn(() => {
-                console.log('Pipeline called, returning:', mockPipeline);
-                return mockPipeline;
-            }),
-            pexpire: jest.fn().mockResolvedValue(true)
-        };
-        console.log('Created Redis instance:', mockRedisInstance);
-
-        // Reset the Redis mock implementation
-        jest.mock('@upstash/redis', () => ({
-            Redis: jest.fn(() => mockRedisInstance)
-        }), { virtual: true });
-
-        // Re-import the rateLimit function to use new mock
-        const { rateLimit: rateLimitFn } = await import('./rateLimiter');
+        // Mock the pipeline method to return over-limit values
+        jest.spyOn(redis, 'pipeline').mockReturnValue({
+            incr: jest.fn().mockReturnThis(),
+            pexpire: jest.fn().mockReturnThis(),
+            get: jest.fn().mockReturnThis(),
+            setex: jest.fn().mockReturnThis(),
+            expire: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([
+                [null, 6],  // First incr returns 6 (over limit)
+                [null, true],
+                [null, 6],  // Second incr returns 6 (over limit)
+                [null, true],
+                [null, '0'],  // blockCount
+                [null, true]
+            ])
+        } as any);
         
-        console.log('Calling rateLimit');
-        const result = await rateLimitFn(mockRequest, 'auth');
-        console.log('Rate limit result:', result);
-        
-        // Add debug logs for pipeline execution
-        console.log('Pipeline exec calls:', mockPipeline.exec.mock.calls.length);
-        console.log('Pipeline exec results:', mockPipeline.exec.mock.results);
-        
-        // Verify the mock was actually used
-        expect(mockRedisInstance.pipeline).toHaveBeenCalled();
-        expect(mockPipeline.exec).toHaveBeenCalled();
-        expect(result.success).toBe(false);
+        const result = await rateLimit(mockRequest, 'auth');
+        expect(result.blocked).toBe(true);
         expect(result.remaining).toBe(0);
     });
 
@@ -96,17 +86,45 @@ describe('Rate Limiter', () => {
     });
 
     it('should reset after window expires', async () => {
-        // Mock time
         jest.useFakeTimers();
         const now = Date.now();
         
+        const redis = getRedisInstance();
+        
         // First request
+        jest.spyOn(redis, 'pipeline').mockReturnValue({
+            incr: jest.fn().mockReturnThis(),
+            pexpire: jest.fn().mockReturnThis(),
+            get: jest.fn().mockReturnThis(),
+            setex: jest.fn().mockReturnThis(),
+            expire: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([
+                [null, 1],  // First request count
+                [null, true],
+                [null, 1],
+                [null, true]
+            ])
+        } as any);
+        
         const result1 = await rateLimit(mockRequest, 'auth');
         
-        // Advance time past window
         jest.setSystemTime(now + 61000); // 61 seconds later
         
-        // Next request should have full limit
+        // Second request after window expires
+        jest.spyOn(redis, 'pipeline').mockReturnValue({
+            incr: jest.fn().mockReturnThis(),
+            pexpire: jest.fn().mockReturnThis(),
+            get: jest.fn().mockReturnThis(),
+            setex: jest.fn().mockReturnThis(),
+            expire: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([
+                [null, 1],  // New window starts at 1
+                [null, true],
+                [null, 1],
+                [null, true]
+            ])
+        } as any);
+        
         const result2 = await rateLimit(mockRequest, 'auth');
         
         expect(result2.remaining).toBe(result2.limit - 1);
@@ -115,13 +133,18 @@ describe('Rate Limiter', () => {
     });
 
     it('should handle Redis errors gracefully', async () => {
-        MockRedis.mockImplementationOnce(() => ({
-            pipeline: jest.fn(() => {
-                throw new Error('Redis connection error');
-            })
-        }));
+        const redis = getRedisInstance();
+        
+        // Mock both multi and pipeline to throw errors
+        jest.spyOn(redis, 'multi').mockImplementation(() => {
+            throw new Error('Redis connection error');
+        });
+        
+        jest.spyOn(redis, 'pipeline').mockImplementation(() => {
+            throw new Error('Redis connection error');
+        });
 
         const result = await rateLimit(mockRequest, 'auth');
-        expect(result.success).toBe(true);
+        expect(result.blocked).toBe(false);
     });
 }); 

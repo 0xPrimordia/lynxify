@@ -1,143 +1,128 @@
 import { Redis } from '@upstash/redis';
 import { NextRequest } from 'next/server';
+import { 
+    RateLimitResult, 
+    RateLimitType, 
+    RateLimitConfig, 
+    RateLimitKey,
+    RATE_LIMIT_CONFIGS 
+} from '@/app/types';
 
-interface RateLimitResult {
-    success: boolean;
-    limit: number;
-    remaining: number;
-    reset: number;
-    blocked?: boolean;
-}
-
-// Check if we're in development mode
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-const redis = isDevelopment ? null : new Redis({
-    url: `https://${process.env.UPSTASH_REDIS_REST_URL}`,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN
+const redis = new Redis({
+    url: `https://${process.env.UPSTASH_REDIS_REST_URL!}`,
+    token: process.env.UPSTASH_REDIS_PASSWORD!
 });
 
-interface RateLimitConfig {
-    maxRequests: number;  // Maximum requests allowed
-    windowMs: number;     // Time window in milliseconds
-    blockDuration?: number;
-    increaseFactor?: number;  // For progressive delays
-}
-
-interface RateLimitKey {
-    ip: string;
-    userId?: string;
-    sessionId?: string;
-    type: string;
-}
-
-const RATE_LIMIT_CONFIGS: { [key: string]: RateLimitConfig } = {
-    'auth': { 
-        maxRequests: 5, 
-        windowMs: 60 * 1000,
-        blockDuration: 15 * 60 * 1000,  // 15 minutes
-        increaseFactor: 2  // Double the block duration on repeated violations
-    },
-    'wallet': { 
-        maxRequests: 10, 
-        windowMs: 60 * 1000,
-        blockDuration: 30 * 60 * 1000,  // 30 minutes
-        increaseFactor: 3
-    },
-    'reset': { maxRequests: 3, windowMs: 60 * 60 * 1000 },   // 3 requests per hour
-    'create': { maxRequests: 2, windowMs: 60 * 60 * 1000 },  // 2 account creations per hour
-    'backup': { maxRequests: 5, windowMs: 60 * 1000 },       // 5 backup attempts per minute
-    'sign': { maxRequests: 20, windowMs: 60 * 1000 }         // 20 signing requests per minute
-};
-
-// Create a type for our mock Redis
-type MockRedis = {
-    incr: () => Promise<number>;
-    expire: () => Promise<boolean>;
-    pexpire: () => Promise<boolean>;
-    get: () => Promise<null>;
-    keys: () => Promise<string[]>;
-    del: (...keys: string[]) => Promise<number>;
-    pipeline: () => {
-        incr: () => MockRedis;
-        pexpire: () => MockRedis;
-        exec: () => Promise<[null, number][]>;
-    };
-};
-
-// Add pipeline support to mock with proper typing
-const mockRedis: MockRedis = {
-    incr: async () => 1,
-    expire: async () => true,
-    pexpire: async () => true,
-    get: async () => null,
-    keys: async () => [] as string[],
-    del: async (...keys: string[]) => 1,
-    pipeline: () => ({
-        incr: () => mockRedis,
-        pexpire: () => mockRedis,
-        exec: async () => [[null, 1]]
-    })
-};
-
-// Export the Redis instance or mock based on environment with proper typing
-export const getRedisInstance = () => isDevelopment ? mockRedis : (redis || mockRedis);
+export const getRedisInstance = () => redis;
 
 async function checkBlockedStatus(redis: Redis, blockKeys: string[]): Promise<{ isBlocked: boolean; reset?: number }> {
-    const pipeline = redis.pipeline();
-    blockKeys.forEach(key => pipeline.get(key));
-    const results = await pipeline.exec();
-    
-    for (const result of results) {
-        if (result && typeof result === 'string') {
-            const blockData = JSON.parse(result);
-            if (blockData.until > Date.now()) {
-                return { isBlocked: true, reset: blockData.until };
+    try {
+        if (!blockKeys.length) return { isBlocked: false };
+        
+        console.log('Checking block status for keys:', blockKeys);
+        const multi = redis.multi();
+        for (const key of blockKeys) {
+            multi.get(key);
+        }
+        
+        const results = await multi.exec();
+        console.log('Multi results:', results);
+        
+        // Upstash returns a flat array of results
+        if (!Array.isArray(results)) {
+            console.error('Expected array result, got:', typeof results);
+            return { isBlocked: false };
+        }
+
+        for (const result of results) {
+            if (!result) continue;
+            try {
+                const blockData = JSON.parse(result as string);
+                if (blockData?.until > Date.now()) {
+                    return { isBlocked: true, reset: blockData.until };
+                }
+            } catch (e) {
+                console.error('Failed to parse block data:', result, e);
             }
         }
+        return { isBlocked: false };
+    } catch (error) {
+        console.error('checkBlockedStatus error:', error);
+        return { isBlocked: false };
     }
-    return { isBlocked: false };
 }
 
 async function updateRateLimits(redis: Redis, keys: Record<string, string | null>, config: RateLimitConfig): Promise<RateLimitResult> {
-    const now = Date.now();
-    const pipeline = redis.pipeline();
-    const windowKey = `window:${now}`;
-    
-    // Add requests to each level's window
-    Object.values(keys).filter(Boolean).forEach(key => {
-        pipeline.incr(`${key}:${windowKey}`);
-        pipeline.pexpire(`${key}:${windowKey}`, config.windowMs);
-    });
-    
-    const results = await pipeline.exec() as [Error | null, number][];
-    const maxCount = Math.max(...results.map(([err, val]) => (err ? 0 : val) || 0));
-    
-    if (maxCount > config.maxRequests) {
-        // Calculate progressive block duration
-        const blockDuration = config.blockDuration || config.windowMs;
-        const previousBlocks = await getPreviousBlockCount(redis, keys);
-        const increaseFactor = config.increaseFactor || 1;
-        const actualBlockDuration = blockDuration * Math.pow(increaseFactor, previousBlocks);
+    try {
+        const { maxRequests, windowMs } = config;
+        const now = Date.now();
+        const windowKey = `window:${Math.floor(now / windowMs)}`;
         
-        // Apply blocks
-        await applyRateLimit(redis, keys, actualBlockDuration);
+        console.log('Keys for rate limit:', keys);
+        
+        const validKeys = Object.values(keys).filter(Boolean) as string[];
+        console.log('Valid keys for pipeline:', validKeys);
+        
+        const pipeline = redis.pipeline();
+        validKeys.forEach(key => {
+            const windowedKey = `${key}:${windowKey}`;
+            console.log('Adding pipeline operations for key:', windowedKey);
+            pipeline.incr(windowedKey);
+            pipeline.pexpire(windowedKey, windowMs);
+        });
+        
+        // Add operation to get block count
+        pipeline.get(`${validKeys[0]}:block`);
+        pipeline.expire(`${validKeys[0]}:block`, windowMs);
+        
+        const results = await pipeline.exec();
+        console.log('Pipeline execution results:', results);
+        
+        if (!Array.isArray(results)) {
+            console.error('Expected array result, got:', typeof results);
+            return {
+                blocked: false,
+                limit: maxRequests,
+                remaining: maxRequests,
+                reset: now + windowMs
+            };
+        }
+        
+        // Filter out the results to get just the counts (every other result is from pexpire)
+        const counts = results
+            .filter((_, i) => i % 2 === 0) // Get only the incr results
+            .map(result => {
+                if (Array.isArray(result)) {
+                    const [err, value] = result;
+                    if (err) {
+                        console.error('Redis error:', err);
+                        return 0;
+                    }
+                    return typeof value === 'number' ? value : parseInt(value as string) || 0;
+                }
+                return 0;
+            });
+        
+        console.log('Filtered counts:', counts);
+        
+        const maxCount = Math.max(...counts);
+        console.log('Max count:', maxCount);
         
         return {
-            success: false,
+            blocked: maxCount > maxRequests,
+            limit: maxRequests,
+            remaining: Math.max(0, maxRequests - maxCount),
+            reset: now + windowMs
+        };
+    } catch (error) {
+        console.error('updateRateLimits error:', error);
+        return {
+            blocked: false,
             limit: config.maxRequests,
-            remaining: 0,
-            reset: now + actualBlockDuration,
-            blocked: true
+            remaining: config.maxRequests,
+            reset: Date.now() + config.windowMs
         };
     }
-    
-    return {
-        success: true,
-        limit: config.maxRequests,
-        remaining: config.maxRequests - maxCount,
-        reset: now + config.windowMs
-    };
 }
 
 async function getPreviousBlockCount(redis: Redis, keys: Record<string, string | null>): Promise<number> {
@@ -157,7 +142,6 @@ async function applyRateLimit(redis: Redis, keys: Record<string, string | null>,
     });
     
     Object.values(keys).filter(Boolean).forEach(key => {
-        // Use setex instead of set with PX option for better type compatibility
         pipeline.setex(`${key}:blocked`, Math.ceil(duration / 1000), blockData);
         pipeline.incr(`${key}:blockCount`);
         pipeline.expire(`${key}:blockCount`, 24 * 60 * 60);
@@ -167,12 +151,10 @@ async function applyRateLimit(redis: Redis, keys: Record<string, string | null>,
 }
 
 export async function rateLimit(request: NextRequest, type: keyof typeof RATE_LIMIT_CONFIGS): Promise<RateLimitResult> {
-    const redisInstance = getRedisInstance() as Redis;
     const config = RATE_LIMIT_CONFIGS[type];
     
-    // Extract identifiers (from previous implementation)
     const keys = {
-        ip: `ratelimit:${type}:ip:${request.ip}`,
+        ip: `ratelimit:${type}:ip:${request.ip || request.headers.get('x-forwarded-for') || 'unknown'}`,
         session: request.cookies.get('session')?.value 
             ? `ratelimit:${type}:session:${request.cookies.get('session')?.value}`
             : null,
@@ -181,23 +163,21 @@ export async function rateLimit(request: NextRequest, type: keyof typeof RATE_LI
             : null
     };
 
-    // Check blocked status
     const blockedStatus = await checkBlockedStatus(
-        redisInstance,
+        redis,
         Object.values(keys).filter((key): key is string => key !== null)
     );
+
     if (blockedStatus.isBlocked) {
         return {
-            success: false,
+            blocked: true,
             limit: config.maxRequests,
             remaining: 0,
-            reset: blockedStatus.reset!,
-            blocked: true
+            reset: blockedStatus.reset!
         };
     }
 
-    // Update and check rate limits
-    return updateRateLimits(redisInstance, keys, config);
+    return updateRateLimits(redis, keys, config);
 }
 
 export const rateLimitAttempt = async (key: string, maxAttempts = 5) => {

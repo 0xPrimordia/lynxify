@@ -1,7 +1,7 @@
 import { POST } from './route';
 import { cookies } from 'next/headers';
 import { createServerSupabase } from '@/utils/supabase';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Client, AccountCreateTransaction, Hbar, PrivateKey, AccountId } from "@hashgraph/sdk";
 import { rewardNewWallet } from '@/lib/utils/tokenRewards';
 
@@ -16,7 +16,12 @@ jest.mock('next/headers', () => ({
 
 // Mock rate limiter
 jest.mock('@/middleware/rateLimiter', () => ({
-    rateLimiterMiddleware: jest.fn().mockResolvedValue({ status: 200 })
+    rateLimiterMiddleware: jest.fn().mockImplementation(async (req, type) => {
+        // Default implementation returns success
+        return {
+            status: 200
+        };
+    })
 }));
 
 // Mock Hedera SDK
@@ -740,5 +745,41 @@ describe('POST /api/wallet/create-account', () => {
         const data = await response.json();
         expect(data).toHaveProperty('accountId');
         expect(data).toHaveProperty('privateKey');
+    });
+
+    it('should handle rate limiter failures', async () => {
+        jest.clearAllMocks();
+        
+        const { rateLimiterMiddleware } = require('@/middleware/rateLimiter');
+        (rateLimiterMiddleware as jest.Mock).mockReset();
+        (rateLimiterMiddleware as jest.Mock).mockResolvedValueOnce(
+            NextResponse.json(
+                { 
+                    error: 'Too Many Requests',
+                    retryAfter: 60
+                },
+                { 
+                    status: 429,  // Changed to 429 to match route check
+                    headers: {
+                        'Retry-After': '60'
+                    }
+                }
+            )
+        );
+
+        const headers = new Headers();
+        headers.set('x-user-id', 'test-user-id');
+        headers.set('Content-Type', 'application/json');
+
+        const req = {
+            method: 'POST',
+            headers,
+            json: () => Promise.resolve({ password: 'test-password' })
+        } as NextRequest;
+
+        const response = await POST(req);
+        expect(response.status).toBe(429);  // Updated expectation
+        const data = await response.json();
+        expect(data.error).toBe('Too Many Requests');
     });
 }); 
