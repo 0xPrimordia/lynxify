@@ -21,9 +21,9 @@ export default function ExportPage() {
         setIsLoading(true);
         
         try {
-            const decryptedKey = await loadWallet(password);
-            if (!decryptedKey) throw new Error('Failed to load wallet');
-            setPrivateKey(decryptedKey.toString());
+            const walletData = await loadWallet(password);
+            if (!walletData) throw new Error('Failed to load wallet');
+            setPrivateKey(walletData.toString());
             setShowKey(true);
             
             // Auto-hide after 5 minutes
