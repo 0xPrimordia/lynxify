@@ -24,38 +24,87 @@ jest.mock('next/dist/compiled/@edge-runtime/cookies', () => ({
     }))
 }))
 
-jest.mock('@upstash/redis')
+// Add SecurityMonitor mock with proper error handling
+jest.mock('@/lib/monitoring/security', () => ({
+    SecurityMonitor: jest.fn().mockImplementation(() => ({
+        logEvent: jest.fn().mockImplementation((req, event) => {
+            // Ensure we can handle undefined headers gracefully
+            if (!req?.headers) {
+                return Promise.resolve();
+            }
+            return Promise.resolve();
+        })
+    }))
+}));
+
+// Update rateLimiter mock to include Redis instance
 jest.mock('@/lib/utils/rateLimiter', () => ({
     getRedisInstance: jest.fn(),
     rateLimit: jest.fn().mockImplementation(() => Promise.resolve({
         limit: 5,
         remaining: 4,
         success: true,
-        toString: () => 'rate-limit-key'
-    }))
-}))
+        reset: Date.now() + 60000,
+        blocked: false
+    })),
+    getRateLimitType: jest.fn().mockImplementation((pathname) => {
+        if (pathname.includes('/api/wallet/create')) return 'create';
+        if (pathname.includes('/api/wallet')) return 'wallet';
+        return null;
+    })
+}));
 
 // Mock NextResponse.json to return a proper Response object
 const mockJson = jest.fn().mockImplementation((body, init) => {
-    const headers = new Headers(init?.headers)
-    const statusCode = init?.status || 200
+    const headers = new Headers(init?.headers || {})
     const response = new Response(JSON.stringify(body), {
         ...init,
         headers,
-        status: statusCode
+        status: init?.status || 200
     })
-    // Create a new headers object to avoid recursion
-    const responseHeaders = new Headers(response.headers)
+    
+    // Ensure headers are properly accessible
     Object.defineProperty(response, 'headers', {
-        get: () => responseHeaders
+        get: () => headers,
+        enumerable: true,
+        configurable: true
     })
-    // Store status separately to avoid recursion
+    
+    // Ensure status is properly accessible
     Object.defineProperty(response, 'status', {
-        get: () => statusCode
+        get: () => init?.status || 200,
+        enumerable: true,
+        configurable: true
     })
+    
+    // Add json method
+    response.json = () => Promise.resolve(body)
     return response
 })
 NextResponse.json = mockJson
+
+// Mock NextResponse.next to return a proper Response object
+const mockNext = jest.fn().mockImplementation(() => {
+    const headers = new Headers()
+    const response = new Response(null, { status: 200 })
+    
+    // Ensure headers are properly accessible
+    Object.defineProperty(response, 'headers', {
+        get: () => headers,
+        enumerable: true,
+        configurable: true
+    })
+    
+    // Ensure status is properly accessible
+    Object.defineProperty(response, 'status', {
+        get: () => 200,
+        enumerable: true,
+        configurable: true
+    })
+    
+    return response
+})
+NextResponse.next = mockNext
 
 describe('Middleware Integration', () => {
     let mockRedis: jest.Mocked<Redis>
@@ -93,20 +142,30 @@ describe('Middleware Integration', () => {
     })
 
     it('should block requests that exceed rate limit', async () => {
-        mockRedis.get.mockResolvedValueOnce(JSON.stringify({
-            count: 6,
-            timestamp: Date.now()
-        }))
+        const rateLimitModule = require('@/lib/utils/rateLimiter');
+        rateLimitModule.rateLimit.mockResolvedValueOnce({
+            success: false,
+            limit: 5,
+            remaining: 0,
+            reset: Date.now() + 60000,
+            blocked: true
+        });
 
+        const headers = new Headers({
+            'x-user-id': 'test-user',  // Add this to prevent the undefined error
+            'cookie': ''
+        });
+        
         const req = new NextRequest(new URL('http://localhost/api/wallet/create'), {
-            method: 'POST'
-        })
+            method: 'POST',
+            headers
+        });
 
-        const response = await middleware(req)
-        expect(response.status).toBe(429)
-        const data = await response.json()
-        expect(data.error).toBe('Too many requests')
-    })
+        const response = await middleware(req);
+        expect(response.status).toBe(429);
+        const data = await response.json();
+        expect(data.error).toBe('Too many requests');
+    });
 
     it('should allow requests within rate limit', async () => {
         mockRedis.get.mockResolvedValueOnce(JSON.stringify({
@@ -126,24 +185,27 @@ describe('Middleware Integration', () => {
     })
 
     it('should handle rate limiter failures gracefully', async () => {
-        mockRedis.get.mockRejectedValueOnce(new Error('Redis connection failed'))
+        const rateLimitModule = require('@/lib/utils/rateLimiter');
+        rateLimitModule.rateLimit.mockRejectedValueOnce(new Error('Redis connection failed'));
 
         const req = new NextRequest(new URL('http://localhost/api/wallet/create'), {
             method: 'POST'
-        })
+        });
 
-        const response = await middleware(req)
-        expect(response.status).toBe(503)
-        const data = await response.json()
-        expect(data.error).toBe('Service temporarily unavailable')
-    })
+        const response = await middleware(req);
+        expect(response.status).toBe(503);
+        const data = await response.json();
+        expect(data.error).toBe('Service temporarily unavailable');
+    });
 
     it('should skip rate limiting for non-API routes', async () => {
         const req = new NextRequest(new URL('http://localhost/about'), {
             method: 'GET'
-        })
+        });
 
-        const response = await middleware(req)
-        expect(response.headers.get('X-RateLimit-Limit')).toBeNull()
+        const response = await middleware(req);
+        // For non-API routes, middleware returns NextResponse.next()
+        expect(response.status).toBe(200);
+        expect(response.headers.get('X-RateLimit-Limit')).toBeNull();
     })
 }) 
