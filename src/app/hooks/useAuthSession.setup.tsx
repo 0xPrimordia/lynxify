@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { WalletContext } from './useWallet';
 import { InAppWalletContext } from '../contexts/InAppWalletContext';
 import { SessionState } from '@/utils/supabase/session';
-import { Client } from '@hashgraph/sdk';
+import { Client, PrivateKey } from '@hashgraph/sdk';
 import { Session, User } from '@supabase/supabase-js';
 // Define strict mock state type
 type MockSessionState = {
@@ -21,6 +21,9 @@ type MockSessionState = {
         error: string | null;
     };
 };
+
+// Create a consistent private key for testing
+const TEST_PRIVATE_KEY = PrivateKey.fromString('302e020100300506032b657004220420e6bc422f0fcf7370bc7ae7047efd9c45dad257867c40ff32381f5d96883b1405');
 
 export const mockWalletContext = {
     account: "",
@@ -65,13 +68,24 @@ export const mockWalletContext = {
 };
 
 const mockInAppWalletContext = {
-    inAppAccount: null,
+    inAppAccount: '0.0.123456',
     inAppPrivateKey: null,
-    userId: null,
+    userId: 'test-user-id',
     createWallet: jest.fn(),
-    loadWallet: jest.fn(),
+    loadWallet: jest.fn().mockImplementation(async (password: string) => {
+        if (password === 'correctpassword') {
+            return {
+                success: true,
+                data: TEST_PRIVATE_KEY
+            };
+        }
+        return {
+            success: false,
+            error: 'Invalid password'
+        };
+    }),
     signTransaction: jest.fn(),
-    isInAppWallet: false,
+    isInAppWallet: true,
     backupKey: jest.fn(),
     recoverKey: jest.fn(),
     setInAppAccount: jest.fn(),
@@ -134,4 +148,6 @@ export function resetMocks() {
             error: null
         }
     } as MockSessionState;
-} 
+}
+
+export { TEST_PRIVATE_KEY };  // Export for use in tests 
