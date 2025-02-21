@@ -17,5 +17,11 @@ module.exports = {
     '/node_modules/(?!(@hashgraph/sdk|@hashgraph/hedera-wallet-connect)/)'
   ],
   testMatch: ['**/*.test.tsx', '**/*.test.ts'],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node']
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/.next/',
+    '/hardhat/',
+    '\\.hardhat\\.',
+  ],
 }; 
