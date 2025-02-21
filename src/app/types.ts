@@ -174,3 +174,9 @@ export const RATE_LIMIT_CONFIGS: { [key: string]: RateLimitConfig } = {
     'backup': { maxRequests: 5, windowMs: 60 * 1000 },
     'sign': { maxRequests: 20, windowMs: 60 * 1000 }
 };
+
+export interface WalletOperationResult<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
+}
