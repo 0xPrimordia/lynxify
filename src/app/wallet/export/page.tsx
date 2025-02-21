@@ -22,8 +22,10 @@ export default function ExportPage() {
         
         try {
             const walletData = await loadWallet(password);
-            if (!walletData) throw new Error('Failed to load wallet');
-            setPrivateKey(walletData.toString());
+            if (!walletData.success || !walletData.data) {
+                throw new Error(walletData.error || 'Failed to load wallet');
+            }
+            setPrivateKey(walletData.data.toString());
             setShowKey(true);
             
             // Auto-hide after 5 minutes
@@ -112,6 +114,7 @@ export default function ExportPage() {
                             <button
                                 onClick={() => setShowKey(!showKey)}
                                 className="text-gray-400 hover:text-gray-200 transition-colors"
+                                aria-label="Toggle private key visibility"
                             >
                                 {showKey ? (
                                     <EyeSlashIcon className="h-5 w-5" />
@@ -121,12 +124,16 @@ export default function ExportPage() {
                             </button>
                         </div>
                         <div className="relative">
-                            <div className="font-mono bg-gray-900 border border-gray-700 p-3 rounded break-all text-gray-100">
+                            <div 
+                                className="font-mono bg-gray-900 border border-gray-700 p-3 rounded break-all text-gray-100"
+                                data-testid="private-key-display"
+                            >
                                 {showKey ? privateKey : '•'.repeat(64)}
                             </div>
                             <button
                                 onClick={copyToClipboard}
                                 className="absolute right-2 top-2 text-gray-400 hover:text-gray-200 transition-colors"
+                                aria-label="Copy to clipboard"
                             >
                                 {copied ? (
                                     <CheckCircleIcon className="h-5 w-5 text-emerald-500" />
