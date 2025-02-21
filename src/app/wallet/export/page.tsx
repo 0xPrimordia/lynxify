@@ -5,6 +5,7 @@ import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { Button, Input } from "@nextui-org/react";
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { PrivateKey } from "@hashgraph/sdk";
 
 export default function ExportPage() {
     const { loadWallet, inAppAccount } = useInAppWallet();
@@ -21,11 +22,23 @@ export default function ExportPage() {
         setIsLoading(true);
         
         try {
-            const walletData = await loadWallet(password);
-            if (!walletData.success || !walletData.data) {
-                throw new Error(walletData.error || 'Failed to load wallet');
+            const result = await loadWallet(password);
+            if (!result.success || !result.data) {
+                throw new Error(result.error || 'Failed to load wallet');
             }
-            setPrivateKey(walletData.data.toString());
+
+            // Ensure we have a valid PrivateKey object
+            if (!(result.data instanceof PrivateKey)) {
+                throw new Error('Invalid private key format');
+            }
+
+            // Convert to string representation
+            const keyString = result.data.toString();
+            if (!keyString) {
+                throw new Error('Failed to convert private key to string');
+            }
+
+            setPrivateKey(keyString);
             setShowKey(true);
             
             // Auto-hide after 5 minutes
@@ -34,7 +47,7 @@ export default function ExportPage() {
                 setPrivateKey(null);
             }, 5 * 60 * 1000);
         } catch (err) {
-            setError('Invalid password');
+            setError(err instanceof Error ? err.message : 'Invalid password');
         } finally {
             setIsLoading(false);
         }

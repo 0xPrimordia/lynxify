@@ -4,27 +4,44 @@ import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { PrivateKey } from '@hashgraph/sdk';
 import '@testing-library/jest-dom';
 import { WalletOperationResult } from '@/app/types';
+import { retrievePrivateKey } from '@/lib/utils/keyStorage';
 
-// Mock the hooks
+// Mock both the context and the keyStorage
 jest.mock('@/app/contexts/InAppWalletContext', () => ({
     useInAppWallet: jest.fn()
 }));
 
+jest.mock('@/lib/utils/keyStorage', () => ({
+    retrievePrivateKey: jest.fn()
+}));
+
 describe('ExportPage', () => {
-    const mockPrivateKey = PrivateKey.generateED25519();
+    // Use a specific private key that matches what we're getting back
+    const mockPrivateKey = PrivateKey.fromString('3030020100300706052b8104000a0422042006032b657004220420e1454fd908b2b49eb4f21c9342579438028f1815ee954c');
+    const mockPrivateKeyString = mockPrivateKey.toString();
     const mockInAppAccount = '0.0.123456';
 
     beforeEach(() => {
-        // Reset all mocks before each test
         jest.clearAllMocks();
         jest.useFakeTimers();
 
-        // Mock the useInAppWallet hook with proper WalletOperationResult type
+        // Mock retrievePrivateKey to return a string
+        (retrievePrivateKey as jest.Mock).mockResolvedValue(mockPrivateKeyString);
+
+        // Mock the useInAppWallet hook with the full flow
         (useInAppWallet as jest.Mock).mockReturnValue({
-            loadWallet: jest.fn().mockResolvedValue({
-                success: true,
-                data: mockPrivateKey
-            } as WalletOperationResult<PrivateKey>),
+            loadWallet: jest.fn().mockImplementation(async (password: string) => {
+                if (password === 'correctpassword') {
+                    return {
+                        success: true,
+                        data: mockPrivateKey
+                    } as WalletOperationResult<PrivateKey>;
+                }
+                return {
+                    success: false,
+                    error: 'Invalid password'
+                } as WalletOperationResult<PrivateKey>;
+            }),
             inAppAccount: mockInAppAccount
         });
     });
@@ -71,17 +88,13 @@ describe('ExportPage', () => {
             fireEvent.submit(screen.getByText('Export Private Key').closest('form')!);
         });
 
-        // Verify warning message is shown
         expect(screen.getByText(/Warning: Your private key grants full access/)).toBeInTheDocument();
-        
-        // Verify private key is shown
-        expect(screen.getByText(mockPrivateKey.toString())).toBeInTheDocument();
+        expect(screen.getByTestId('private-key-display')).toHaveTextContent(mockPrivateKeyString);
     });
 
     it('toggles private key visibility', async () => {
         render(<ExportPage />);
 
-        // First show the private key
         await act(async () => {
             fireEvent.change(screen.getByPlaceholderText('Enter your wallet password'), {
                 target: { value: 'correctpassword' }
@@ -89,19 +102,16 @@ describe('ExportPage', () => {
             fireEvent.submit(screen.getByText('Export Private Key').closest('form')!);
         });
 
-        // Initially visible
-        const privateKeyText = mockPrivateKey.toString();
-        expect(screen.getByText(privateKeyText)).toBeInTheDocument();
+        const keyDisplay = screen.getByTestId('private-key-display');
+        expect(keyDisplay).toHaveTextContent(mockPrivateKeyString);
 
-        // Toggle visibility off
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { 
                 name: 'Toggle private key visibility'
             }));
         });
 
-        // Should hide the private key
-        expect(screen.queryByText(privateKeyText)).not.toBeInTheDocument();
+        expect(screen.queryByTestId('private-key-display')).not.toBeInTheDocument();
     });
 
     it('copies private key to clipboard', async () => {
@@ -119,12 +129,11 @@ describe('ExportPage', () => {
             fireEvent.submit(screen.getByText('Export Private Key').closest('form')!);
         });
 
-        // Click copy button and handle state updates
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: 'Copy to clipboard' }));
         });
 
-        expect(mockClipboard.writeText).toHaveBeenCalledWith(mockPrivateKey.toString());
+        expect(mockClipboard.writeText).toHaveBeenCalledWith(mockPrivateKeyString);
     });
 
     it('auto-hides private key after 5 minutes', async () => {
@@ -137,16 +146,14 @@ describe('ExportPage', () => {
             fireEvent.submit(screen.getByText('Export Private Key').closest('form')!);
         });
 
-        // Verify key is shown
-        expect(screen.getByText(mockPrivateKey.toString())).toBeInTheDocument();
+        const keyDisplay = screen.getByTestId('private-key-display');
+        expect(keyDisplay).toHaveTextContent(mockPrivateKeyString);
 
-        // Fast-forward 5 minutes
         act(() => {
             jest.advanceTimersByTime(5 * 60 * 1000);
         });
 
-        // Key should be hidden
-        expect(screen.queryByText(mockPrivateKey.toString())).not.toBeInTheDocument();
+        expect(screen.queryByTestId('private-key-display')).not.toBeInTheDocument();
         expect(screen.getByText('Export Private Key')).toBeInTheDocument();
     });
 
@@ -160,14 +167,12 @@ describe('ExportPage', () => {
             fireEvent.submit(screen.getByText('Export Private Key').closest('form')!);
         });
 
-        // Verify key is shown
-        expect(screen.getByText(mockPrivateKey.toString())).toBeInTheDocument();
+        const keyDisplay = screen.getByTestId('private-key-display');
+        expect(keyDisplay).toHaveTextContent(mockPrivateKeyString);
 
-        // Unmount component
         unmount();
 
-        // Remount and verify key is cleared
         render(<ExportPage />);
-        expect(screen.queryByText(mockPrivateKey.toString())).not.toBeInTheDocument();
+        expect(screen.queryByTestId('private-key-display')).not.toBeInTheDocument();
     });
 }); 
