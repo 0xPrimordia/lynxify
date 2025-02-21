@@ -21,13 +21,15 @@ function VerifyEmailPage() {
                     </div>
                 ) : (
                     <>
-                        <Alert 
-                            className="mb-6"
-                            color="success"
-                        >
-                            Your email has been verified. Please create your wallet to continue.
-                        </Alert>
                         <CreateWalletForm />
+                        <div className="fixed bottom-4 left-4 z-50">
+                            <Alert 
+                                className="min-w-[300px]"
+                                color="success"
+                            >
+                                Your email has been verified. Please create your wallet to continue.
+                            </Alert>
+                        </div>
                     </>
                 )}
             </div>
