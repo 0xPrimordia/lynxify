@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
-import { encrypt } from '@/lib/utils/encryption';
 import { persistSession } from '@/utils/supabase/session';
 import { passwordSchema } from '@/lib/utils/validation';
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
@@ -176,9 +175,23 @@ export default function CreateWalletForm() {
                     </div>
                 </div>
                 <div className="bg-yellow-900/50 p-4 rounded-lg mb-6 border border-yellow-800">
-                    <p className="text-yellow-200 text-sm">
-                        Important: Save your private key in a secure location. 
-                        You will need it to access your account. It cannot be recovered if lost.
+                    <p className="text-yellow-200 text-sm mb-2">
+                        <span className="font-bold">Important:</span> While this key is stored in your browser, you must back it up externally because:
+                    </p>
+                    <ul className="text-yellow-200 text-sm list-disc pl-4 space-y-1 mb-2">
+                        <li>Browser data can be cleared or lost</li>
+                        <li>The key only works in this browser on this device</li>
+                        <li>There is no way to recover your account without this key</li>
+                    </ul>
+                    <p className="text-yellow-200 text-sm font-bold mb-2">Secure ways to back up your key:</p>
+                    <ul className="text-yellow-200 text-sm list-disc pl-4 space-y-1">
+                        <li>Store on an offline device (USB drive, external hard drive)</li>
+                        <li>Save an encrypted file on your computer (never in plain text)</li>
+                        <li>Write it down and store in a secure, private location</li>
+                        <li>Consider using an air-gapped computer for maximum security</li>
+                    </ul>
+                    <p className="text-yellow-200 text-sm mt-2">
+                        <span className="font-bold">Never</span> store your key in cloud services, emails, or messaging apps.
                     </p>
                 </div>
                 <button
