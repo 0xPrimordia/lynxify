@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Initialize Hedera client
     console.log('[executeOrder] Initializing Hedera client');
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     
     if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY) {
       console.error('[executeOrder] Missing Hedera credentials');

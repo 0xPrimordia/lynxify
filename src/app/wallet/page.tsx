@@ -18,7 +18,7 @@ interface TokenBalance {
     icon?: string;
 }
 
-const client = Client.forTestnet(); // or forMainnet() depending on your environment
+const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
 
 export default function WalletPage() {
     const [isLoading, setIsLoading] = useState(true);
@@ -95,7 +95,7 @@ export default function WalletPage() {
 
                         try {
                             const response = await fetch(
-                                `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? '' : 'testnet.'}mirrornode.hedera.com/api/v1/tokens/${tokenId}`
+                                `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/tokens/${tokenId}`
                             );
                             const tokenData = await response.json();
                             console.log('Token data:', tokenData);

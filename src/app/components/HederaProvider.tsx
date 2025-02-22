@@ -30,12 +30,13 @@ export const useHederaClient = (): HederaContextType => {
 };
 
 export function HederaProvider({ children }: HederaProviderProps) {
-    const hashConnectInstance = new HashConnect(LedgerId.TESTNET, process.env.NEXT_PUBLIC_WALLETCONNECT_ID as string, appMetadata, true);
+    const ledgerId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
+    const hashConnectInstance = new HashConnect(ledgerId, process.env.NEXT_PUBLIC_WALLETCONNECT_ID as string, appMetadata, true);
     const [isConnected, setIsConnected] = useState(false);
     const [hashPairingData, setHashPairingData] = useState<SessionData | null>(null)
     let state: HashConnectConnectionState = HashConnectConnectionState.Disconnected;
 
-    //Create your Hedera Testnet client without an operator
+    //Create your Hedera client without an operator
     const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
 
     async function connectWallet() {

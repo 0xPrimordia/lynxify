@@ -15,7 +15,7 @@ export const useNFTGate = (accountId: string) => {
 
       try {
         const response = await fetch(
-          `https://testnet.mirrornode.hedera.com/api/v1/accounts/${accountId}/nfts?token.id=${NFT_TOKEN_ID}`
+          `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${accountId}/nfts?token.id=${NFT_TOKEN_ID}`
         );
         
         const data = await response.json();

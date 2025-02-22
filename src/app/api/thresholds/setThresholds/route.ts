@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     // Initialize Hedera client
     console.log('Initializing Hedera client...');
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     client.setOperator(
       AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
       PrivateKey.fromString(process.env.OPERATOR_KEY!)

@@ -117,7 +117,7 @@ export default function DexPage() {
     const [poolSearch, setPoolSearch] = useState("");
     const [isUsdInput, setIsUsdInput] = useState(false);
     const [usdAmount, setUsdAmount] = useState("0.0");
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     const { 
         password, 
         setPassword, 
