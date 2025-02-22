@@ -1064,6 +1064,7 @@ export default function DexPage() {
                         alt={selectedPool?.tokenA?.symbol || ''}
                         width={24}
                         height={24}
+                        className="object-contain" // Add this to maintain aspect ratio
                     />
                 </div>
                 <Button
@@ -1085,6 +1086,7 @@ export default function DexPage() {
                         alt={selectedPool?.tokenB?.symbol || ''}
                         width={24}
                         height={24}
+                        className="object-contain" // Add this to maintain aspect ratio
                     />
                 </div>
             </div>
@@ -1190,7 +1192,8 @@ export default function DexPage() {
             <div className="relative">
                 <TestnetAlert />
             </div>
-            <div className="w-full px-8 mb-6">
+            {/* Add mobile padding */}
+            <div className="w-full px-4 md:px-8 mb-6">
                 <div className="flex justify-between items-center">
                     <PoolSelector />
                     <SwapDirectionSelector />
@@ -1211,7 +1214,8 @@ export default function DexPage() {
                             )}
                         </Button>
                     </div>
-                    <div className={`${isChartCollapsed ? 'h-0 lg:h-[calc(100vh-120px)]' : 'h-[500px] lg:h-[calc(100vh-120px)]'} transition-all duration-300`}>
+                    {/* Adjust mobile chart height */}
+                    <div className={`${isChartCollapsed ? 'h-0 lg:h-[calc(100vh-120px)]' : 'h-[80vh] lg:h-[calc(100vh-120px)]'} transition-all duration-300`}>
                         <Tabs 
                             aria-label="section" 
                             selectedKey={selectedSection} 
@@ -1336,7 +1340,8 @@ export default function DexPage() {
                     </div>
                 </div>
 
-                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto lg:pr-8 pb-24">
+                {/* Add mobile padding to swap form */}
+                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto lg:pr-8 pb-24 px-4 lg:px-0">
                     <Tabs 
                         aria-label="Trading Options" 
                         className="w-full"
