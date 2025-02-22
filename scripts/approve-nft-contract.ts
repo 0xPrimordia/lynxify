@@ -18,7 +18,7 @@ async function main() {
         throw new Error("Environment variables must be present");
     }
 
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     client.setOperator(
         AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID),
         PrivateKey.fromString(process.env.OPERATOR_KEY)

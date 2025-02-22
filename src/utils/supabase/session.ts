@@ -1,28 +1,61 @@
 import { Session } from '@supabase/supabase-js';
 import { SessionTypes } from '@walletconnect/types';
-import { SessionState } from '@/app/types';
+import { PrivateKey } from "@hashgraph/sdk";
 import { supabase } from '@/utils/supabase';
+import { User } from '@supabase/supabase-js';
+
+export interface SessionState {
+    wallet: {
+        isConnected: boolean;
+        accountId: string | null;
+        session: SessionTypes.Struct | null;
+        isInAppWallet?: boolean;
+        privateKey?: PrivateKey | null;
+    };
+    auth: {
+        isAuthenticated: boolean;
+        userId: string | null;
+        session: Session | null;
+        user: User | null;
+        error?: string | null;
+    };
+}
 
 const SESSION_STORAGE_KEY = 'lynxify_session';
 
 let isClearing = false;
 
-export const persistSession = (walletSession: SessionTypes.Struct | null, authSession: Session | null) => {
+export const persistSession = (
+    walletSession: SessionTypes.Struct | null, 
+    authSession: Session | null,
+    isInAppWallet: boolean = false,
+    privateKey: PrivateKey | null = null,
+    inAppAccountId: string | null = null
+) => {
     try {
         const sessionData: SessionState = {
             wallet: {
-                isConnected: !!walletSession,
-                accountId: walletSession?.namespaces?.hedera?.accounts?.[0]?.split(':').pop() || null,
-                session: walletSession
+                isConnected: !!walletSession || isInAppWallet,
+                accountId: inAppAccountId || walletSession?.namespaces?.hedera?.accounts?.[0]?.split(':').pop() || null,
+                session: walletSession,
+                isInAppWallet,
+                privateKey: null
             },
             auth: {
                 isAuthenticated: !!authSession,
                 userId: authSession?.user?.id || null,
-                session: authSession
+                session: authSession,
+                user: authSession?.user || null
             }
         };
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-        console.log('Session persisted:', sessionData);
+        console.log('Session persisted:', {
+            ...sessionData,
+            wallet: {
+                ...sessionData.wallet,
+                privateKey: privateKey ? '[REDACTED]' : null
+            }
+        });
     } catch (error) {
         console.error('Error persisting session:', error);
     }
@@ -32,7 +65,14 @@ export const getStoredSession = (): SessionState | null => {
     try {
         const storedData = localStorage.getItem(SESSION_STORAGE_KEY);
         if (!storedData) return null;
-        return JSON.parse(storedData);
+        const sessionData = JSON.parse(storedData);
+        
+        // Convert stored private key string back to PrivateKey object if it exists
+        if (sessionData.wallet.isInAppWallet && sessionData.wallet.privateKey) {
+            sessionData.wallet.privateKey = PrivateKey.fromString(sessionData.wallet.privateKey.toString());
+        }
+        
+        return sessionData;
     } catch (error) {
         console.error('Error retrieving stored session:', error);
         return null;
@@ -44,20 +84,17 @@ export const clearStoredSession = async () => {
     
     try {
         isClearing = true;
-        
-        // Clear local storage first
         localStorage.removeItem(SESSION_STORAGE_KEY);
         
-        // Perform Supabase signout
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            throw error;
+        // Only sign out if we have an active session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            console.log('Session storage and auth cleared');
         }
-        
-        console.log('Session storage and auth cleared');
     } catch (error) {
         console.error('Error clearing session:', error);
-        throw error;
     } finally {
         isClearing = false;
     }

@@ -3,70 +3,74 @@ import { createServerSupabase } from '@/utils/supabase';
 import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
 import { cookies } from 'next/headers';
+import { User, Threshold } from '@/app/types';  // Import types
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = req.headers.get('x-user-id');
+    if (!userId) {
+      return NextResponse.json({ 
+        error: 'Unauthorized', 
+        details: 'No user session found' 
+      }, { status: 401 });
+    }
+
     const cookieStore = cookies();
-    // Get the request body first
+    const supabase = createServerSupabase(cookieStore, true);
+
     const body = await req.json();
     const { hederaAccountId, slippageBasisPoints } = body;
     
     console.log('Received request with body:', body);
     console.log('Looking for user with Hedera ID:', hederaAccountId);
 
-    // Use service client directly to find user by Hedera ID
-    const serviceClient = createServerSupabase(cookieStore, true);
-    
-    // Find user by Hedera account ID first
-    const { data: dbUser, error: userError } = await serviceClient
+    // Type-safe user verification
+    const { data: user, error: userError } = await supabase
       .from('Users')
-      .select('*')
+      .select<'*', User>('*')  // Specify the type for type-safe queries
+      .eq('id', userId)
       .eq('hederaAccountId', hederaAccountId)
       .single();
 
-    if (!dbUser) {
-      console.error('User lookup failed:', { error: userError, hederaId: hederaAccountId });
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'User not found',
-          hederaAccountId,
-          queryError: userError,
-          requestBody: body
-        }),
-        { status: 404 }
-      );
+    if (userError || !user) {
+      console.error('User verification error:', userError);
+      return NextResponse.json({ 
+        error: 'Unauthorized',
+        details: 'Account not found or unauthorized'
+      }, { status: 401 });
     }
 
-    // Create threshold record with slippage
-    const { data: pendingThreshold, error: insertError } = await serviceClient
+    // Type-safe threshold creation
+    const thresholdData: Partial<Threshold> = {
+      userId: user.id,
+      ...body,
+      slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
+      isActive: false,
+      status: 'pending',
+      testnet: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet',
+      createdAt: new Date().toISOString(),
+      lastChecked: new Date().toISOString(),
+      lastExecutedAt: new Date().toISOString(),
+      lastError: '',
+      txHash: ''
+    };
+
+    const { data: pendingThreshold, error: insertError } = await supabase
       .from('Thresholds')
-      .insert({
-        userId: dbUser.id,
-        ...body,
-        slippageBasisPoints: slippageBasisPoints || 50, // Default to 0.5% if not provided
-        isActive: false,
-        status: 'pending',
-        testnet: process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet',
-        createdAt: new Date().toISOString(),
-        lastChecked: new Date().toISOString(),
-        lastExecutedAt: new Date().toISOString(),
-        lastError: '',
-        txHash: ''
-      })
-      .select()
+      .insert(thresholdData)
+      .select<'*', Threshold>('*')
       .single();
 
     if (insertError) {
       console.error('Failed to create threshold record:', insertError);
-      return new NextResponse(
-        JSON.stringify({ error: `Failed to create threshold record: ${insertError.message}` }),
-        { status: 500 }
-      );
+      return NextResponse.json({ 
+        error: `Failed to create threshold record: ${insertError.message}` 
+      }, { status: 500 });
     }
 
     // Initialize Hedera client
     console.log('Initializing Hedera client...');
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     client.setOperator(
       AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
       PrivateKey.fromString(process.env.OPERATOR_KEY!)
@@ -127,7 +131,7 @@ export async function POST(req: NextRequest) {
         };
         console.error('Contract transaction failed:', errorDetails);
 
-        await serviceClient
+        await supabase
           .from('Thresholds')
           .update({ 
             status: 'failed',
@@ -136,18 +140,15 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', pendingThreshold.id);
 
-        return new NextResponse(
-          JSON.stringify({ 
-            error: `Contract transaction failed`,
-            details: errorDetails,
-            debugInfo: {
-              requestBody: body,
-              contractParams: debugParams,
-              receipt: receipt
-            }
-          }),
-          { status: 500 }
-        );
+        return NextResponse.json({ 
+          error: `Contract transaction failed`,
+          details: errorDetails,
+          debugInfo: {
+            requestBody: body,
+            contractParams: debugParams,
+            receipt: receipt
+          }
+        }, { status: 500 });
       }
 
       // After successful contract execution
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
       });
       
       // First verify the threshold exists
-      const { data: verifyData, error: verifyError } = await serviceClient
+      const { data: verifyData, error: verifyError } = await supabase
         .from('Thresholds')
         .select('*')
         .eq('id', pendingThreshold.id)
@@ -175,7 +176,7 @@ export async function POST(req: NextRequest) {
       });
 
       // Then attempt the update
-      const { data: updateData, error: updateError } = await serviceClient
+      const { data: updateData, error: updateError } = await supabase
         .from('Thresholds')
         .update({ 
           isActive: true,
@@ -194,14 +195,11 @@ export async function POST(req: NextRequest) {
         thresholdId: pendingThreshold.id
       });
 
-      return new NextResponse(
-        JSON.stringify({
-          message: 'Threshold set successfully',
-          txHash: txResponse.transactionId.toString(),
-          id: pendingThreshold.id
-        }),
-        { status: 200 }
-      );
+      return NextResponse.json({
+        message: 'Threshold set successfully',
+        txHash: txResponse.transactionId.toString(),
+        id: pendingThreshold.id
+      });
 
     } catch (error: any) {
       // Catch and log any unexpected errors during contract interaction
@@ -213,7 +211,7 @@ export async function POST(req: NextRequest) {
       };
       console.error('Unexpected error during contract interaction:', errorDetails);
 
-      await serviceClient
+      await supabase
         .from('Thresholds')
         .update({ 
           status: 'failed',
@@ -222,29 +220,18 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', pendingThreshold.id);
 
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'Failed to set threshold',
-          details: errorDetails
-        }),
-        { status: 500 }
-      );
+      return NextResponse.json({ 
+        error: 'Failed to set threshold',
+        details: errorDetails
+      }, { status: 500 });
     }
 
   } catch (error: any) {
-    console.error('Error in setThresholds:', error);
-    return new NextResponse(
-      JSON.stringify({ 
-        error: 'Failed to set thresholds', 
-        details: error.message,
-        debugInfo: {
-          errorName: error.name,
-          errorStack: error.stack,
-          errorMessage: error.message
-        }
-      }),
-      { status: 500 }
-    );
+    console.error('Threshold creation error:', error);
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 

@@ -21,7 +21,7 @@ async function resetContract() {
         throw new Error("Environment variables OPERATOR_ID and OPERATOR_KEY must be present");
     }
 
-    const client = Client.forTestnet();
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     client.setOperator(
         AccountId.fromString(OPERATOR_ID),
         PrivateKey.fromString(OPERATOR_KEY)

@@ -29,6 +29,15 @@ export const getQuoteExactInput = async (
         pathData.push(decimalToPaddedHex(fee, 6));
         pathData.push(ContractId.fromString(outputToken).toSolidityAddress().padStart(40, '0'));
 
+        // Add debug logging for the request
+        console.log('Quote request:', {
+            path: pathData.join(''),
+            amountIn: amountInSmallestUnit,
+            inputToken,
+            outputToken,
+            fee
+        });
+
         const encodedPath = `0x${pathData.join('')}`;
         const encodedFunction = quoterInterface.encodeFunctionData('quoteExactInput', [
             encodedPath,
@@ -45,10 +54,20 @@ export const getQuoteExactInput = async (
             to: ContractId.fromString(QUOTER_V2_ADDRESS).toSolidityAddress(),
         };
 
-        const response = await axios.post(url, data, { headers: {'content-type': 'application/json'} });
-        const result = quoterInterface.decodeFunctionResult('quoteExactInput', response.data.result);
+        console.log('Mirror node request:', data);
 
-        return result.amountOut;
+        try {
+            const response = await axios.post(url, data, { headers: {'content-type': 'application/json'} });
+            console.log('Mirror node response:', response.data);
+            const result = quoterInterface.decodeFunctionResult('quoteExactInput', response.data.result);
+            return result.amountOut;
+        } catch (error: any) {
+            console.error('Mirror node error details:', {
+                response: error.response?.data,
+                status: error.response?.status
+            });
+            throw error;
+        }
     } catch (error) {
         console.error("Error in getQuoteExactInput:", error);
         throw error;

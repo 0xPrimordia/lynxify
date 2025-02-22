@@ -1,6 +1,4 @@
 import { TESTNET_REWARDS } from '@/config/rewards';
-import { Session } from '@supabase/supabase-js';
-import { SessionTypes } from '@walletconnect/types';
 
 export type PriceHistory = {
     id: number;
@@ -86,28 +84,11 @@ export type Token = {
     isFeeOnTransferToken: boolean;
 }
 
-export type User = {
+export interface User {
     id: string;
-    hederaAccountId: string;
     created_at: string;
-}
-
-// Session State Types
-export interface WalletState {
-    isConnected: boolean;
-    accountId: string | null;
-    session: SessionTypes.Struct | null;
-}
-
-export interface AuthState {
-    isAuthenticated: boolean;
-    userId: string | null;
-    session: Session | null;
-}
-
-export interface SessionState {
-    wallet: WalletState;
-    auth: AuthState;
+    hederaAccountId?: string;
+    isInAppWallet?: boolean;
 }
   
 
@@ -134,4 +115,68 @@ export type Pool = {
     sqrtRatioX96: string;
     tickCurrent: number;
     liquidity: string;
+}
+
+export interface PasswordModalContext {
+    isOpen: boolean;
+    description: string;
+    transaction: string | null;
+    transactionPromise?: {
+        resolve: (value: any) => void;
+        reject: (reason?: any) => void;
+    } | null;
+}
+
+export interface RateLimitResult {
+    blocked: boolean;
+    limit: number;
+    remaining: number;
+    reset: number;
+}
+
+export interface RateLimitError {
+    message: string;
+    code: string;
+    details?: Record<string, unknown>;
+}
+
+export type RateLimitType = 'auth' | 'wallet' | 'reset' | 'create' | 'backup' | 'sign';
+
+export interface RateLimitConfig {
+    maxRequests: number;
+    windowMs: number;
+    blockDuration?: number;
+    increaseFactor?: number;
+}
+
+export interface RateLimitKey {
+    ip: string;
+    userId?: string;
+    sessionId?: string;
+    type: string;
+}
+
+export const RATE_LIMIT_CONFIGS: { [key: string]: RateLimitConfig } = {
+    'auth': { 
+        maxRequests: 5, 
+        windowMs: 60 * 1000,
+        blockDuration: 15 * 60 * 1000,
+        increaseFactor: 2
+    },
+    'wallet': { 
+        maxRequests: 10, 
+        windowMs: 60 * 1000,
+        blockDuration: 30 * 60 * 1000,
+        increaseFactor: 3
+    },
+    'reset': { maxRequests: 3, windowMs: 60 * 60 * 1000 },
+    'create': { maxRequests: 2, windowMs: 60 * 60 * 1000 },
+    'backup': { maxRequests: 5, windowMs: 60 * 1000 },
+    'sign': { maxRequests: 20, windowMs: 60 * 1000 }
+};
+
+export interface WalletOperationResult<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
 }

@@ -11,7 +11,7 @@ import {
 } from '@hashgraph/hedera-wallet-connect';
 import { SessionTypes } from '@walletconnect/types';
 import { supabase } from '@/utils/supabase';
-import { SessionState } from '@/app/types';
+import { SessionState } from '@/utils/supabase/session';
 import { persistSession, getStoredSession, clearStoredSession } from '@/utils/supabase/session';
 import { handleDisconnectSessions } from '@/utils/supabase/session';
 
@@ -32,7 +32,10 @@ interface WalletContextType {
     account: string;
     handleConnect: () => Promise<void>;
     handleDisconnectSessions: () => Promise<void>;
-    signAndExecuteTransaction: (params: { transactionList: string, signerAccountId: string }) => Promise<any>;
+    signAndExecuteTransaction: (params: { 
+        transactionList: string, 
+        signerAccountId: string
+    }) => Promise<any>;
     client: Client;
     appMetadata: typeof appMetadata;
     sessions?: SessionTypes.Struct[];
@@ -44,6 +47,9 @@ interface WalletContextType {
     error: string | null;
     sessionState: SessionState;
     handleDisconnect: () => Promise<void>;
+    setError: (error: string | null) => void;
+    walletType: string | null;
+    setAccount: (account: string) => void;
 }
 
 export const WalletContext = createContext<WalletContextType>({
@@ -64,15 +70,19 @@ export const WalletContext = createContext<WalletContextType>({
         wallet: {
             isConnected: false,
             accountId: null,
-            session: null
+            session: null as SessionTypes.Struct | null,
         },
         auth: {
             isAuthenticated: false,
             userId: null,
-            session: null
+            session: null,
+            user: null
         }
     },
-    handleDisconnect: async () => {}
+    handleDisconnect: async () => {},
+    setError: () => {},
+    walletType: null,
+    setAccount: () => {},
 });
 
 interface WalletProviderProps {
@@ -93,12 +103,13 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     wallet: {
       isConnected: false,
       accountId: null,
-      session: null
+      session: null as SessionTypes.Struct | null,
     },
     auth: {
       isAuthenticated: false,
       userId: null,
-      session: null
+      session: null,
+      user: null
     }
   });
 
@@ -178,12 +189,13 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
                     wallet: {
                       isConnected: true,
                       accountId: storedSession.wallet.accountId,
-                      session: matchingSession
+                      session: matchingSession || null
                     },
                     auth: {
                       isAuthenticated: true,
                       userId: storedSession.auth.userId,
-                      session: data.session
+                      session: data.session,
+                      user: data.session.user
                     }
                   });
                 }
@@ -222,7 +234,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
             wallet: {
               isConnected: true,
               accountId: storedSession.wallet.accountId,
-              session: matchingSession
+              session: matchingSession as SessionTypes.Struct | null
             }
           }));
         } else {
@@ -245,7 +257,8 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
           auth: {
             isAuthenticated: true,
             userId: storedSession.auth.userId,
-            session: data.session
+            session: data.session,
+            user: data.session?.user || null
           }
         }));
       }
@@ -256,7 +269,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       clearStoredSession();
       setSessionState({
         wallet: { isConnected: false, accountId: null, session: null },
-        auth: { isAuthenticated: false, userId: null, session: null }
+        auth: { isAuthenticated: false, userId: null, session: null, user: null }
       });
       return false;
     }
@@ -540,7 +553,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         setUserId(null);
         setSessionState({
             wallet: { isConnected: false, accountId: null, session: null },
-            auth: { isAuthenticated: false, userId: null, session: null }
+            auth: { isAuthenticated: false, userId: null, session: null, user: null }
         });
 
         // Clear stored session last
@@ -557,24 +570,25 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         setUserId(null);
         setSessionState({
             wallet: { isConnected: false, accountId: null, session: null },
-            auth: { isAuthenticated: false, userId: null, session: null }
+            auth: { isAuthenticated: false, userId: null, session: null, user: null }
         });
         localStorage.removeItem('lynxify_session');
         throw error;
     }
   };
 
-  const signAndExecuteTransaction = async (params: { transactionList: string, signerAccountId: string }) => {
+  const signAndExecuteTransaction = async (params: { 
+        transactionList: string;
+        signerAccountId: string;
+    }) => {
     if (!dAppConnector) {
-      throw new Error("DAppConnector not initialized");
+        throw new Error("DAppConnector not initialized");
     }
     
-    const result = await dAppConnector.signAndExecuteTransaction({
-      signerAccountId: params.signerAccountId,
-      transactionList: params.transactionList
+    return await dAppConnector.signAndExecuteTransaction({
+        signerAccountId: params.signerAccountId,
+        transactionList: params.transactionList
     });
-    
-    return result;
   };
 
   const handleDisconnect = useCallback(async () => {
@@ -602,7 +616,8 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
             auth: {
                 isAuthenticated: false,
                 userId: null,
-                session: null
+                session: null,
+                user: null
             }
         });
     } catch (error) {
@@ -628,7 +643,10 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         isConnecting,
         error,
         sessionState,
-        handleDisconnect
+        handleDisconnect,
+        setError: setError,
+        walletType: null,
+        setAccount,
       }}
     >
       {children}

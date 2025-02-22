@@ -30,11 +30,27 @@ import { ThresholdSection } from '../components/ThresholdSection';
 import PriceChart, { ChartData } from '../components/PriceChart';
 import { MagnifyingGlassIcon as SearchIcon } from "@heroicons/react/24/outline";
 import { checkTokenAssociation, associateToken } from '@/app/lib/utils/tokens';
+import { useSupabase } from '@/app/hooks/useSupabase';
+import { useInAppWallet } from '../contexts/InAppWalletContext';
+import { AccountBalanceQuery, TokenId, AccountId, Client } from "@hashgraph/sdk";
+import { usePasswordModal } from '../hooks/usePasswordModal';
+import { handleInAppTransaction, handlePasswordSubmit as handleInAppPasswordSubmit } from '../lib/transactions/inAppWallet';
+import { handleExtensionTransaction } from '../lib/transactions/extensionWallet';
+import { PasswordModal } from '../components/PasswordModal';
+import { PasswordModalContext } from '../types';
 
 export default function DexPage() {
     const router = useRouter();
-    const { account, userId, signAndExecuteTransaction } = useWalletContext();
+    const { account, signAndExecuteTransaction, isConnecting } = useWalletContext();
+    const { inAppAccount, signTransaction } = useInAppWallet();
+    
+    // Determine wallet type based on which account is present
+    const walletType = inAppAccount ? 'inApp' : account ? 'extension' : null;
+    const activeAccount = account || inAppAccount;
     const { awardXP } = useRewards();
+    const { supabase } = useSupabase();
+    const [isSignedIn, setIsSignedIn] = useState(false);
+    const [userAccountId, setUserAccountId] = useState<string | null>(null);
     const currentDate = new Date();
     const pastDate = new Date();
     pastDate.setDate(currentDate.getDate() - 7);
@@ -96,6 +112,19 @@ export default function DexPage() {
     const [selectedRange, setSelectedRange] = useState('1M');
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
     const [tokenSearch, setTokenSearch] = useState("");
+    const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
+    const [isPoolModalOpen, setIsPoolModalOpen] = useState(false);
+    const [poolSearch, setPoolSearch] = useState("");
+    const [isUsdInput, setIsUsdInput] = useState(false);
+    const [usdAmount, setUsdAmount] = useState("0.0");
+    const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
+    const { 
+        password, 
+        setPassword, 
+        passwordModalContext, 
+        setPasswordModalContext,
+        resetPasswordModal 
+    } = usePasswordModal();
 
     const timeRanges = [
         { id: '1H', label: '1H', value: 60 * 60 },
@@ -126,7 +155,7 @@ export default function DexPage() {
         if (defaultRange) {
             handleTimeRangeChange(defaultRange.value, defaultRange.id);
         }
-    }, []);
+    }, [timeRanges]);
 
     useEffect(() => {
         if (currentToken && currentToken.priceUsd) {
@@ -151,7 +180,10 @@ export default function DexPage() {
     useEffect(() => {
         const fetchThresholds = async () => {
             try {
-                const response = await fetch(`/api/thresholds?userId=${userId}`);
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user?.id) return;
+                
+                const response = await fetch(`/api/thresholds?userId=${session.user.id}`);
                 const data = await response.json();
                 if (response.ok) {
                     setThresholds(data);
@@ -163,10 +195,8 @@ export default function DexPage() {
             }
         };
 
-        if (userId) {
-            fetchThresholds();
-        }
-    }, [userId]);
+        fetchThresholds();
+    }, [supabase.auth]);
 
     useEffect(() => {
         if (!tokens || !tokens.length) return;
@@ -213,61 +243,130 @@ export default function DexPage() {
         });
     }, [slippageTolerance]);
 
+    const executeTransaction = async (tx: string, description: string) => {
+        if (!activeAccount) throw new Error("No active account");
+        
+        if (walletType === 'inApp') {
+            return new Promise((resolve, reject) => {
+                handleInAppTransaction(tx, signTransaction, (context) => {
+                    setPasswordModalContext({
+                        ...context,
+                        transactionPromise: { resolve, reject }
+                    });
+                });
+            });
+        } else if (walletType === 'extension') {
+            return handleExtensionTransaction(tx, account, signAndExecuteTransaction);
+        }
+        
+        throw new Error("No wallet connected");
+    };
+
+    const handlePasswordSubmit = async () => {
+        if (!passwordModalContext.transaction) return;
+        
+        setIsSubmitting(true);
+        try {
+            console.log('Calling handleInAppPasswordSubmit...');
+            const result = await handleInAppPasswordSubmit(
+                passwordModalContext.transaction,
+                password,
+                signTransaction,
+                setPasswordModalContext
+            );
+            
+            if (result.status === 'ERROR') {
+                passwordModalContext.transactionPromise?.reject(new Error(result.error));
+            } else {
+                passwordModalContext.transactionPromise?.resolve(result);
+            }
+        } catch (error) {
+            passwordModalContext.transactionPromise?.reject(error);
+        } finally {
+            setIsSubmitting(false);
+            resetPasswordModal();
+        }
+    };
+
     const handleQuote = async () => {
-        if (!currentPool || !currentToken || !tradeToken || !account) return;
+        if (!currentPool || !currentToken || !tradeToken || !activeAccount) return;
 
         try {
-            const slippageBasisPoints = Math.floor(slippageTolerance * 100);
-            
-            // First check for any required associations
+            console.log('Starting swap with:', {
+                currentToken,
+                tradeToken,
+                amount: tradeAmount,
+                pool: currentPool,
+                type: getTradeType(),
+                slippageBasisPoints: Math.floor(slippageTolerance * 100)
+            });
+
             let transactions: string[] = [];
             
             // Check associations based on trade type
             switch (getTradeType()) {
                 case 'hbarToToken':
-                    if (!await checkTokenAssociation(account, tradeToken.id)) {
-                        transactions.push(await associateToken(account, tradeToken.id));
+                    if (!await checkTokenAssociation(activeAccount, tradeToken.id)) {
+                        transactions.push(await associateToken(activeAccount, tradeToken.id));
                     }
                     break;
                 case 'tokenToHbar':
-                    if (!await checkTokenAssociation(account, currentToken.id)) {
-                        transactions.push(await associateToken(account, currentToken.id));
+                    if (!await checkTokenAssociation(activeAccount, currentToken.id)) {
+                        transactions.push(await associateToken(activeAccount, currentToken.id));
                     }
                     break;
                 case 'tokenToToken':
-                    if (!await checkTokenAssociation(account, currentToken.id)) {
-                        transactions.push(await associateToken(account, currentToken.id));
+                    if (!await checkTokenAssociation(activeAccount, currentToken.id)) {
+                        transactions.push(await associateToken(activeAccount, currentToken.id));
                     }
-                    if (!await checkTokenAssociation(account, tradeToken.id)) {
-                        transactions.push(await associateToken(account, tradeToken.id));
+                    if (!await checkTokenAssociation(activeAccount, tradeToken.id)) {
+                        transactions.push(await associateToken(activeAccount, tradeToken.id));
                     }
                     break;
             }
 
+            console.log('Token association check:', {
+                account: activeAccount,
+                token: tradeToken.id,
+                isAssociated: await checkTokenAssociation(activeAccount, tradeToken.id)
+            });
+
             // Get the swap transaction
             const swapResult = await getSwapTransaction();
-            if (typeof swapResult === 'object' && swapResult.tx) {
+            
+            console.log('Getting swap transaction...');
+
+            if (swapResult?.type === 'approve') {
+                transactions.push(swapResult.tx);
+                const actualSwap = await getSwapTransaction();
+                if (actualSwap?.tx) {
+                    transactions.push(actualSwap.tx);
+                }
+            } else if (swapResult?.tx) {
                 transactions.push(swapResult.tx);
             }
 
-            // If we have any transactions, execute them all in sequence
+            console.log('Swap transaction result:', swapResult);
+
+            // Execute all transactions in sequence
             if (transactions.length > 0) {
                 for (const tx of transactions) {
-                    const result = await signAndExecuteTransaction({
-                        transactionList: tx,
-                        signerAccountId: account
+                    console.log('Executing transaction:', {
+                        tx: tx.substring(0, 100) + '...',
+                        type: getTradeType()
                     });
-                    
-                    // Add debug logging
+                    const result = await executeTransaction(tx, 'Swap transaction');
                     console.log('Transaction result:', result);
                     
-                    // Check if transaction was successful
-                    if (result.status === 'reverted' || result.status === 'failed') {
-                        throw new Error(`Transaction failed with status: ${result.status}`);
+                    if (!result) {
+                        throw new Error('Transaction failed: No result returned');
+                    }
+                    
+                    if (result.status === 'ERROR' || result.status === 'FAILED') {
+                        throw new Error(`Transaction failed: ${result.error || 'Unknown error'}`);
                     }
                 }
 
-                // Only show success after all transactions are confirmed
                 setTradeAmount("0.0");
                 setReceiveAmount("0.0");
                 setAlertState({
@@ -276,10 +375,10 @@ export default function DexPage() {
                     type: 'success'
                 });
 
-                // Award XP for successful trade
+                // Award XP
                 try {
-                    if (userId && account) {
-                        await awardXP(userId, account, 'FIRST_TRADE');
+                    if (userAccountId && activeAccount) {
+                        await awardXP(userAccountId, activeAccount, 'FIRST_TRADE');
                     }
                 } catch (error) {
                     console.error('Failed to award XP for first trade:', error);
@@ -289,7 +388,7 @@ export default function DexPage() {
             console.error('Error in handleQuote:', error);
             setAlertState({
                 isVisible: true,
-                message: 'Failed to execute trade',
+                message: error instanceof Error ? error.message : 'Failed to execute trade',
                 type: 'danger'
             });
         }
@@ -306,7 +405,7 @@ export default function DexPage() {
                     tradeAmount.toString(),
                     tradeToken.id,
                     currentPool.fee || 3000,
-                    account,
+                    activeAccount || '',
                     Math.floor(Date.now() / 1000) + 60,
                     slippageBasisPoints,
                     tradeToken.decimals
@@ -316,7 +415,7 @@ export default function DexPage() {
                     tradeAmount.toString(),
                     currentToken.id,
                     currentPool.fee || 3000,
-                    account,
+                    activeAccount || '',
                     Math.floor(Date.now() / 1000) + 60,
                     slippageBasisPoints,
                     currentToken.decimals
@@ -327,7 +426,7 @@ export default function DexPage() {
                     currentToken.id,
                     tradeToken.id,
                     currentPool.fee || 3000,
-                    account,
+                    activeAccount || '',
                     Math.floor(Date.now() / 1000) + 60,
                     slippageBasisPoints,
                     currentToken.decimals,
@@ -365,57 +464,50 @@ export default function DexPage() {
         setTradeToken(null);  // Reset trade token when token changes
     };
 
-    const saveThresholds = async (type: 'stopLoss' | 'buyOrder' | 'sellOrder') => {
-        if (!account || !userId || !currentPool) {
-            setAlertState({
-                isVisible: true,
-                message: "Missing required data: account, userId, or pool",
-                type: "danger"
-            });
-            return;
+    const saveThresholds = async (thresholdData: {
+        type: 'stopLoss' | 'buyOrder' | 'sellOrder';
+        price: number;
+        cap: number;
+        hederaAccountId: string;
+        tokenA: string;
+        tokenB: string;
+        fee: number;
+        slippageBasisPoints: number;
+    }) => {
+        if (!activeAccount || !userAccountId || !currentPool) {
+            throw new Error('Missing required data');
         }
 
-        setIsSubmitting(true);
         try {
-            console.log('Sending threshold data:', {
-                type,
-                price: type === 'stopLoss' ? stopLossPrice :
-                       type === 'buyOrder' ? buyOrderPrice :
-                       sellOrderPrice,
-                cap: type === 'stopLoss' ? stopLossCap :
-                     type === 'buyOrder' ? buyOrderCap :
-                     sellOrderCap,
-                hederaAccountId: account,
-                tokenA: currentPool.tokenA.id,
-                tokenB: currentPool.tokenB.id
+            const { data: { session }, error } = await supabase.auth.getSession();
+            console.log('Auth check:', {
+                hasSession: !!session,
+                error,
+                accessToken: session?.access_token ? 'present' : 'missing',
+                userId: session?.user?.id
             });
 
-            const response = await fetch('/api/thresholds/setThresholds', {
+            if (!session) {
+                throw new Error('No active session');
+            }
+
+            console.log('Making request with token:', session.access_token.substring(0, 10) + '...');
+            
+            const response: Response = await fetch('/api/thresholds/setThresholds', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type,
-                    price: type === 'stopLoss' ? stopLossPrice :
-                           type === 'buyOrder' ? buyOrderPrice :
-                           sellOrderPrice,
-                    cap: type === 'stopLoss' ? stopLossCap :
-                         type === 'buyOrder' ? buyOrderCap :
-                         sellOrderCap,
-                    hederaAccountId: account,
-                    tokenA: currentPool.tokenA.id,
-                    tokenB: currentPool.tokenB.id,
-                    fee: currentPool.fee,
-                    userId: userId,
-                    slippageBasisPoints: Math.floor(
-                        (type === 'stopLoss' ? stopLossSlippage :
-                         type === 'buyOrder' ? buyOrderSlippage :
-                         sellOrderSlippage) * 100
-                    )
-                }),
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify(thresholdData),
+                credentials: 'include'
             });
 
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
                 const errorData = await response.json();
+                console.log('Error response:', errorData);
                 throw new Error(`API Error: ${errorData.error || response.statusText}`);
             }
 
@@ -434,48 +526,34 @@ export default function DexPage() {
                 message: error.message || "Failed to create threshold",
                 type: "danger"
             });
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
     const handleCurrentPool = (poolId: any) => {
+        console.log('Pool selection:', {
+            poolId,
+            currentPools,
+            selectedPool: selectedPool,
+            currentPool: currentPool
+        });
+
         if (!currentPools || !Array.isArray(currentPools)) {
             console.log('No current pools available');
             return;
         }
         
-        // Extract the actual ID from the Set
         const selectedId = Array.from(poolId)[0];
-        
-        console.log('Selecting pool:', {
-            rawPoolId: poolId,
-            selectedId,
-            availablePools: currentPools.map(p => ({
-                id: p.id,
-                tokenA: p.tokenA?.symbol,
-                tokenB: p.tokenB?.symbol
-            }))
-        });
-        
         const pool = currentPools.find((p: Pool) => p.id.toString() === selectedId);
-        if (!pool) {
-            console.log('Pool not found:', selectedId);
-            return;
-        }
         
-        console.log('Found pool:', {
-            id: pool.id,
-            tokenA: pool.tokenA?.symbol,
-            tokenB: pool.tokenB?.symbol
-        });
-        
-        setCurrentPool(pool);
-        
-        // Set trade token based on current token
-        if (currentToken && pool.tokenA && pool.tokenB) {
-            const tradeToken = pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA;
-            setTradeToken(tradeToken);
+        if (pool) {
+            console.log('Setting selected pool:', pool);
+            setCurrentPool(pool);
+            setSelectedPool(pool);
+            
+            if (currentToken && pool.tokenA && pool.tokenB) {
+                const tradeToken = pool.tokenA.id === currentToken.id ? pool.tokenB : pool.tokenA;
+                setTradeToken(tradeToken);
+            }
         }
     };
 
@@ -518,29 +596,44 @@ export default function DexPage() {
     };
 
     const getTokenBalance = async (tokenId: string) => {
-        if (!account) return 0;
+        if (!activeAccount) return 0;
         
         try {
             // Special case for WHBAR - check native HBAR balance instead
             if (tokenId === "0.0.15058") {
-                const response = await fetch(`https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${account}`);
+                const response = await fetch(`https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${activeAccount}`);
                 if (!response.ok) {
-                    throw new Error('Failed to fetch HBAR balance');
+                    throw new Error(`Failed to fetch HBAR balance: ${response.statusText}`);
                 }
                 const data = await response.json();
-                // Convert from tinybars (10^8) to HBAR
                 return data.balance.balance;
             }
 
-            // Regular token balance check
-            const response = await fetch(`/api/tokens/balance?accountId=${account}&tokenId=${tokenId}`);
+            // For in-app wallets, use direct SDK query
+            if (walletType === 'inApp') {
+                const query = new AccountBalanceQuery()
+                    .setAccountId(AccountId.fromString(activeAccount));
+                const balance = await query.execute(client);
+                
+                // Return token balance if exists, otherwise 0
+                const tokenBalance = balance.tokens?.get(TokenId.fromString(tokenId));
+                return tokenBalance ? tokenBalance.toNumber() : 0;
+            }
+
+            // For extension wallets, use existing API route
+            const response = await fetch(`/api/tokens/balance?accountId=${activeAccount}&tokenId=${tokenId}`);
             if (!response.ok) {
-                throw new Error('Failed to fetch token balance');
+                throw new Error(`Failed to fetch token balance: ${response.statusText}`);
             }
             const data = await response.json();
             return data.balance;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching token balance:', error);
+            setAlertState({
+                isVisible: true,
+                message: `Failed to fetch balance: ${error.message}`,
+                type: 'danger'
+            });
             return 0;
         }
     };
@@ -571,47 +664,69 @@ export default function DexPage() {
     };
 
     useEffect(() => {
-        console.log("Current pool listener:", currentPool)
-    }, [currentPool]);
+        console.log("Current pool listener:", currentPool);
+        
+        // If currentPool becomes null but we have a selectedPool, restore it
+        if (!currentPool && selectedPool) {
+            console.log("Restoring pool from selectedPool:", selectedPool);
+            setCurrentPool(selectedPool);
+        }
+    }, [currentPool, selectedPool]);
 
     const calculateTradeAmount = async (amount: string) => {
-        if (!currentPool || !tradeToken || !currentToken || !amount || Number(amount) <= 0) {
+        const activePool = currentPool || selectedPool;
+        
+        console.log('Starting trade calculation:', {
+            inputAmount: amount,
+            inputToken: {
+                symbol: tradeToken?.symbol,
+                decimals: tradeToken?.decimals,
+                priceUsd: tradeToken?.priceUsd
+            },
+            outputToken: {
+                symbol: currentToken?.symbol,
+                decimals: currentToken?.decimals,
+                priceUsd: currentToken?.priceUsd
+            },
+            pool: {
+                id: activePool?.id,
+                fee: activePool?.fee
+            }
+        });
+
+        if (!activePool || !tradeToken || !currentToken || !amount || Number(amount) <= 0) {
+            console.log('Trade calculation validation failed:', {
+                hasPool: !!activePool,
+                hasTradeToken: !!tradeToken,
+                hasCurrentToken: !!currentToken,
+                amount,
+                isPositive: Number(amount) > 0
+            });
             setReceiveAmount("0.0");
             return;
         }
 
         try {
-            // Ensure we're working with a clean number
             const cleanAmount = amount.replace(/[^0-9.]/g, '');
             
-            console.log('Trade amount calculation:', {
-                input: {
-                    amount: cleanAmount,
-                    token: currentToken.symbol,
-                    decimals: currentToken.decimals,
-                    expectedRawAmount: (Number(cleanAmount) * Math.pow(10, currentToken.decimals)).toString()
-                },
-                output: {
-                    token: tradeToken.symbol,
-                    decimals: tradeToken.decimals
-                }
-            });
-
             const quoteAmount = await getQuoteExactInput(
-                currentToken.id,
-                currentToken.decimals,
                 tradeToken.id,
+                tradeToken.decimals,
+                currentToken.id,
                 cleanAmount,
-                currentPool.fee,
-                tradeToken.decimals
+                activePool.fee,
+                currentToken.decimals
             );
             
-            const formattedAmount = ethers.formatUnits(quoteAmount, tradeToken.decimals);
+            const formattedAmount = ethers.formatUnits(quoteAmount, currentToken.decimals);
             
-            console.log('Quote result:', {
-                rawQuote: quoteAmount.toString(),
-                outputDecimals: tradeToken.decimals,
-                formattedAmount: formattedAmount
+            console.log('Quote calculation result:', {
+                inputAmount: cleanAmount,
+                rawQuoteAmount: quoteAmount.toString(),
+                formattedQuoteAmount: formattedAmount,
+                inputTokenDecimals: tradeToken.decimals,
+                outputTokenDecimals: currentToken.decimals,
+                estimatedUsdValue: (Number(formattedAmount) * (currentToken?.priceUsd || 0))
             });
             
             setReceiveAmount(formattedAmount);
@@ -800,7 +915,7 @@ export default function DexPage() {
         const currentPrice = parseFloat(buyOrderPrice || currentToken?.priceUsd?.toString() || "0");
         if (!isNaN(currentPrice)) {
             const newPrice = currentPrice * (1 - percentageChange);
-            setBuyOrderPrice(newPrice.toFixed(8)); // Using 8 decimal places for precision
+            setBuyOrderPrice(newPrice.toFixed(8));
         }
     };
 
@@ -823,21 +938,266 @@ export default function DexPage() {
             .filter((token: Token) => 
                 pools?.some((pool: any) => 
                     pool.tokenA?.id === token.id || pool.tokenB?.id === token.id
-                )
-            )
+                ))
             .filter((token: Token) => 
                 token.name.toLowerCase().includes(tokenSearch.toLowerCase()) ||
                 token.symbol.toLowerCase().includes(tokenSearch.toLowerCase())
             );
     }, [tokens, pools, tokenSearch]);
 
+    const getDefaultPool = (pools: Pool[]) => {
+        if (!pools || !Array.isArray(pools)) return null;
+        return pools.find(pool => 
+            (pool.tokenA?.symbol === 'HBAR' && pool.tokenB?.symbol === 'SAUCE') ||
+            (pool.tokenA?.symbol === 'SAUCE' && pool.tokenB?.symbol === 'HBAR')
+        ) || null;
+    };
+
+    useEffect(() => {
+        console.log('Setting default pool:', {
+            hasPools: !!pools,
+            poolsLength: pools?.length,
+            availablePools: pools?.map((p: Pool) => ({
+                id: p.id,
+                tokenA: p.tokenA?.symbol,
+                tokenB: p.tokenB?.symbol,
+                liquidity: p.liquidity
+            }))
+        });
+
+        if (pools && Array.isArray(pools)) {
+            // Filter out pools with zero liquidity
+            const activePools = pools.filter(pool => 
+                pool.liquidity && BigInt(pool.liquidity) > BigInt(0)
+            );
+
+            console.log('Active pools with liquidity:', activePools.length);
+
+            const defaultPool = activePools.find(pool => 
+                (pool.tokenA?.symbol === 'HBAR' && pool.tokenB?.symbol === 'SAUCE') ||
+                (pool.tokenA?.symbol === 'SAUCE' && pool.tokenB?.symbol === 'HBAR')
+            );
+
+            console.log('Found default pool:', defaultPool);
+
+            if (defaultPool) {
+                setSelectedPool(defaultPool);
+                setCurrentPool(defaultPool);
+                
+                // Set the current token and trade token based on the pool
+                if (defaultPool.tokenA && defaultPool.tokenB) {
+                    const hbarToken = defaultPool.tokenA.symbol === 'HBAR' ? defaultPool.tokenA : defaultPool.tokenB;
+                    const sauceToken = defaultPool.tokenA.symbol === 'SAUCE' ? defaultPool.tokenA : defaultPool.tokenB;
+                    
+                    console.log('Setting tokens:', {
+                        hbarToken,
+                        sauceToken
+                    });
+
+                    if (hbarToken.icon && sauceToken.icon) {
+                        setCurrentToken(hbarToken as Token);
+                        setTradeToken(sauceToken as Token);
+                    }
+                }
+            } else {
+                console.log('No default HBAR-SAUCE pool found');
+            }
+        }
+    }, [pools]);
+
+    const filteredPools = useMemo(() => {
+        if (!pools || !Array.isArray(pools)) return [];
+        
+        return pools.filter((pool: Pool) => {
+            const searchLower = poolSearch.toLowerCase();
+            return pool.tokenA?.symbol.toLowerCase().includes(searchLower) ||
+                   pool.tokenB?.symbol.toLowerCase().includes(searchLower) ||
+                   pool.tokenA?.name.toLowerCase().includes(searchLower) ||
+                   pool.tokenB?.name.toLowerCase().includes(searchLower);
+        });
+    }, [pools, poolSearch]);
+
+    const PoolSelector = () => (
+        <Button
+            variant="bordered"
+            onPress={() => setIsPoolModalOpen(true)}
+            className="rounded-full px-4 py-2 border border-gray-800"
+        >
+            <div className="flex items-center gap-2">
+                <div className="relative w-12 h-6">
+                    {selectedPool?.tokenA && (
+                        <Image
+                            src={getTokenImageUrl(selectedPool.tokenA.icon || '')}
+                            alt={selectedPool.tokenA.symbol}
+                            width={24}
+                            height={24}
+                            className="absolute left-0 top-0"
+                        />
+                    )}
+                    {selectedPool?.tokenB && (
+                        <Image
+                            src={getTokenImageUrl(selectedPool.tokenB.icon || '')}
+                            alt={selectedPool.tokenB.symbol}
+                            width={24}
+                            height={24}
+                            className="absolute left-4 top-0"
+                        />
+                    )}
+                </div>
+                <span>
+                    {selectedPool 
+                        ? `${selectedPool.tokenA?.symbol} / ${selectedPool.tokenB?.symbol}`
+                        : "Select Pool"
+                    }
+                </span>
+                <ChevronDownIcon className="w-4 h-4" />
+            </div>
+        </Button>
+    );
+
+    const SwapDirectionSelector = () => (
+        <div className="flex items-center gap-2">
+            <div className="flex items-center p-2 rounded-full border border-gray-800">
+                <div className={`p-1 rounded-full ${currentToken?.id === selectedPool?.tokenA?.id ? 'bg-gray-800' : ''}`}>
+                    <Image
+                        src={getTokenImageUrl(selectedPool?.tokenA?.icon || '')}
+                        alt={selectedPool?.tokenA?.symbol || ''}
+                        width={24}
+                        height={24}
+                    />
+                </div>
+                <Button
+                    isIconOnly
+                    variant="light"
+                    className="mx-2"
+                    onPress={() => {
+                        if (selectedPool?.tokenA && selectedPool?.tokenB) {
+                            setCurrentToken(tradeToken as Token);
+                            setTradeToken(currentToken);
+                        }
+                    }}
+                >
+                    <ArrowsRightLeftIcon className="w-4 h-4" />
+                </Button>
+                <div className={`p-1 rounded-full ${currentToken?.id === selectedPool?.tokenB?.id ? 'bg-gray-800' : ''}`}>
+                    <Image
+                        src={getTokenImageUrl(selectedPool?.tokenB?.icon || '')}
+                        alt={selectedPool?.tokenB?.symbol || ''}
+                        width={24}
+                        height={24}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+
+    const convertAmount = (amount: string, price: number, toUsd: boolean) => {
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount)) return "0.0";
+        return toUsd ? (numAmount * price).toFixed(2) : (numAmount / price).toFixed(6);
+    };
+
+    useEffect(() => {
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            setIsSignedIn(!!session);
+
+            if (session?.user) {
+                // Fetch user's Hedera account ID
+                const { data: userData } = await supabase
+                    .from('Users')
+                    .select('hederaAccountId')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                if (userData?.hederaAccountId) {
+                    setUserAccountId(userData.hederaAccountId);
+                }
+            }
+        };
+
+        checkSession();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            setIsSignedIn(!!session);
+            if (session?.user) {
+                const { data: userData } = await supabase
+                    .from('Users')
+                    .select('hederaAccountId')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                if (userData?.hederaAccountId) {
+                    setUserAccountId(userData.hederaAccountId);
+                }
+            } else {
+                setUserAccountId(null);
+            }
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [supabase.auth]);
+
+    const renderTradeButton = () => {
+        const hasAccount = Boolean(account || inAppAccount);
+
+        return (
+            <Button
+                color="primary"
+                className="w-full"
+                onPress={() => handleQuote()}
+                isLoading={loading || isConnecting}
+                isDisabled={!hasAccount}
+            >
+                {hasAccount ? 'Swap' : 'Connect Wallet to Trade'}
+            </Button>
+        );
+    };
+
+    const handleThresholdInputFocus = (event: React.FocusEvent) => {
+        if (event.target instanceof HTMLInputElement) {
+            event.target.select();
+        }
+    };
+
+    const adjustThresholdPrice = (type: 'stopLoss' | 'buyOrder' | 'sellOrder', percent: number) => {
+        switch(type) {
+            case 'stopLoss':
+                const currentStopPrice = parseFloat(stopLossPrice);
+                if (!isNaN(currentStopPrice)) {
+                    setStopLossPrice((currentStopPrice * (1 - percent)).toFixed(8));
+                }
+                break;
+            case 'buyOrder':
+                const currentBuyPrice = parseFloat(buyOrderPrice);
+                if (!isNaN(currentBuyPrice)) {
+                    setBuyOrderPrice((currentBuyPrice * (1 - percent)).toFixed(8));
+                }
+                break;
+            case 'sellOrder':
+                const currentSellPrice = parseFloat(sellOrderPrice);
+                if (!isNaN(currentSellPrice)) {
+                    setSellOrderPrice((currentSellPrice * (1 + percent)).toFixed(8));
+                }
+                break;
+        }
+    };
+
     return (    
         <div className="fixed inset-0 flex flex-col w-full pt-24">
             <div className="relative">
                 <TestnetAlert />
             </div>
-            <div className="flex flex-col lg:flex-row overflow-hidden pl-0 lg:pl-8">
-                <div className="w-full lg:w-[70%] order-2 lg:order-1 px-4 lg:pr-8">
+            <div className="w-full px-8 mb-6">
+                <div className="flex justify-between items-center">
+                    <PoolSelector />
+                    <SwapDirectionSelector />
+                </div>
+            </div>
+            <div className="flex flex-col lg:flex-row overflow-hidden">
+                <div className="w-full lg:w-[70%] order-2 lg:order-1 lg:pr-8">
                     <div className="lg:hidden">
                         <Button
                             variant="light"
@@ -845,13 +1205,9 @@ export default function DexPage() {
                             onPress={() => setIsChartCollapsed(!isChartCollapsed)}
                         >
                             {isChartCollapsed ? (
-                                <>
-                                    Show Chart <ChevronDownIcon className="w-4 h-4 ml-2" />
-                                </>
+                                <>Show Chart <ChevronDownIcon className="w-4 h-4 ml-2" /></>
                             ) : (
-                                <>
-                                    Hide Chart <ChevronUpIcon className="w-4 h-4 ml-2" />
-                                </>
+                                <>Hide Chart <ChevronUpIcon className="w-4 h-4 ml-2" /></>
                             )}
                         </Button>
                     </div>
@@ -860,6 +1216,9 @@ export default function DexPage() {
                             aria-label="section" 
                             selectedKey={selectedSection} 
                             onSelectionChange={(key) => setSelectedSection(key.toString())}
+                            classNames={{
+                                tabList: "ml-4"
+                            }}
                         >
                             <Tab key="chart" title='Price Chart'>
                                 <div className="w-full h-full">
@@ -971,174 +1330,357 @@ export default function DexPage() {
                                         ) : (
                                             <div>No thresholds found</div>
                                         )}
-                                    </div>
-                                </div>
+                                    </div>                                </div>
                             </Tab>
                         </Tabs>
                     </div>
                 </div>
 
-                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto px-4 lg:pr-6 pb-24">
-                    <div className="w-full flex">
-                        {currentToken && currentToken.icon && (
-                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} />
-                        )}
-                        <div className="px-3">
-                            <h1 className="font-bold text-lg">{currentToken.symbol}</h1>
-                            <p>{currentToken.name}</p>
-                        </div>
-                        <div className="pl-1">
-                            <span className="text-xl text-green-500">
-                                ${formatPrice(currentToken?.priceUsd)}
-                            </span>
-                        </div>
-                        <Button
-                            variant="light"
-                            onPress={() => setIsTokenModalOpen(true)}
-                            className="min-w-10"
+                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto lg:pr-8 pb-24">
+                    <Tabs 
+                        aria-label="Trading Options" 
+                        className="w-full"
+                        classNames={{
+                            tabList: "gap-4 w-full",
+                            cursor: "w-full",
+                            tab: "flex-1 h-12",
+                            tabContent: "group-data-[selected=true]:text-white w-full text-center",
+                            base: "w-full",
+                            panel: "w-full"
+                        }}
+                    >
+                        <Tab 
+                            key="buy" 
+                            title={
+                                <div className="flex items-center justify-center w-full">
+                                    Buy
+                                </div>
+                            }
                         >
-                            <ChevronDownIcon className="w-5 h-5" />
-                        </Button>
-                    </div>
-                    <div className="w-full pt-8 pb-8">
-                        {Array.isArray(currentPools) && currentPools.length > 0 && (
-                            <div className="mb-8">
-                                {!currentPool ? (
-                                    <Select 
-                                        items={currentPools}
-                                        label="Select Pool"
-                                        onSelectionChange={(key) => handleCurrentPool(key as any)}
-                                        selectedKeys={currentPool ? new Set([currentPool.id.toString()]) : new Set()}
-                                        placeholder="Select Pool"
+                            <div className="w-full pb-8">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p>Swap Amount</p>
+                                    <Button
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => {
+                                            setIsUsdInput(!isUsdInput);
+                                            if (!isUsdInput) {
+                                                // Switching to USD - round to 2 decimal places
+                                                const newUsdAmount = (Number(tradeAmount) * (tradeToken?.priceUsd || 0)).toFixed(2);
+                                                setUsdAmount(newUsdAmount);
+                                            }
+                                        }}
                                     >
-                                        {(pool:any) => (
-                                            <SelectItem 
-                                                key={pool.id.toString()} 
-                                                textValue={`${pool.tokenA?.symbol} - ${pool.tokenB?.symbol} pool with ${pool.fee / 10_000.0}% fee`}
+                                        <div className="flex items-center gap-2">
+                                            <span className={isUsdInput ? "text-white" : "text-default-500"}>USD</span>
+                                            <span className="text-default-500">/</span>
+                                            <span className={!isUsdInput ? "text-white" : "text-default-500"}>{tradeToken?.symbol}</span>
+                                        </div>
+                                    </Button>
+                                </div>
+                                <Input
+                                    type="number"
+                                    value={isUsdInput ? usdAmount : tradeAmount}
+                                    onChange={(e) => {
+                                        const newValue = e.target.value;
+                                        if (isUsdInput) {
+                                            // Round USD to 2 decimal places
+                                            const roundedUsd = Number(newValue).toFixed(2);
+                                            setUsdAmount(roundedUsd);
+                                            const tokenAmount = (Number(roundedUsd) / (tradeToken?.priceUsd || 1)).toString();
+                                            setTradeAmount(tokenAmount);
+                                            calculateTradeAmount(tokenAmount);
+                                        } else {
+                                            setTradeAmount(newValue);
+                                            // Round USD to 2 decimal places when calculating equivalent
+                                            const usdValue = (Number(newValue) * (tradeToken?.priceUsd || 0)).toFixed(2);
+                                            setUsdAmount(usdValue);
+                                            calculateTradeAmount(newValue);
+                                        }
+                                    }}
+                                    onFocus={handleInputFocus}
+                                    isDisabled={!tradeToken}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {tradeToken && <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} />
+                                        </div>
+                                    }
+                                    endContent={
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-default-400">
+                                                {isUsdInput ? '$' : ''}
+                                            </span>
+                                            <Button 
+                                                onClick={handleMaxClick} 
+                                                aria-label="Set maximum amount"
+                                                className="cursor-pointer" 
+                                                radius="sm" 
+                                                size="sm"
                                             >
-                                                {pool.tokenA?.symbol} - {pool.tokenB?.symbol} / fee: {pool.fee / 10_000.0}%
-                                            </SelectItem>
-                                        )}
-                                    </Select>
-                                ):(
-                                    <p>Pool: {currentPool.tokenA?.symbol} - {currentPool.tokenB?.symbol} / fee: {currentPool.fee / 10_000.0}% <Button size="sm" variant="light" onPress={() => setCurrentPool(null)} aria-label="Clear pool selection">Clear</Button></p>
-                                )}
-                                
-                            </div>
-                        
-                        )}
-                        {!Array.isArray(currentPools) || currentPools.length === 0 && (
-                            <p className="pb-8">No pools found for {currentToken.symbol}</p>
-                        )}
-                        <p className="mb-4">Trade Amount</p>
-                        <Input
-                            type="number"
-                            value={String(tradeAmount)}
-                            description="  "
-                            onChange={(e) => {
-                                setTradeAmount(e.target.value);
-                                calculateTradeAmount(e.target.value);
-                            }}
-                            onFocus={handleInputFocus}
-                            isDisabled={tradeToken ? false : true}
-                            className="text-lg"
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken.icon)} /> 
-                                    <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
-                                    {tradeToken && <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
-                                </div>
-                            }
-                            endContent={
-                                <Button 
-                                    onClick={handleMaxClick} 
-                                    aria-label="Set maximum amount"
-                                    className="cursor-pointer" 
-                                    radius="sm" 
-                                    size="sm"
-                                >
-                                    MAX
-                                </Button>
-                            }
-                            step="0.000001"
-                        />
-                        <p className="text-sm text-gray-400 mt-1 text-right">
-                            ≈ ${(Number(tradeAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD
-                        </p>
+                                                MAX
+                                            </Button>
+                                        </div>
+                                    }
+                                    step="0.000001"
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    {isUsdInput 
+                                        ? `≈ ${tradeAmount} ${tradeToken?.symbol}`
+                                        : `≈ $${(Number(tradeAmount) * (tradeToken?.priceUsd || 0)).toFixed(2)} USD`
+                                    }
+                                </p>
 
-                        <p className="mt-4">Receive Amount</p>
-                        <Input
-                            type="number"
-                            value={receiveAmount}
-                            className="text-lg pt-4"
-                            isReadOnly={true}
-                            classNames={{
-                                input: "text-xl pl-4",
-                                inputWrapper: "items-center h-16",
-                                mainWrapper: "h-16",
-                            }}
-                            step="0.000001"
-                            isDisabled={tradeToken ? false : true}
-                            startContent={
-                                <div className="flex items-center mr-2">
-                                    {tradeToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
+                                <p className="mt-4">Receive Amount</p>
+                                <Input
+                                    type="number"
+                                    value={receiveAmount}
+                                    className="text-lg pt-4"
+                                    isReadOnly={true}
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    step="0.000001"
+                                    isDisabled={tradeToken ? false : true}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {currentToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(currentToken.icon)} />}
+                                        </div>
+                                    }
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    ≈ ${(Number(receiveAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD
+                                </p>
+                                <ThresholdSlippageSelector 
+                                    slippage={slippageTolerance} 
+                                    setSlippage={setSlippageTolerance}
+                                    label="Trade Slippage"
+                                />
+                                {renderTradeButton()}
+                            </div>
+                            <ThresholdSection
+                                mode="buy"
+                                selectedThresholdType={selectedThresholdType}
+                                setSelectedThresholdType={setSelectedThresholdType}
+                                currentPool={currentPool}
+                                currentToken={currentToken}
+                                tradeToken={tradeToken}
+                                stopLossPrice={stopLossPrice}
+                                stopLossCap={stopLossCap}
+                                buyOrderPrice={buyOrderPrice}
+                                buyOrderCap={buyOrderCap}
+                                sellOrderPrice={sellOrderPrice}
+                                sellOrderCap={sellOrderCap}
+                                stopLossSlippage={stopLossSlippage}
+                                buyOrderSlippage={buyOrderSlippage}
+                                sellOrderSlippage={sellOrderSlippage}
+                                isSubmitting={isSubmitting}
+                                setStopLossPrice={setStopLossPrice}
+                                setStopLossCap={setStopLossCap}
+                                setBuyOrderPrice={setBuyOrderPrice}
+                                setBuyOrderCap={setBuyOrderCap}
+                                setSellOrderPrice={setSellOrderPrice}
+                                setSellOrderCap={setSellOrderCap}
+                                setStopLossSlippage={setStopLossSlippage}
+                                setBuyOrderSlippage={setBuyOrderSlippage}
+                                setSellOrderSlippage={setSellOrderSlippage}
+                                handleInputFocus={handleInputFocus}
+                                adjustStopLossPrice={(percent) => adjustThresholdPrice('stopLoss', percent)}
+                                adjustSellOrderPrice={(percent) => adjustThresholdPrice('sellOrder', percent)}
+                                adjustBuyOrderPrice={(percent) => adjustThresholdPrice('buyOrder', percent)}
+                                hanndleMaxClickStopLoss={handleMaxClick}
+                                handleMaxClickSellOrder={handleMaxClickSellOrder}
+                                saveThresholds={saveThresholds}
+                                resetThresholdForm={() => {
+                                    setStopLossPrice(currentToken.priceUsd.toString());
+                                    setSellOrderPrice(currentToken.priceUsd.toString());
+                                    setBuyOrderPrice(currentToken.priceUsd.toString());
+                                    setStopLossCap("0.0");
+                                    setBuyOrderCap("0.0");
+                                    setSellOrderCap("0.0");
+                                }}
+                                setIsSubmitting={setIsSubmitting}
+                                setError={(error) => setAlertState({
+                                    isVisible: true,
+                                    message: error,
+                                    type: 'danger'
+                                })}
+                                executeTransaction={executeTransaction}
+                                activeAccount={activeAccount || ''}
+                            />
+                        </Tab>
+                        <Tab 
+                            key="sell" 
+                            title={
+                                <div className="flex items-center justify-center w-full">
+                                    Sell
                                 </div>
                             }
-                        />
-                        <ThresholdSlippageSelector 
-                            slippage={slippageTolerance} 
-                            setSlippage={setSlippageTolerance}
-                            label="Trade Slippage"
-                        />
-                        <Button 
-                            isDisabled={currentPool ? false : true} 
-                            onPress={handleQuote} 
-                            className="w-full" 
-                            endContent={<ArrowsRightLeftIcon className="w-4 h-4" />}
                         >
-                            Trade
-                        </Button>
-                    </div>
-                    <ThresholdSection
-                        selectedThresholdType={selectedThresholdType}
-                        setSelectedThresholdType={setSelectedThresholdType}
-                        currentPool={currentPool}
-                        currentToken={currentToken}
-                        tradeToken={tradeToken}
-                        stopLossPrice={stopLossPrice}
-                        stopLossCap={stopLossCap}
-                        buyOrderPrice={buyOrderPrice}
-                        buyOrderCap={buyOrderCap}
-                        sellOrderPrice={sellOrderPrice}
-                        sellOrderCap={sellOrderCap}
-                        stopLossSlippage={stopLossSlippage}
-                        buyOrderSlippage={buyOrderSlippage}
-                        sellOrderSlippage={sellOrderSlippage}
-                        isSubmitting={isSubmitting}
-                        setIsSubmitting={setIsSubmitting}
-                        setStopLossPrice={setStopLossPrice}
-                        setStopLossCap={setStopLossCap}
-                        setBuyOrderPrice={setBuyOrderPrice}
-                        setBuyOrderCap={setBuyOrderCap}
-                        setSellOrderPrice={setSellOrderPrice}
-                        setSellOrderCap={setSellOrderCap}
-                        setStopLossSlippage={setStopLossSlippage}
-                        setBuyOrderSlippage={setBuyOrderSlippage}
-                        setSellOrderSlippage={setSellOrderSlippage}
-                        handleInputFocus={handleInputFocus}
-                        adjustStopLossPrice={adjustStopLossPrice}
-                        adjustSellOrderPrice={adjustSellOrderPrice}
-                        hanndleMaxClickStopLoss={handleMaxClickStopLoss}
-                        handleMaxClickSellOrder={handleMaxClickSellOrder}
-                        saveThresholds={saveThresholds}
-                        resetThresholdForm={resetThresholdForm}
-                        adjustBuyOrderPrice={adjustBuyOrderPrice}
-                    />
+                            <div className="w-full pb-8">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p>Swap Amount</p>
+                                    <Button
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => setIsUsdInput(!isUsdInput)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className={isUsdInput ? "text-default-500" : "text-white"}>USD</span>
+                                            <span className="text-default-500">/</span>
+                                            <span className={!isUsdInput ? "text-default-500" : "text-white"}>{currentToken?.symbol}</span>
+                                        </div>
+                                    </Button>
+                                </div>
+                                <Input
+                                    type="number"
+                                    value={isUsdInput ? usdAmount : tradeAmount}
+                                    onChange={(e) => {
+                                        const newValue = e.target.value;
+                                        if (isUsdInput) {
+                                            const roundedUsd = Number(newValue).toFixed(2);
+                                            setUsdAmount(roundedUsd);
+                                            const tokenAmount = (Number(roundedUsd) / (currentToken?.priceUsd || 1)).toString();
+                                            setTradeAmount(tokenAmount);
+                                            calculateTradeAmount(tokenAmount);
+                                        } else {
+                                            setTradeAmount(newValue);
+                                            const usdValue = (Number(newValue) * (currentToken?.priceUsd || 0)).toFixed(2);
+                                            setUsdAmount(usdValue);
+                                            calculateTradeAmount(newValue);
+                                        }
+                                    }}
+                                    onFocus={handleInputFocus}
+                                    isDisabled={!currentToken}
+                                    className="text-lg"
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(currentToken?.icon)} />
+                                            <ArrowRightIcon className="w-4 h-4 mt-1 mr-2 ml-2" />
+                                            <Image className="mt-1" width={40} alt="icon" src={getTokenImageUrl(tradeToken?.icon || '')} />
+                                        </div>
+                                    }
+                                    endContent={
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-default-400">
+                                                {isUsdInput ? '$' : ''}
+                                            </span>
+                                            <Button 
+                                                onClick={handleMaxClick} 
+                                                aria-label="Set maximum amount"
+                                                className="cursor-pointer" 
+                                                radius="sm" 
+                                                size="sm"
+                                            >
+                                                MAX
+                                            </Button>
+                                        </div>
+                                    }
+                                    step="0.000001"
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    {isUsdInput 
+                                        ? `≈ ${tradeAmount} ${currentToken?.symbol}`
+                                        : `≈ $${(Number(tradeAmount) * (currentToken?.priceUsd || 0)).toFixed(2)} USD`
+                                    }
+                                </p>
+
+                                <p className="mt-4">Receive Amount</p>
+                                <Input
+                                    type="number"
+                                    value={receiveAmount}
+                                    className="text-lg pt-4"
+                                    isReadOnly={true}
+                                    classNames={{
+                                        input: "text-xl pl-4",
+                                        inputWrapper: "items-center h-16",
+                                        mainWrapper: "h-16",
+                                    }}
+                                    step="0.000001"
+                                    isDisabled={currentToken ? false : true}
+                                    startContent={
+                                        <div className="flex items-center mr-2">
+                                            {tradeToken && <Image className="mt-1" width={30} alt="icon" src={getTokenImageUrl(tradeToken.icon)} />}
+                                        </div>
+                                    }
+                                />
+                                <p className="text-sm text-gray-400 mt-1 text-right">
+                                    ≈ ${(Number(receiveAmount) * (tradeToken?.priceUsd || 0)).toFixed(2)} USD
+                                </p>
+                                <ThresholdSlippageSelector 
+                                    slippage={slippageTolerance} 
+                                    setSlippage={setSlippageTolerance}
+                                    label="Trade Slippage"
+                                />
+                                {renderTradeButton()}
+                            </div>
+                            <ThresholdSection
+                                mode="sell"
+                                selectedThresholdType={selectedThresholdType}
+                                setSelectedThresholdType={setSelectedThresholdType}
+                                currentPool={currentPool}
+                                currentToken={currentToken}
+                                tradeToken={tradeToken}
+                                stopLossPrice={stopLossPrice}
+                                stopLossCap={stopLossCap}
+                                buyOrderPrice={buyOrderPrice}
+                                buyOrderCap={buyOrderCap}
+                                sellOrderPrice={sellOrderPrice}
+                                sellOrderCap={sellOrderCap}
+                                stopLossSlippage={stopLossSlippage}
+                                buyOrderSlippage={buyOrderSlippage}
+                                sellOrderSlippage={sellOrderSlippage}
+                                isSubmitting={isSubmitting}
+                                setStopLossPrice={setStopLossPrice}
+                                setStopLossCap={setStopLossCap}
+                                setBuyOrderPrice={setBuyOrderPrice}
+                                setBuyOrderCap={setBuyOrderCap}
+                                setSellOrderPrice={setSellOrderPrice}
+                                setSellOrderCap={setSellOrderCap}
+                                setStopLossSlippage={setStopLossSlippage}
+                                setBuyOrderSlippage={setBuyOrderSlippage}
+                                setSellOrderSlippage={setSellOrderSlippage}
+                                handleInputFocus={handleInputFocus}
+                                adjustStopLossPrice={(percent) => adjustThresholdPrice('stopLoss', percent)}
+                                adjustSellOrderPrice={(percent) => adjustThresholdPrice('sellOrder', percent)}
+                                adjustBuyOrderPrice={(percent) => adjustThresholdPrice('buyOrder', percent)}
+                                hanndleMaxClickStopLoss={handleMaxClick}
+                                handleMaxClickSellOrder={handleMaxClickSellOrder}
+                                saveThresholds={saveThresholds}
+                                resetThresholdForm={() => {
+                                    setStopLossPrice(currentToken.priceUsd.toString());
+                                    setSellOrderPrice(currentToken.priceUsd.toString());
+                                    setBuyOrderPrice(currentToken.priceUsd.toString());
+                                    setStopLossCap("0.0");
+                                    setBuyOrderCap("0.0");
+                                    setSellOrderCap("0.0");
+                                }}
+                                setIsSubmitting={setIsSubmitting}
+                                setError={(error) => setAlertState({
+                                    isVisible: true,
+                                    message: error,
+                                    type: 'danger'
+                                })}
+                                executeTransaction={executeTransaction}
+                                activeAccount={activeAccount || ''}
+                            />
+                        </Tab>
+                    </Tabs>
                 </div>
             </div>
             
@@ -1220,6 +1762,94 @@ export default function DexPage() {
                     </ModalBody>
                 </ModalContent>
             </Modal>
+
+            <Modal 
+                isOpen={isPoolModalOpen} 
+                onClose={() => {
+                    setIsPoolModalOpen(false);
+                    setPoolSearch("");
+                }}
+                scrollBehavior="inside"
+                size="lg"
+                classNames={{
+                    base: "bg-black border border-gray-800 rounded-lg",
+                    header: "border-b border-gray-800",
+                    body: "max-h-[400px] overflow-y-auto",
+                    closeButton: "hover:bg-gray-800 active:bg-gray-700"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">Select Pool</ModalHeader>
+                    <ModalBody>
+                        <Input
+                            placeholder="Search pools..."
+                            value={poolSearch}
+                            onChange={(e) => setPoolSearch(e.target.value)}
+                            startContent={<SearchIcon className="w-4 h-4 text-default-400" />}
+                            className="mb-4"
+                            classNames={{
+                                input: "bg-black",
+                                inputWrapper: "bg-black border border-gray-800 hover:bg-gray-900"
+                            }}
+                        />
+                        <div className="flex flex-col gap-2">
+                            {filteredPools.map((pool: Pool) => (
+                                <Button
+                                    key={pool.id}
+                                    variant="light"
+                                    className="w-full justify-start p-4 hover:bg-gray-900"
+                                    onPress={() => {
+                                        setSelectedPool(pool);
+                                        setCurrentPool(pool);
+                                        if (pool.tokenA && pool.tokenB) {
+                                            setCurrentToken(pool.tokenA as Token);
+                                            setTradeToken(pool.tokenB as Token);
+                                        }
+                                        setIsPoolModalOpen(false);
+                                        setPoolSearch("");
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative w-12 h-6">
+                                            <Image
+                                                src={getTokenImageUrl(pool.tokenA?.icon || '')}
+                                                alt={pool.tokenA?.symbol}
+                                                width={24}
+                                                height={24}
+                                                className="absolute left-0 top-0"
+                                            />
+                                            <Image
+                                                src={getTokenImageUrl(pool.tokenB?.icon || '')}
+                                                alt={pool.tokenB?.symbol}
+                                                width={24}
+                                                height={24}
+                                                className="absolute left-4 top-0"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-semibold">
+                                                {pool.tokenA?.symbol} / {pool.tokenB?.symbol}
+                                            </span>
+                                            <span className="text-sm text-default-500">
+                                                Fee: {pool.fee / 10_000.0}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Button>
+                            ))}
+                        </div>
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
+
+            <PasswordModal
+                context={passwordModalContext}
+                password={password}
+                setPassword={setPassword}
+                onSubmit={handlePasswordSubmit}
+                setContext={setPasswordModalContext}
+                isSubmitting={isSubmitting}
+            />
         </div>
     );
 }

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const client = Client.forTestnet();
+        const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
         client.setOperator(process.env.NEXT_PUBLIC_OPERATOR_ID as string, process.env.OPERATOR_KEY as string);
 
         // Get the serial number from contract

@@ -1,0 +1,6 @@
+---
+description: handling testnet vs. mainnet 
+globs: 
+---
+
+Whenever you are setting a blockchain client or url such as a mirrornode, do not declare the chain directly in the production file. Use the ev var NEXT_PUBLIC_HEDERA_NETWORK so that this project woorks in both instances.
