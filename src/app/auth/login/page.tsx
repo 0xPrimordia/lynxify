@@ -40,7 +40,7 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-black flex items-start justify-center pt-20">
-            <div className="w-[450px] bg-black rounded-lg border border-gray-800 shadow-xl p-8 mx-4">
+            <div className="w-[450px] sm:w-[450px] bg-black rounded-lg border border-gray-800 shadow-xl p-4 sm:p-8 mx-1.5 sm:mx-0">
                 <h1 className={`text-4xl font-bold mb-6 text-white text-center ${vt323.className}`}>Log In</h1>
                 
                 {error && (

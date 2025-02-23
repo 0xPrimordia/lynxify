@@ -1204,7 +1204,7 @@ export default function DexPage() {
                     <div className="lg:hidden">
                         <Button
                             variant="light"
-                            className="w-full mb-2 flex items-center justify-center"
+                            className={`w-full mb-2 flex items-center justify-center ${!isChartCollapsed && 'fixed top-[80px] z-[51] left-0 right-0 bg-black'}`}
                             onPress={() => setIsChartCollapsed(!isChartCollapsed)}
                         >
                             {isChartCollapsed ? (
@@ -1214,8 +1214,11 @@ export default function DexPage() {
                             )}
                         </Button>
                     </div>
-                    {/* Adjust mobile chart height */}
-                    <div className={`${isChartCollapsed ? 'h-0 lg:h-[calc(100vh-120px)]' : 'h-[80vh] lg:h-[calc(100vh-120px)]'} transition-all duration-300`}>
+                    <div className={`
+                        ${isChartCollapsed ? 'h-0' : 'h-[400px]'} 
+                        lg:h-[calc(100vh-120px)]
+                        ${!isChartCollapsed && 'lg:hidden fixed inset-0 top-[120px] z-50 bg-black h-[calc(100vh-120px)]'}
+                    `}>
                         <Tabs 
                             aria-label="section" 
                             selectedKey={selectedSection} 
