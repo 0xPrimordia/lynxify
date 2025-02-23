@@ -12,8 +12,8 @@ function RegisterContent() {
     const campaignId = searchParams.get('c');
 
     return (
-        <div className="min-h-screen bg-black flex items-start justify-center pt-20">
-            <div className="w-[450px] bg-black rounded-lg border border-gray-800 shadow-xl p-8 mx-4">
+        <div className="min-h-screen bg-black flex items-start justify-center pt-20 w-full">
+            <div className="w-[calc(100%-6px)] sm:w-[450px] bg-black rounded-lg border border-gray-800 shadow-xl p-4 sm:p-8 mx-0.5 sm:mx-0 min-w-[245px]">
                 <h1 className={`text-4xl font-bold mb-6 text-white text-center ${vt323.className}`}>Register</h1>
                 <ConnectWallet campaignId={campaignId} />
             </div>

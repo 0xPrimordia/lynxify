@@ -189,10 +189,6 @@ const Header = () => {
                 isMenuOpen={isMenuOpen}
                 onMenuOpenChange={setIsMenuOpen}
             >
-                <NavbarContent className="sm:hidden" justify="start">
-                    <NavbarMenuToggle />
-                </NavbarContent>
-
                 <NavbarBrand>
                     <Link href="/" className="cursor-pointer">
                         <span className="box">
@@ -322,18 +318,7 @@ const Header = () => {
                 {/* Mobile Menu Button - Always visible on mobile */}
                 <NavbarContent className="sm:hidden" justify="end">
                     {!isConnected ? (
-                        <Button 
-                            size="sm"
-                            variant="bordered"
-                            style={{
-                                backgroundColor: "#0159E0",
-                                color: "white",
-                                borderColor: "#0159E0"
-                            }}
-                            onPress={() => setShowConnectModal(true)}
-                        >
-                            Connect
-                        </Button>
+                        <NavbarMenuToggle />
                     ) : (
                         <Button 
                             variant="light" 
@@ -350,29 +335,89 @@ const Header = () => {
                     <NavbarMenuItem>
                         <Link 
                             href="/dex" 
-                            className="w-full py-2 text-foreground-500 hover:text-foreground"
+                            className={`w-full py-2 text-foreground-500 hover:text-foreground text-2xl ${vt323.className}`}
                         >
                             DEX
                         </Link>
                     </NavbarMenuItem>
-                    <NavbarMenuItem>
+                    <NavbarMenuItem className="mb-6">
                         <Link 
                             href="/wallet" 
-                            className="w-full py-2 text-foreground-500 hover:text-foreground"
+                            className={`w-full py-2 text-foreground-500 hover:text-foreground text-2xl ${vt323.className}`}
                         >
                             Wallet
                         </Link>
                     </NavbarMenuItem>
-                    {isConnected && (
-                        <NavbarMenuItem className="mb-4">
-                            <div className="px-3 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center justify-between w-full">
-                                <span className="text-[#0159E0] font-bold">
-                                    {totalXP} XP
-                                </span>
-                            </div>
-                        </NavbarMenuItem>
+
+                    {/* Updated mobile authentication section */}
+                    {!isConnected && !isSignedIn ? (
+                        <>
+                            <NavbarMenuItem>
+                                <Button 
+                                    className="w-full" 
+                                    variant="bordered"
+                                    style={{
+                                        backgroundColor: "#0159E0",
+                                        color: "white",
+                                        borderColor: "#0159E0"
+                                    }}
+                                    onPress={() => handleConnect()}
+                                >
+                                    Connect Wallet
+                                </Button>
+                            </NavbarMenuItem>
+                            <NavbarMenuItem>
+                                <Button
+                                    className="w-full"
+                                    variant="bordered"
+                                    onPress={() => setShowConnectModal(true)}
+                                >
+                                    Create Wallet
+                                </Button>
+                            </NavbarMenuItem>
+                            <NavbarMenuItem>
+                                <Button
+                                    className="w-full"
+                                    variant="light"
+                                    onPress={() => router.push('/auth/login')}
+                                >
+                                    Sign In
+                                </Button>
+                            </NavbarMenuItem>
+                        </>
+                    ) : (
+                        <>
+                            {/* Show when connected */}
+                            <NavbarMenuItem className="mb-4">
+                                <div className="px-3 py-2 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center justify-between w-full">
+                                    <span className="text-[#0159E0] font-bold">
+                                        {totalXP} XP
+                                    </span>
+                                </div>
+                            </NavbarMenuItem>
+                            
+                            <NavbarMenuItem>
+                                <div 
+                                    className="w-full py-2 text-foreground-500 cursor-pointer"
+                                    onClick={() => handleCopyAccount(activeAccount!)}
+                                >
+                                    Account: {activeAccount}
+                                </div>
+                            </NavbarMenuItem>
+                            
+                            <NavbarMenuItem>
+                                <Button 
+                                    color="danger" 
+                                    variant="flat" 
+                                    onPress={handleSignOut}
+                                    className="w-full"
+                                >
+                                    Sign Out
+                                </Button>
+                            </NavbarMenuItem>
+                        </>
                     )}
-                    
+
                     <NavbarMenuItem>
                         <Link 
                             href="/token" 
@@ -388,26 +433,6 @@ const Header = () => {
                             <span>LXY Token</span>
                         </Link>
                     </NavbarMenuItem>
-
-                    {isConnected && (
-                        <>
-                            <NavbarMenuItem className="py-2">
-                                <div className="text-sm text-foreground-500">
-                                    Account: {account}
-                                </div>
-                            </NavbarMenuItem>
-                            <NavbarMenuItem>
-                                <Button 
-                                    color="danger" 
-                                    variant="flat" 
-                                    onPress={handleDisconnect}
-                                    className="w-full"
-                                >
-                                    Sign Out
-                                </Button>
-                            </NavbarMenuItem>
-                        </>
-                    )}
                 </NavbarMenu>
             </Navbar>
 
