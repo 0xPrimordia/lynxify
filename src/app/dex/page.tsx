@@ -1064,6 +1064,7 @@ export default function DexPage() {
                         alt={selectedPool?.tokenA?.symbol || ''}
                         width={24}
                         height={24}
+                        className="object-contain" // Add this to maintain aspect ratio
                     />
                 </div>
                 <Button
@@ -1085,6 +1086,7 @@ export default function DexPage() {
                         alt={selectedPool?.tokenB?.symbol || ''}
                         width={24}
                         height={24}
+                        className="object-contain" // Add this to maintain aspect ratio
                     />
                 </div>
             </div>
@@ -1190,7 +1192,8 @@ export default function DexPage() {
             <div className="relative">
                 <TestnetAlert />
             </div>
-            <div className="w-full px-8 mb-6">
+            {/* Add mobile padding */}
+            <div className="w-full px-4 md:px-8 mb-6">
                 <div className="flex justify-between items-center">
                     <PoolSelector />
                     <SwapDirectionSelector />
@@ -1201,7 +1204,7 @@ export default function DexPage() {
                     <div className="lg:hidden">
                         <Button
                             variant="light"
-                            className="w-full mb-2 flex items-center justify-center"
+                            className={`w-full mb-2 flex items-center justify-center ${!isChartCollapsed && 'fixed top-[80px] z-[51] left-0 right-0 bg-black'}`}
                             onPress={() => setIsChartCollapsed(!isChartCollapsed)}
                         >
                             {isChartCollapsed ? (
@@ -1211,7 +1214,11 @@ export default function DexPage() {
                             )}
                         </Button>
                     </div>
-                    <div className={`${isChartCollapsed ? 'h-0 lg:h-[calc(100vh-120px)]' : 'h-[500px] lg:h-[calc(100vh-120px)]'} transition-all duration-300`}>
+                    <div className={`
+                        ${isChartCollapsed ? 'h-0' : 'h-[400px]'} 
+                        lg:h-[calc(100vh-120px)]
+                        ${!isChartCollapsed && 'lg:hidden fixed inset-0 top-[120px] z-50 bg-black h-[calc(100vh-120px)]'}
+                    `}>
                         <Tabs 
                             aria-label="section" 
                             selectedKey={selectedSection} 
@@ -1336,7 +1343,8 @@ export default function DexPage() {
                     </div>
                 </div>
 
-                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto lg:pr-8 pb-24">
+                {/* Add mobile padding to swap form */}
+                <div className="w-full lg:w-[30%] order-1 lg:order-2 overflow-y-auto lg:pr-8 pb-24 px-4 lg:px-0">
                     <Tabs 
                         aria-label="Trading Options" 
                         className="w-full"

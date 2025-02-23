@@ -73,13 +73,13 @@ export default function WalletLayout({ children }: { children: React.ReactNode }
 
     return (
         <div className="min-h-screen w-full bg-black">
-            <div className="flex w-full">
-                {/* Sidebar */}
-                <div className="w-64 bg-black border-r border-gray-800 min-h-screen fixed">
+            <div className="flex w-full flex-col sm:flex-row">
+                {/* Sidebar - mobile friendly */}
+                <div className="w-full sm:w-64 bg-black border-b sm:border-r border-gray-800 sm:min-h-screen sm:fixed">
                     <div className="p-6">
                         <h2 className="text-xl font-semibold text-white">Wallet</h2>
                     </div>
-                    <nav className="space-y-1 px-4">
+                    <nav className="space-y-1 px-4 pb-4 sm:pb-0">
                         {navigation.map((item) => {
                             const isActive = pathname === item.href;
                             return (
@@ -105,10 +105,10 @@ export default function WalletLayout({ children }: { children: React.ReactNode }
                     </nav>
                 </div>
 
-                {/* Main content */}
-                <div className="flex-1 pl-64">
+                {/* Main content - adjusted for mobile */}
+                <div className="flex-1 sm:pl-64">
                     <main className="w-full min-h-screen bg-black">
-                        <div className="p-8">
+                        <div className="p-4 sm:p-8">
                             {children}
                         </div>
                     </main>
