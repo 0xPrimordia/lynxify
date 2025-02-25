@@ -4,3 +4,4 @@
 /node_modules
 /.next
 .env.local
+scripts/create-lxy-token-mainnet.ts
