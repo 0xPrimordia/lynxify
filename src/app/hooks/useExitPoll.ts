@@ -48,8 +48,18 @@ export const useExitPoll = () => {
 
   const handlePollSubmit = async (data: ExitPollData) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
       await supabase.from('exit_polls').insert([{
-        ...data,
+        rating: data.rating,
+        feedback: data.feedback,
+        usage_type: data.usageType,
+        will_return: data.willReturn,
+        user_id: user.id,
         submitted_at: new Date().toISOString()
       }]);
       
