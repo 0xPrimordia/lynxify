@@ -17,19 +17,34 @@ export const useExitPoll = () => {
 
     const shouldShowPoll = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('[ExitPoll] Auth check:', { isAuthenticated: !!user });
-      return !hasShownPoll && 
+      const should = !hasShownPoll && 
              !isUnloading && 
              !localStorage.getItem('exitPollCompleted') && 
-             !!user;  // Only show for authenticated users
+             !!user;
+      
+      console.log('[ExitPoll] shouldShowPoll check:', { 
+        isAuthenticated: !!user,
+        hasShownPoll,
+        isUnloading,
+        hasCompletedPoll: !!localStorage.getItem('exitPollCompleted'),
+        shouldShow: should
+      });
+      
+      return should;
     };
 
     const showPollSafely = () => {
+      console.log('[ExitPoll] Attempting to show poll safely');
       shouldShowPoll().then(should => {
+        console.log('[ExitPoll] Should show poll result:', should);
         if (should) {
-          console.log('[ExitPoll] Showing poll');
+          console.log('[ExitPoll] Setting hasShownPoll to true');
           hasShownPoll = true;
-          setTimeout(() => setShowPoll(true), 0);
+          console.log('[ExitPoll] Calling setShowPoll(true)');
+          setTimeout(() => {
+            setShowPoll(true);
+            console.log('[ExitPoll] setShowPoll(true) called');
+          }, 0);
         }
       });
     };
@@ -63,12 +78,14 @@ export const useExitPoll = () => {
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('beforeunload', handleBeforeUnload);
       document.addEventListener('mouseleave', handleMouseLeave);
+      console.log('[ExitPoll] Event listeners attached');
     }, 1000);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('mouseleave', handleMouseLeave);
+      console.log('[ExitPoll] Event listeners cleaned up');
     };
   }, [supabase]);
 
