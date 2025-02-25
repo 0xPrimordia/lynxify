@@ -12,6 +12,7 @@ import FeedbackForm from "./components/FeedbackForm";
 import FormspreeProvider from './components/FormspreeProvider';
 import { Providers } from "./providers";
 import { Toaster } from 'sonner';
+import { ExitPollWrapper } from './components/ExitPollWrapper';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -59,24 +60,25 @@ export default function RootLayout({
                     {children}
                   </main>
                   <FeedbackForm />
+                  <ExitPollWrapper />
                 </PoolProvider>
               </SaucerSwapProvider>
             </WalletProvider>
           </InAppWalletProvider>
+          <Toaster 
+            richColors 
+            position="top-right"
+            theme="dark"
+            className="!bg-gray-900"
+            toastOptions={{
+              style: {
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                color: 'white',
+              },
+            }}
+          />
         </SupabaseProvider>
-        <Toaster 
-          richColors 
-          position="top-right"
-          theme="dark"
-          className="!bg-gray-900"
-          toastOptions={{
-            style: {
-              background: '#1a1a1a',
-              border: '1px solid #333',
-              color: 'white',
-            },
-          }}
-        />
       </body>
     </html>
   );
