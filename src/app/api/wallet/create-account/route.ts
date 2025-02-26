@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
         // Create Hedera account
         const transaction = new AccountCreateTransaction()
             .setKey(publicKey)
-            .setInitialBalance(new Hbar(0.5))
+            .setInitialBalance(new Hbar(0.01))
             .setMaxAutomaticTokenAssociations(-1);
 
         const response = await transaction.execute(client);
