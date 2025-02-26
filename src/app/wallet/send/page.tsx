@@ -97,7 +97,7 @@ export default function SendPage() {
     fetchBalances();
   }, [inAppAccount]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inAppAccount) {
       setError('Wallet not connected');
@@ -190,7 +190,7 @@ export default function SendPage() {
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-white mb-6">Send Tokens</h1>
       
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6" noValidate>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Select Token
