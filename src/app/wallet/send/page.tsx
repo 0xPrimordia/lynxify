@@ -150,6 +150,18 @@ export default function SendPage() {
             const senderAccountId = AccountId.fromString(inAppAccount);
             const recipientAccountId = AccountId.fromString(recipient);
             
+            console.log('[SendPage] Account details:', {
+                sender: {
+                    original: inAppAccount,
+                    parsed: senderAccountId.toString()
+                },
+                recipient: {
+                    original: recipient,
+                    parsed: recipientAccountId.toString()
+                },
+                amount: numAmount
+            });
+            
             transaction = await new TransferTransaction()
                 .addHbarTransfer(senderAccountId, new Hbar(-numAmount))
                 .addHbarTransfer(recipientAccountId, new Hbar(numAmount))
@@ -158,10 +170,11 @@ export default function SendPage() {
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
                 
-            console.log('[SendPage] Created HBAR transaction:', {
-                sender: senderAccountId.toString(),
-                recipient: recipientAccountId.toString(),
-                amount: numAmount
+            console.log('[SendPage] Transaction details:', {
+                transactionId: transaction.transactionId?.toString(),
+                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString()),
+                transfers: transaction.hbarTransfers,
+                maxFee: transaction.maxTransactionFee?.toString()
             });
         } else {
             const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
