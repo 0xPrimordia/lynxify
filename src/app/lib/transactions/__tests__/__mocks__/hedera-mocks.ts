@@ -16,7 +16,10 @@ export class MockAccountBalanceQuery {
 
         const accountStr = this.accountId.toString();
         if (!VALID_ACCOUNTS.has(accountStr)) {
-            throw new Error('INVALID_ACCOUNT_ID');
+            // Match the exact error format from the Hedera SDK
+            const error = new Error(`transaction 0.0.0@${Date.now()} failed precheck with status INVALID_ACCOUNT_ID against node account id 0.0.4`);
+            error.name = 'StatusError';
+            throw error;
         }
 
         return {
