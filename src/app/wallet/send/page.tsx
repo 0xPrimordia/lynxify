@@ -142,16 +142,19 @@ export default function SendPage() {
       const encodedTx = transactionToBase64String(transaction);
 
       if (walletType === 'inApp') {
-        await handleInAppTransaction(
-          encodedTx,
-          signTransaction,
-          (context) => setPasswordModalContext({
-            ...context,
-            transactionPromise: new Promise((resolve, reject) => {
-              context.transactionPromise = { resolve, reject };
+        await new Promise((resolve, reject) => {
+          handleInAppTransaction(
+            encodedTx,
+            signTransaction,
+            (context) => setPasswordModalContext({
+              ...context,
+              transactionPromise: new Promise((res, rej) => {
+                resolve(res);
+                reject(rej);
+              })
             })
-          })
-        );
+          );
+        });
       } else {
         await handleExtensionTransaction(
           encodedTx,
