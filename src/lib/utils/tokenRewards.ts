@@ -1,6 +1,11 @@
 import { AccountId, Client, TokenId, TransferTransaction, TokenAssociateTransaction, AccountInfoQuery } from "@hashgraph/sdk";
 
-const SAUCE_TOKEN_ID = "0.0.1183558"; // From your test files
+let SAUCE_TOKEN_ID: string;
+if (process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet') {
+    SAUCE_TOKEN_ID = "0.0.1183558";
+} else {
+    SAUCE_TOKEN_ID = "0.0.731861";
+}
 
 export async function rewardNewWallet(
     client: Client,
