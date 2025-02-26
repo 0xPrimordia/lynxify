@@ -171,13 +171,19 @@ export default function SendPage() {
     
     if (walletType === 'inApp') {
       return new Promise((resolve, reject) => {
+        setPasswordModalContext({
+          isOpen: true,
+          transaction: tx,
+          description: description,
+          transactionPromise: { resolve, reject }
+        });
+        
         handleInAppTransaction(tx, signTransaction, (context) => {
-          setPasswordModalContext({
-            isOpen: true,
-            transaction: tx,
-            description: description,
-            transactionPromise: { resolve, reject }
-          });
+          setPasswordModalContext(prev => ({
+            ...prev,
+            ...context,
+            transactionPromise: prev.transactionPromise
+          }));
         });
       });
     } else {
