@@ -151,10 +151,11 @@ export default function SendPage() {
             const recipientAccountId = AccountId.fromString(recipient);
             const hbarAmount = Hbar.from(numAmount, HbarUnit.Hbar);
             
-            console.log('[SendPage] Creating HBAR transfer:', {
+            console.log('[SendPage] HBAR Transfer Details:', {
                 sender: senderAccountId.toString(),
                 recipient: recipientAccountId.toString(),
-                amount: hbarAmount.toString()
+                amount: hbarAmount.toString(),
+                network: process.env.NEXT_PUBLIC_HEDERA_NETWORK
             });
 
             // Create the transaction exactly following the Hedera docs pattern
@@ -165,10 +166,12 @@ export default function SendPage() {
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
 
+            // Log the transaction details for debugging
             console.log('[SendPage] Transfer transaction created:', {
-                id: transaction.transactionId?.toString() ?? 'unknown',
-                transfers: transaction.hbarTransfers,
-                maxFee: transaction.maxTransactionFee?.toString() ?? '2 ℏ'
+                id: transaction.transactionId?.toString(),
+                hbarTransfers: transaction.hbarTransfers,
+                maxFee: transaction.maxTransactionFee?.toString(),
+                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString())
             });
         } else {
             // Token transfer case
@@ -177,11 +180,12 @@ export default function SendPage() {
             const recipientAccountId = AccountId.fromString(recipient);
             const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
 
-            console.log('[SendPage] Creating token transfer:', {
+            console.log('[SendPage] Token Transfer Details:', {
                 token: tokenId.toString(),
                 sender: senderAccountId.toString(),
                 recipient: recipientAccountId.toString(),
-                amount: tokenAmount
+                amount: tokenAmount,
+                network: process.env.NEXT_PUBLIC_HEDERA_NETWORK
             });
 
             transaction = await new TransferTransaction()
@@ -191,15 +195,25 @@ export default function SendPage() {
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
 
+            // Log the transaction details for debugging
             console.log('[SendPage] Token transfer created:', {
-                id: transaction.transactionId?.toString() ?? 'unknown',
-                transfers: transaction.tokenTransfers,
-                maxFee: transaction.maxTransactionFee?.toString() ?? '2 ℏ'
+                id: transaction.transactionId?.toString(),
+                tokenTransfers: transaction.tokenTransfers,
+                maxFee: transaction.maxTransactionFee?.toString(),
+                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString())
             });
         }
 
         console.log('[SendPage] Encoding transaction');
         const encodedTx = transactionToBase64String(transaction);
+
+        // Log the decoded transaction for verification
+        const decodedTx = base64StringToTransaction(encodedTx) as TransferTransaction;
+        console.log('[SendPage] Decoded transaction for verification:', {
+            hbarTransfers: decodedTx.hbarTransfers,
+            tokenTransfers: decodedTx.tokenTransfers,
+            nodeAccountIds: decodedTx.nodeAccountIds?.map(id => id.toString())
+        });
 
         console.log('[SendPage] Executing transaction');
         const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
