@@ -28,6 +28,13 @@ export interface InAppWalletContextType {
     setInAppAccount: (accountId: string) => void;
     recoverKey: (userId: string) => Promise<WalletOperationResult<void>>;
     verifyMetadataSync: (currentMetadata: any, storedMetadata: any) => Promise<WalletOperationResult<boolean>>;
+    setPasswordModalContext: (context: {
+        isOpen: boolean;
+        transaction: string | null;
+        description: string;
+        transactionPromise: null | Promise<any>;
+    }) => void;
+    walletType: 'inApp' | 'extension' | null;
 }
 
 interface WalletState {
@@ -306,7 +313,16 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             setInAppAccount: (accountId: string) => 
                 setWalletState(prev => ({ ...prev, inAppAccount: accountId })),
             recoverKey,
-            verifyMetadataSync
+            verifyMetadataSync,
+            setPasswordModalContext: (context: {
+                isOpen: boolean;
+                transaction: string | null;
+                description: string;
+                transactionPromise: null | Promise<any>;
+            }) => {
+                // Implementation of setPasswordModalContext
+            },
+            walletType: null
         }}>
             {children}
         </InAppWalletContext.Provider>
