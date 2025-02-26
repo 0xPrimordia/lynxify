@@ -150,10 +150,12 @@ export default function SendPage() {
             const senderAccountId = AccountId.fromString(inAppAccount);
             const recipientAccountId = AccountId.fromString(recipient);
             
-            transaction = new TransferTransaction()
+            transaction = await new TransferTransaction()
                 .addHbarTransfer(senderAccountId, new Hbar(-numAmount))
                 .addHbarTransfer(recipientAccountId, new Hbar(numAmount))
                 .setTransactionId(TransactionId.generate(senderAccountId))
+                .setNodeAccountIds([new AccountId(3)])
+                .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
                 
             console.log('[SendPage] Created HBAR transaction:', {
