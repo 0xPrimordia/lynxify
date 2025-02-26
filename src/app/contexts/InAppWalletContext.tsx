@@ -207,7 +207,20 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             }
 
             const tx = base64StringToTransaction(transaction);
+            console.log("[InAppWalletContext] Decoded transaction:", {
+                type: tx.constructor.name,
+                hbarTransfers: tx instanceof TransferTransaction ? tx.hbarTransfers : null,
+                transactionId: tx.transactionId?.toString(),
+                nodeAccountIds: tx.nodeAccountIds?.map(id => id.toString())
+            });
+
             const signedTx = await tx.sign(loadResult.data);
+            console.log("[InAppWalletContext] Signed transaction:", {
+                type: signedTx.constructor.name,
+                hbarTransfers: signedTx instanceof TransferTransaction ? signedTx.hbarTransfers : null,
+                transactionId: signedTx.transactionId?.toString(),
+                nodeAccountIds: signedTx.nodeAccountIds?.map(id => id.toString())
+            });
 
             // Log transaction details before execution
             if (tx instanceof TransferTransaction) {

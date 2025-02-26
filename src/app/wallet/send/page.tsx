@@ -153,7 +153,7 @@ export default function SendPage() {
         }
 
         console.log('[SendPage] Creating transaction');
-        let transaction;
+        let transaction: TransferTransaction;
         if (selectedToken.isHbar) {
             // Create transfer with explicit AccountId objects and proper validation
             const senderAccountId = AccountId.fromString(inAppAccount);
@@ -172,6 +172,65 @@ export default function SendPage() {
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
+
+            // Log complete transaction details before encoding
+            const txTransfers = Array.from(Object.keys(transaction.hbarTransfers)).map(key => ({
+                account: key,
+                amount: transaction.hbarTransfers.get(key)?.toString()
+            }));
+
+            console.log('[SendPage] Transaction before encoding:', {
+                hbarTransfers: txTransfers,
+                transactionId: transaction.transactionId?.toString(),
+                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString()),
+                maxTransactionFee: transaction.maxTransactionFee?.toString()
+            });
+
+            console.log('[SendPage] Encoding transaction');
+            const encodedTx = transactionToBase64String(transaction);
+
+            // Verify the transaction after encoding
+            console.log('[SendPage] Verifying encoded transaction');
+            const verifyTx = base64StringToTransaction(encodedTx) as TransferTransaction;
+            
+            // Log complete decoded transaction details
+            const verifyTxTransfers = Array.from(Object.keys(verifyTx.hbarTransfers)).map(key => ({
+                account: key,
+                amount: verifyTx.hbarTransfers.get(key)?.toString()
+            }));
+
+            console.log('[SendPage] Decoded transaction for verification:', {
+                hbarTransfers: verifyTxTransfers,
+                transactionId: verifyTx.transactionId?.toString(),
+                nodeAccountIds: verifyTx.nodeAccountIds?.map(id => id.toString()),
+                maxTransactionFee: verifyTx.maxTransactionFee?.toString()
+            });
+
+            // Verify critical transaction properties are preserved
+            const originalRecipientAmount = transaction.hbarTransfers.get(recipientAccountId.toString())?.toString();
+            const decodedRecipientAmount = verifyTx.hbarTransfers.get(recipientAccountId.toString())?.toString();
+            
+            if (originalRecipientAmount !== decodedRecipientAmount) {
+                console.error('[SendPage] Transaction amount mismatch after encoding/decoding:', {
+                    original: originalRecipientAmount,
+                    decoded: decodedRecipientAmount
+                });
+                throw new Error('Transaction data corrupted during encoding');
+            }
+
+            console.log('[SendPage] Executing transaction');
+            const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
+            console.log('[SendPage] Transaction execution result:', result);
+
+            // Only clear form if we get a successful result
+            if (result?.status === 'SUCCESS') {
+                setAmount('');
+                setRecipient('');
+                console.log('[SendPage] Transaction successful, form cleared');
+            } else {
+                console.error('[SendPage] Transaction failed:', result);
+                setError('Transaction failed. Please try again.');
+            }
         } else {
             // Token transfer case
             const tokenId = TokenId.fromString(selectedToken.id);
@@ -192,25 +251,24 @@ export default function SendPage() {
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
+
+            console.log('[SendPage] Encoding transaction');
+            const encodedTx = transactionToBase64String(transaction);
+
+            console.log('[SendPage] Executing transaction');
+            const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
+            console.log('[SendPage] Transaction execution result:', result);
+
+            // Only clear form if we get a successful result
+            if (result?.status === 'SUCCESS') {
+                setAmount('');
+                setRecipient('');
+                console.log('[SendPage] Transaction successful, form cleared');
+            } else {
+                console.error('[SendPage] Transaction failed:', result);
+                setError('Transaction failed. Please try again.');
+            }
         }
-
-        console.log('[SendPage] Encoding transaction');
-        const encodedTx = transactionToBase64String(transaction);
-
-        console.log('[SendPage] Executing transaction');
-        const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
-        console.log('[SendPage] Transaction execution result:', result);
-
-        // Only clear form if we get a successful result
-        if (result?.status === 'SUCCESS') {
-            setAmount('');
-            setRecipient('');
-            console.log('[SendPage] Transaction successful, form cleared');
-        } else {
-            console.error('[SendPage] Transaction failed:', result);
-            setError('Transaction failed. Please try again.');
-        }
-        
     } catch (err: any) {
         console.error('[SendPage] Error in submit handler:', err);
         setError(err.message || 'Transaction failed. Please try again.');
