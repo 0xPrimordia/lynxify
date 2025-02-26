@@ -203,17 +203,20 @@ export default function SendPage() {
         passwordModalContext.transactionPromise.resolve(result);
         setAmount('');
         setRecipient('');
+        resetPasswordModal();
       } else {
         throw new Error(result.error || 'Transaction failed');
       }
     } catch (error: any) {
-      setError(error.message);
-      setIsSubmitting(false);
-      return;
+      setError(error.message === 'OperationError' ? 'Invalid password. Please try again.' : error.message);
+      if (error.message === 'OperationError') {
+        setIsSubmitting(false);
+        return;
+      }
+      resetPasswordModal();
     }
     
     setIsSubmitting(false);
-    resetPasswordModal();
   };
 
   if (isLoadingBalances) {
