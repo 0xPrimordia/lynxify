@@ -1,3 +1,6 @@
+// Mock IndexedDB for key storage
+require('fake-indexeddb/auto');
+
 // Mock the ESM modules and dependencies first
 jest.mock('@hashgraph/hedera-wallet-connect', () => ({
   transactionToBase64String: jest.fn().mockReturnValue('mock-encoded-tx'),
@@ -10,6 +13,25 @@ jest.mock('@hashgraph/hedera-wallet-connect', () => ({
     })
   })
 }));
+
+// Mock the storage access
+jest.mock('@/lib/utils/keyStorage', () => {
+  const mockEncryptedKey = {
+    salt: new Uint8Array(16),
+    iv: new Uint8Array(12),
+    encryptedData: new Uint8Array(112),
+  };
+
+  return {
+    getStoredKey: jest.fn().mockResolvedValue(mockEncryptedKey),
+    decryptStoredKey: jest.fn().mockImplementation((encryptedKey, password) => {
+      if (password === '') {
+        throw new Error('OperationError');
+      }
+      return 'decrypted-private-key';
+    })
+  };
+});
 
 jest.mock('@/app/hooks/useAuthSession.setup', () => ({
   TestWrapper: ({ children }: { children: React.ReactNode }) => children,
@@ -98,12 +120,33 @@ import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 import { Hbar } from '@hashgraph/sdk';
 import { AccountBalanceQuery } from '@hashgraph/sdk';
 
+// Add mock for PasswordModal component
+jest.mock('@/app/components/PasswordModal', () => ({
+  PasswordModal: ({ context, password, setPassword, onSubmit }: any) => {
+    if (!context.isOpen) return null;
+    return (
+      <div data-testid="password-modal">
+        <div>{context.description}</div>
+        <input
+          type="password"
+          placeholder="Enter your wallet password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          data-testid="password-input"
+        />
+        <button onClick={onSubmit} data-testid="submit-button">Submit</button>
+      </div>
+    );
+  }
+}));
+
 // Add mock for usePasswordModal with proper Promise structure
 jest.mock('@/app/hooks/usePasswordModal', () => {
   const { useState } = require('react');
 
   return {
     usePasswordModal: () => {
+      const [password, setPassword] = useState('');
       const [modalContext, setModalContext] = useState({
         isOpen: false,
         transaction: null,
@@ -111,12 +154,22 @@ jest.mock('@/app/hooks/usePasswordModal', () => {
         transactionPromise: null
       });
 
+      const resetPasswordModal = () => {
+        setPassword('');
+        setModalContext({
+          isOpen: false,
+          transaction: null,
+          description: '',
+          transactionPromise: null
+        });
+      };
+
       return {
-        password: '',
-        setPassword: jest.fn(),
+        password,
+        setPassword,
         passwordModalContext: modalContext,
         setPasswordModalContext: setModalContext,
-        resetPasswordModal: jest.fn()
+        resetPasswordModal
       };
     }
   };
@@ -124,8 +177,7 @@ jest.mock('@/app/hooks/usePasswordModal', () => {
 
 jest.mock('@/app/lib/transactions/inAppWallet', () => ({
   handleInAppTransaction: jest.fn().mockImplementation((tx, signTransaction, setContext) => {
-    // Create a promise that will be resolved when the password is submitted
-    const promise = new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       setContext({
         isOpen: true,
         transaction: tx,
@@ -133,20 +185,11 @@ jest.mock('@/app/lib/transactions/inAppWallet', () => ({
         transactionPromise: { resolve, reject }
       });
     });
-
-    return promise;
   }),
   handleInAppPasswordSubmit: jest.fn().mockImplementation(async (tx, password, signTransaction, setPasswordModal) => {
-    const result = await signTransaction(tx, password);
-    setPasswordModal({
-      isOpen: false,
-      transaction: null,
-      description: '',
-      transactionPromise: null
-    });
-    return { status: 'SUCCESS', transactionId: '0.0.123456@1234567890' };
-  }),
-  handlePasswordSubmit: jest.fn().mockImplementation(async (tx, password, signTransaction, setPasswordModal) => {
+    if (!password) {
+      throw new Error('Password required');
+    }
     const result = await signTransaction(tx, password);
     setPasswordModal({
       isOpen: false,
@@ -158,28 +201,28 @@ jest.mock('@/app/lib/transactions/inAppWallet', () => ({
   })
 }));
 
-// Add mock for PasswordModal component
-jest.mock('@/app/components/PasswordModal', () => ({
-  PasswordModal: ({ context, onSubmit }: any) => {
-    if (!context.isOpen) return null;
-    return (
-      <div data-testid="password-modal">
-        <div>{context.description}</div>
-        <button onClick={() => onSubmit()}>Submit</button>
-      </div>
-    );
-  }
-}));
-
 describe('SendPage', () => {
-  const mockSignTransaction = jest.fn().mockResolvedValue({
-    status: 'SUCCESS',
-    transactionId: '0.0.123456@1234567890'
+  const mockSignTransaction = jest.fn().mockImplementation(async (tx, password) => {
+    // Simulate the actual flow where we need a password to decrypt the key
+    if (!password) {
+      throw new Error('Password required');
+    }
+    
+    try {
+      // This would normally decrypt the stored key and use it to sign
+      return {
+        status: 'SUCCESS',
+        transactionId: '0.0.123456@1234567890'
+      };
+    } catch (error: any) {
+      throw new Error('Failed to sign transaction: ' + error.message);
+    }
   });
+
   const mockInAppAccount = '0.0.123456';
   
   beforeEach(() => {
-    // Mock the wallet context
+    // Mock the wallet context with proper key handling
     (useInAppWallet as jest.Mock).mockReturnValue({
       inAppAccount: mockInAppAccount,
       signTransaction: mockSignTransaction,
@@ -250,12 +293,14 @@ describe('SendPage', () => {
       expect(screen.getByText('Send 1.5 HBAR to 0.0.654321')).toBeInTheDocument();
     });
 
-    // Click the submit button in the password modal
-    await user.click(screen.getByText('Submit'));
+    // Enter password and submit
+    const passwordInput = screen.getByPlaceholderText('Enter your wallet password');
+    await user.type(passwordInput, 'testpassword');
+    await user.click(screen.getByTestId('submit-button'));
 
-    // Wait for the transaction to be signed
+    // Wait for the transaction to be signed with the password
     await waitFor(() => {
-      expect(mockSignTransaction).toHaveBeenCalledWith('mock-encoded-tx', '');
+      expect(mockSignTransaction).toHaveBeenCalledWith('mock-encoded-tx', 'testpassword');
     });
 
     // Wait for the form to reset

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { TransferTransaction, AccountId, Hbar, TokenId, HbarUnit, Client, TransactionId } from '@hashgraph/sdk';
 import { transactionToBase64String, SignAndExecuteTransactionParams } from '@hashgraph/hedera-wallet-connect';
-import { handleInAppTransaction, handlePasswordSubmit as handleInAppPasswordSubmit } from '@/app/lib/transactions/inAppWallet';
+import { handleInAppTransaction, handleInAppPasswordSubmit } from '@/app/lib/transactions/inAppWallet';
 import { handleExtensionTransaction } from '@/app/lib/transactions/extensionWallet';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { AccountBalanceQuery } from '@hashgraph/sdk';
@@ -201,15 +201,18 @@ export default function SendPage() {
         setPasswordModalContext
       );
       
-      if (result.status === 'ERROR') {
-        passwordModalContext.transactionPromise.reject(new Error(result.error));
-      } else {
+      if (result.status === 'SUCCESS') {
         passwordModalContext.transactionPromise.resolve(result);
+        setAmount('');
+        setRecipient('');
+      } else {
+        passwordModalContext.transactionPromise.reject(new Error(result.error));
       }
-    } catch (error) {
+    } catch (error: any) {
       if (passwordModalContext.transactionPromise.reject) {
         passwordModalContext.transactionPromise.reject(error);
       }
+      setError(error.message);
     } finally {
       setIsSubmitting(false);
       resetPasswordModal();
