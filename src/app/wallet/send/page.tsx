@@ -129,12 +129,21 @@ export default function SendPage() {
 
     try {
         console.log('[SendPage] Validating inputs');
+        let recipientAccountId: AccountId;
         try {
-            AccountId.fromString(recipient);
+            recipientAccountId = AccountId.fromString(recipient);
+            
+            // Validate recipient account exists
+            const query = new AccountBalanceQuery().setAccountId(recipientAccountId);
+            await query.execute(client);
+            
+            console.log('[SendPage] Recipient account validated:', recipientAccountId.toString());
         } catch (err) {
-            console.error('[SendPage] Invalid account ID:', err);
+            console.error('[SendPage] Account validation error:', err);
             setIsLoading(false);
-            setError('Invalid Hedera account ID format');
+            setError(err instanceof Error && err.message.includes('INVALID_ACCOUNT_ID') 
+                ? 'Invalid or non-existent Hedera account ID' 
+                : 'Invalid Hedera account ID format');
             return;
         }
 
@@ -157,7 +166,6 @@ export default function SendPage() {
         if (selectedToken.isHbar) {
             // Create transfer with explicit AccountId objects and proper validation
             const senderAccountId = AccountId.fromString(inAppAccount);
-            const recipientAccountId = AccountId.fromString(recipient);
             const hbarAmount = Hbar.from(numAmount, HbarUnit.Hbar);
             
             console.log('[SendPage] HBAR Transfer Details:');
@@ -174,6 +182,7 @@ export default function SendPage() {
                 .freezeWith(client);
 
             // Log complete transaction details before encoding
+            console.log('[SendPage] Raw transaction hbarTransfers:', transaction.hbarTransfers);
             const txTransfers = Array.from(Object.keys(transaction.hbarTransfers)).map(key => ({
                 account: key,
                 amount: transaction.hbarTransfers.get(key)?.toString()
