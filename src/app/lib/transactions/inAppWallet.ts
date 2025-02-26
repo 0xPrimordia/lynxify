@@ -1,6 +1,13 @@
 import { PasswordModalContext } from '@/app/types';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
-import { TokenAssociateTransaction, TransferTransaction, ContractExecuteTransaction } from '@hashgraph/sdk';
+import { TokenAssociateTransaction, TransferTransaction, ContractExecuteTransaction, Transaction } from '@hashgraph/sdk';
+
+interface DecodedTransaction extends Transaction {
+    type?: string;
+    functionParameters?: {
+        toString: () => string;
+    };
+}
 
 export const handleInAppTransaction = async (
     transaction: string,
@@ -8,16 +15,16 @@ export const handleInAppTransaction = async (
     setContext: (context: PasswordModalContext) => void
 ) => {
     // Decode the transaction to determine its type
-    const decodedTransaction = base64StringToTransaction(transaction);
+    const decodedTransaction = base64StringToTransaction(transaction) as DecodedTransaction;
     
     // Set appropriate description based on transaction type and data
     let description = "Enter your password to confirm the transaction.";
     
-    if (decodedTransaction instanceof TokenAssociateTransaction) {
+    if (decodedTransaction.type === 'TokenAssociateTransaction') {
         description = "Enter your password to associate this token with your account. This is required before you can receive the token.";
-    } else {
+    } else if (decodedTransaction.type === 'ContractExecuteTransaction') {
         // Check if this is an approval transaction by looking at the function signature
-        const functionData = (decodedTransaction as ContractExecuteTransaction).functionParameters?.toString() || '';
+        const functionData = decodedTransaction.functionParameters?.toString() || '';
         const isApproval = functionData.includes('approve');
         
         description = isApproval 
