@@ -54,11 +54,12 @@ describe('Transfer Transaction Flow', () => {
             expect(result).toBeDefined();
         });
 
-        it('should reject non-existent accounts', async () => {
+        it('should reject non-existent accounts with correct error format', async () => {
             const query = new MockAccountBalanceQuery()
                 .setAccountId(MockAccountId.fromString(invalidAccount));
             
-            await expect(query.execute(client)).rejects.toThrow('INVALID_ACCOUNT_ID');
+            await expect(query.execute(client)).rejects.toThrow(/transaction .* failed precheck with status INVALID_ACCOUNT_ID against node account id 0.0.4/);
+            await expect(query.execute(client)).rejects.toHaveProperty('name', 'StatusError');
         });
     });
 
