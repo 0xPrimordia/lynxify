@@ -173,8 +173,7 @@ export default function SendPage() {
 
       setAmount('');
       setRecipient('');
-      // Refresh balances after successful transfer
-      window.location.reload();
+
     } catch (err: any) {
       setError(err.message);
     } finally {
