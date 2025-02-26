@@ -48,12 +48,14 @@ export default function SendPage() {
         const query = new AccountBalanceQuery().setAccountId(accountId);
         const balance = await query.execute(client);
 
-        // Start with HBAR
-        const hbarBalance = balance.hbars.toString().replace('ℏ', '').trim();
+        // Start with HBAR - remove ℏ symbol and convert to string
+        const hbarBalance = balance.hbars.toTinybars().toString();
+        const hbarBalanceInHbar = (Number(hbarBalance) / 100_000_000).toString(); // Convert from tinybars to HBAR
+        
         const tokenBalances: TokenBalance[] = [{
           id: 'HBAR',
           symbol: 'HBAR',
-          balance: hbarBalance,
+          balance: hbarBalanceInHbar,
           decimals: 8,
           isHbar: true
         }];
@@ -82,6 +84,8 @@ export default function SendPage() {
         }
 
         setTokens(tokenBalances);
+        // Set initial selected token with correct balance
+        setSelectedToken(tokenBalances[0]);
       } catch (err) {
         console.error('Error fetching balances:', err);
         setError('Failed to load balances');
