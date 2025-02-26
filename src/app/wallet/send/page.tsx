@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
-import { TransferTransaction, AccountId, Hbar, TokenId, HbarUnit, Client } from '@hashgraph/sdk';
+import { TransferTransaction, AccountId, Hbar, TokenId, HbarUnit, Client, TransactionId } from '@hashgraph/sdk';
 import { transactionToBase64String, SignAndExecuteTransactionParams } from '@hashgraph/hedera-wallet-connect';
 import { handleInAppTransaction } from '@/app/lib/transactions/inAppWallet';
 import { handleExtensionTransaction } from '@/app/lib/transactions/extensionWallet';
@@ -127,15 +127,17 @@ export default function SendPage() {
       // Create appropriate transaction based on token type
       let transaction;
       if (selectedToken.isHbar) {
-        transaction = await new TransferTransaction()
+        transaction = new TransferTransaction()
           .addHbarTransfer(inAppAccount, new Hbar(-numAmount))
           .addHbarTransfer(recipient, new Hbar(numAmount))
+          .setTransactionId(TransactionId.generate(inAppAccount))
           .freezeWith(client);
       } else {
         const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
-        transaction = await new TransferTransaction()
+        transaction = new TransferTransaction()
           .addTokenTransfer(TokenId.fromString(selectedToken.id), inAppAccount, -tokenAmount)
           .addTokenTransfer(TokenId.fromString(selectedToken.id), recipient, tokenAmount)
+          .setTransactionId(TransactionId.generate(inAppAccount))
           .freezeWith(client);
       }
 
@@ -147,7 +149,9 @@ export default function SendPage() {
             encodedTx,
             signTransaction,
             (context) => setPasswordModalContext({
-              ...context,
+              isOpen: true,
+              transaction: encodedTx,
+              description: context.description,
               transactionPromise: new Promise((res, rej) => {
                 resolve(res);
                 reject(rej);
