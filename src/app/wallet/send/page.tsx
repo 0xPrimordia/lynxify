@@ -146,12 +146,21 @@ export default function SendPage() {
         console.log('[SendPage] Creating transaction');
         let transaction;
         if (selectedToken.isHbar) {
+            // Create transfer with explicit AccountId objects
+            const senderAccountId = AccountId.fromString(inAppAccount);
+            const recipientAccountId = AccountId.fromString(recipient);
+            
             transaction = new TransferTransaction()
-                .addHbarTransfer(inAppAccount, new Hbar(-numAmount))
-                .addHbarTransfer(recipient, new Hbar(numAmount))
-                .setTransactionId(TransactionId.generate(inAppAccount))
+                .addHbarTransfer(senderAccountId, new Hbar(-numAmount))
+                .addHbarTransfer(recipientAccountId, new Hbar(numAmount))
+                .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
-            console.log('[SendPage] Created HBAR transaction');
+                
+            console.log('[SendPage] Created HBAR transaction:', {
+                sender: senderAccountId.toString(),
+                recipient: recipientAccountId.toString(),
+                amount: numAmount
+            });
         } else {
             const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
             transaction = new TransferTransaction()
