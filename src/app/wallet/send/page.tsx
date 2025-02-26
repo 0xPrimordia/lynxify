@@ -177,14 +177,6 @@ export default function SendPage() {
           description: description,
           transactionPromise: { resolve, reject }
         });
-        
-        handleInAppTransaction(tx, signTransaction, (context) => {
-          setPasswordModalContext(prev => ({
-            ...prev,
-            ...context,
-            transactionPromise: prev.transactionPromise
-          }));
-        });
       });
     } else {
       return handleExtensionTransaction(
@@ -212,17 +204,16 @@ export default function SendPage() {
         setAmount('');
         setRecipient('');
       } else {
-        passwordModalContext.transactionPromise.reject(new Error(result.error));
+        throw new Error(result.error || 'Transaction failed');
       }
     } catch (error: any) {
-      if (passwordModalContext.transactionPromise.reject) {
-        passwordModalContext.transactionPromise.reject(error);
-      }
       setError(error.message);
-    } finally {
       setIsSubmitting(false);
-      resetPasswordModal();
+      return;
     }
+    
+    setIsSubmitting(false);
+    resetPasswordModal();
   };
 
   if (isLoadingBalances) {

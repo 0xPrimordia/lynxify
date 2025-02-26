@@ -25,10 +25,8 @@ jest.mock('@/lib/utils/keyStorage', () => {
   return {
     getStoredKey: jest.fn().mockResolvedValue(mockEncryptedKey),
     decryptStoredKey: jest.fn().mockImplementation((encryptedKey, password) => {
-      if (password === '') {
-        throw new Error('OperationError');
-      }
-      return 'decrypted-private-key';
+      // Always throw OperationError to simulate decryption failure
+      throw new Error('OperationError');
     })
   };
 });
@@ -203,20 +201,8 @@ jest.mock('@/app/lib/transactions/inAppWallet', () => ({
 
 describe('SendPage', () => {
   const mockSignTransaction = jest.fn().mockImplementation(async (tx, password) => {
-    // Simulate the actual flow where we need a password to decrypt the key
-    if (!password) {
-      throw new Error('Password required');
-    }
-    
-    try {
-      // This would normally decrypt the stored key and use it to sign
-      return {
-        status: 'SUCCESS',
-        transactionId: '0.0.123456@1234567890'
-      };
-    } catch (error: any) {
-      throw new Error('Failed to sign transaction: ' + error.message);
-    }
+    // Simulate decryption error
+    throw new Error('OperationError');
   });
 
   const mockInAppAccount = '0.0.123456';
@@ -438,6 +424,60 @@ describe('SendPage', () => {
     // Verify the modal closes and transaction completes
     await waitFor(() => {
       expect(screen.queryByTestId('password-modal')).not.toBeInTheDocument();
+    });
+  });
+
+  it('should display password modal when decryption fails', async () => {
+    const user = userEvent.setup();
+    render(
+      <TestWrapper>
+        <SendPage />
+      </TestWrapper>
+    );
+
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading balances...')).not.toBeInTheDocument();
+    });
+
+    // Fill in send form
+    await user.type(screen.getByPlaceholderText('0.0.123456'), '0.0.654321');
+    await user.type(screen.getByPlaceholderText('0.00'), '1.5');
+
+    // Click send button
+    await user.click(screen.getByText('Send'));
+
+    // Verify the password modal appears
+    await waitFor(() => {
+      expect(screen.getByTestId('password-modal')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Enter your wallet password')).toBeInTheDocument();
+    });
+
+    // Enter password
+    await user.type(screen.getByPlaceholderText('Enter your wallet password'), 'wrongpassword');
+    
+    // Submit password
+    await user.click(screen.getByTestId('submit-button'));
+
+    // Verify error is shown and modal stays open
+    await waitFor(() => {
+      // Modal should still be open
+      expect(screen.getByTestId('password-modal')).toBeInTheDocument();
+      // Error message should be shown
+      expect(screen.getByRole('alert')).toHaveTextContent('Invalid password. Please try again.');
+      // Password input should still be there
+      expect(screen.getByPlaceholderText('Enter your wallet password')).toBeInTheDocument();
+    });
+
+    // Try another wrong password
+    await user.clear(screen.getByPlaceholderText('Enter your wallet password'));
+    await user.type(screen.getByPlaceholderText('Enter your wallet password'), 'anotherwrongpassword');
+    await user.click(screen.getByTestId('submit-button'));
+
+    // Verify modal is still open and error is still shown
+    await waitFor(() => {
+      expect(screen.getByTestId('password-modal')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('Invalid password. Please try again.');
     });
   });
 }); 
