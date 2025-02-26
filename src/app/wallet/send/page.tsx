@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
-import { TransferTransaction, AccountId, Hbar, TokenId, HbarUnit, Client, TransactionId } from '@hashgraph/sdk';
+import { 
+    TransferTransaction, 
+    AccountId, 
+    Hbar, 
+    TokenId, 
+    HbarUnit, 
+    Client, 
+    TransactionId,
+    Transaction
+} from '@hashgraph/sdk';
 import { transactionToBase64String, SignAndExecuteTransactionParams, base64StringToTransaction } from '@hashgraph/hedera-wallet-connect';
 import { handleInAppTransaction, handleInAppPasswordSubmit } from '@/app/lib/transactions/inAppWallet';
 import { handleExtensionTransaction } from '@/app/lib/transactions/extensionWallet';
@@ -151,12 +160,10 @@ export default function SendPage() {
             const recipientAccountId = AccountId.fromString(recipient);
             const hbarAmount = Hbar.from(numAmount, HbarUnit.Hbar);
             
-            console.log('[SendPage] HBAR Transfer Details:', {
-                sender: senderAccountId.toString(),
-                recipient: recipientAccountId.toString(),
-                amount: hbarAmount.toString(),
-                network: process.env.NEXT_PUBLIC_HEDERA_NETWORK
-            });
+            console.log('[SendPage] HBAR Transfer Details:');
+            console.log('- Sender Account ID:', senderAccountId.toString());
+            console.log('- Recipient Account ID:', recipientAccountId.toString());
+            console.log('- Transfer Amount:', hbarAmount.toString());
 
             // Create the transaction exactly following the Hedera docs pattern
             transaction = await new TransferTransaction()
@@ -165,14 +172,6 @@ export default function SendPage() {
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
-
-            // Log the transaction details for debugging
-            console.log('[SendPage] Transfer transaction created:', {
-                id: transaction.transactionId?.toString(),
-                hbarTransfers: transaction.hbarTransfers,
-                maxFee: transaction.maxTransactionFee?.toString(),
-                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString())
-            });
         } else {
             // Token transfer case
             const tokenId = TokenId.fromString(selectedToken.id);
@@ -184,8 +183,7 @@ export default function SendPage() {
                 token: tokenId.toString(),
                 sender: senderAccountId.toString(),
                 recipient: recipientAccountId.toString(),
-                amount: tokenAmount,
-                network: process.env.NEXT_PUBLIC_HEDERA_NETWORK
+                amount: tokenAmount
             });
 
             transaction = await new TransferTransaction()
@@ -194,26 +192,10 @@ export default function SendPage() {
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .setMaxTransactionFee(new Hbar(2))
                 .freezeWith(client);
-
-            // Log the transaction details for debugging
-            console.log('[SendPage] Token transfer created:', {
-                id: transaction.transactionId?.toString(),
-                tokenTransfers: transaction.tokenTransfers,
-                maxFee: transaction.maxTransactionFee?.toString(),
-                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString())
-            });
         }
 
         console.log('[SendPage] Encoding transaction');
         const encodedTx = transactionToBase64String(transaction);
-
-        // Log the decoded transaction for verification
-        const decodedTx = base64StringToTransaction(encodedTx) as TransferTransaction;
-        console.log('[SendPage] Decoded transaction for verification:', {
-            hbarTransfers: decodedTx.hbarTransfers,
-            tokenTransfers: decodedTx.tokenTransfers,
-            nodeAccountIds: decodedTx.nodeAccountIds?.map(id => id.toString())
-        });
 
         console.log('[SendPage] Executing transaction');
         const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);

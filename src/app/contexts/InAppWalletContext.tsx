@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar, TransactionReceipt } from "@hashgraph/sdk";
+import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar, TransactionReceipt, TransferTransaction } from "@hashgraph/sdk";
 import { supabase } from '@/utils/supabase';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import { decrypt } from '@/lib/utils/encryption';
@@ -208,14 +208,29 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
 
             const tx = base64StringToTransaction(transaction);
             const signedTx = await tx.sign(loadResult.data);
+
+            // Log transaction details before execution
+            if (tx instanceof TransferTransaction) {
+                const transferTx = tx as TransferTransaction;
+                console.log("[InAppWalletContext] Transaction Details:");
+                console.log("- Sender Account ID:", walletState.inAppAccount);
+                console.log("- HBAR Transfers:", transferTx.hbarTransfers);
+                console.log("- Token Transfers:", transferTx.tokenTransfers);
+                console.log("- Max Transaction Fee:", transferTx.maxTransactionFee?.toString());
+            }
+
+            console.log("[InAppWalletContext] Executing signed transaction...");
             const response = await signedTx.execute(client);
+            console.log("[InAppWalletContext] Transaction executed, ID:", response.transactionId.toString());
             
+            console.log("[InAppWalletContext] Waiting for transaction receipt...");
             const receiptPromise = response.getReceipt(client);
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Transaction receipt timeout')), 30000)
             );
             
             const receipt = await Promise.race([receiptPromise, timeoutPromise]) as TransactionReceipt;
+            console.log("[InAppWalletContext] Transaction status:", receipt.status.toString());
             
             if (receipt.status._code !== 22) { // Not SUCCESS
                 return {
