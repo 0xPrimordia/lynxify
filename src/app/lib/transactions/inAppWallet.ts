@@ -12,33 +12,31 @@ interface DecodedTransaction extends Transaction {
 export const handleInAppTransaction = async (
     transaction: string,
     signTransaction: (transaction: string, password: string) => Promise<any>,
-    setContext: (context: PasswordModalContext) => void
+    setContext: (context: PasswordModalContext | ((prevContext: PasswordModalContext) => PasswordModalContext)) => void
 ) => {
-    // Decode the transaction to determine its type
-    const decodedTransaction = base64StringToTransaction(transaction) as DecodedTransaction;
+    console.log('[handleInAppTransaction] Starting transaction flow');
     
-    // Set appropriate description based on transaction type and data
-    let description = "Enter your password to confirm the transaction.";
-    
-    if (decodedTransaction.type === 'TokenAssociateTransaction') {
-        description = "Enter your password to associate this token with your account. This is required before you can receive the token.";
-    } else if (decodedTransaction.type === 'ContractExecuteTransaction') {
-        // Check if this is an approval transaction by looking at the function signature
-        const functionData = decodedTransaction.functionParameters?.toString() || '';
-        const isApproval = functionData.includes('approve');
-        
-        description = isApproval 
-            ? "Enter your password to approve the token for trading. This is required once before swapping."
-            : "Enter your password to confirm the swap transaction.";
-    }
-
-    // Set the context with the transaction and description
-    // Do NOT reset the transactionPromise as it's passed from the caller
+    // Show password modal immediately with default description
+    console.log('[handleInAppTransaction] Setting modal context to open');
     setContext({
         isOpen: true,
         transaction,
-        description,
+        description: "Enter your password to confirm the transaction.",
         transactionPromise: null // This will be set by the caller
+    });
+
+    console.log('[handleInAppTransaction] Creating promise for transaction handling');
+    return new Promise((resolve, reject) => {
+        console.log('[handleInAppTransaction] Setting transaction promise in context');
+        setContext((prevContext: PasswordModalContext) => {
+            console.log('[handleInAppTransaction] Previous context:', prevContext);
+            const newContext = {
+                ...prevContext,
+                transactionPromise: { resolve, reject }
+            };
+            console.log('[handleInAppTransaction] New context:', newContext);
+            return newContext;
+        });
     });
 };
 
@@ -74,31 +72,64 @@ export const handleInAppPasswordSubmit = async (
     signTransaction: (tx: string, password: string) => Promise<any>,
     setPasswordModal: (context: PasswordModalContext) => void
 ) => {
-    console.log('Starting password submission');
+    console.log('[handleInAppPasswordSubmit] Starting password submission');
     try {
-        const result = await signTransaction(transaction, password);
-        console.log('Sign transaction result:', result);
-        
-        if (result.status === 'SUCCESS') {
+        // First try to decode the transaction to determine its type
+        try {
+            console.log('[handleInAppPasswordSubmit] Attempting to decode transaction');
+            const decodedTransaction = base64StringToTransaction(transaction) as DecodedTransaction;
+            let description = "Enter your password to confirm the transaction.";
+            
+            if (decodedTransaction.type === 'TokenAssociateTransaction') {
+                description = "Enter your password to associate this token with your account. This is required before you can receive the token.";
+            } else if (decodedTransaction.type === 'ContractExecuteTransaction') {
+                const functionData = decodedTransaction.functionParameters?.toString() || '';
+                const isApproval = functionData.includes('approve');
+                
+                description = isApproval 
+                    ? "Enter your password to approve the token for trading. This is required once before swapping."
+                    : "Enter your password to confirm the swap transaction.";
+            }
+            console.log('[handleInAppPasswordSubmit] Transaction decoded, type:', decodedTransaction.type);
+
+            // Update modal with specific description
+            console.log('[handleInAppPasswordSubmit] Updating modal with specific description:', description);
             setPasswordModal({
-                isOpen: false,
-                description: '',
-                transaction: null,
+                isOpen: true,
+                transaction,
+                description,
                 transactionPromise: null
             });
-            return result;
-        } else {
+        } catch (error: unknown) {
+            console.error('[handleInAppPasswordSubmit] Transaction decode failed:', error);
+        }
+
+        console.log('[handleInAppPasswordSubmit] Attempting to sign transaction');
+        const result = await signTransaction(transaction, password);
+        console.log('[handleInAppPasswordSubmit] Sign transaction result:', result);
+        
+        if (!result.success) {
+            console.error('[handleInAppPasswordSubmit] Transaction signing failed:', result.error);
             throw new Error(result.error || 'Transaction failed');
         }
-    } catch (error: any) {
-        console.error('Password submission error:', error);
         
-        // If it's a decryption error, keep the modal open
-        if (error.message === 'OperationError' || error.message.includes('Decryption failed')) {
+        setPasswordModal({
+            isOpen: false,
+            description: '',
+            transaction: null,
+            transactionPromise: null
+        });
+        
+        return result.data;
+    } catch (error: unknown) {
+        console.error('[handleInAppPasswordSubmit] Password submission error:', error);
+        // Keep modal open on password error
+        if (error instanceof Error && (error.message === 'OperationError' || error.message.includes('Decryption failed'))) {
+            console.log('[handleInAppPasswordSubmit] Password error, keeping modal open');
             throw new Error('Invalid password. Please try again.');
         }
-        
-        // For other errors, close the modal
+        // Close modal on other errors
+        console.log('[handleInAppPasswordSubmit] Non-password error, closing modal');
         setPasswordModal({
             isOpen: false,
             description: '',

@@ -247,14 +247,7 @@ export default function DexPage() {
         if (!activeAccount) throw new Error("No active account");
         
         if (walletType === 'inApp') {
-            return new Promise((resolve, reject) => {
-                handleInAppTransaction(tx, signTransaction, (context) => {
-                    setPasswordModalContext({
-                        ...context,
-                        transactionPromise: { resolve, reject }
-                    });
-                });
-            });
+            return handleInAppTransaction(tx, signTransaction, setPasswordModalContext);
         } else if (walletType === 'extension') {
             return handleExtensionTransaction(tx, account, signAndExecuteTransaction);
         }

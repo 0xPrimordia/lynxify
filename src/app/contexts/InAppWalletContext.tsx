@@ -28,12 +28,7 @@ export interface InAppWalletContextType {
     setInAppAccount: (accountId: string) => void;
     recoverKey: (userId: string) => Promise<WalletOperationResult<void>>;
     verifyMetadataSync: (currentMetadata: any, storedMetadata: any) => Promise<WalletOperationResult<boolean>>;
-    setPasswordModalContext: (context: {
-        isOpen: boolean;
-        transaction: string | null;
-        description: string;
-        transactionPromise: null | Promise<any>;
-    }) => void;
+    setPasswordModalContext: (context: PasswordModalState | ((prevContext: PasswordModalState) => PasswordModalState)) => void;
     walletType: 'inApp' | 'extension' | null;
 }
 
@@ -44,6 +39,16 @@ interface WalletState {
     error: string | null;
     isRecoveryInProgress: boolean;
     isOperationInProgress: boolean;
+}
+
+interface PasswordModalState {
+    isOpen: boolean;
+    transaction: string | null;
+    description: string;
+    transactionPromise: {
+        resolve: (value: any) => void;
+        reject: (reason?: any) => void;
+    } | null;
 }
 
 export const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
@@ -63,6 +68,14 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' 
         ? Client.forMainnet() 
         : Client.forTestnet();
+
+    // Add state for password modal context with proper typing
+    const [passwordModalContext, setPasswordModalContext] = useState<PasswordModalState>({
+        isOpen: false,
+        transaction: null,
+        description: '',
+        transactionPromise: null
+    });
 
     useEffect(() => {
         const checkInAppWallet = async () => {
@@ -169,6 +182,18 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         setWalletState(prev => ({ ...prev, isOperationInProgress: true, error: null }));
         
         try {
+            // Only try to load the wallet if a password is provided
+            if (!password) {
+                return {
+                    success: false,
+                    error: 'Password required',
+                    data: {
+                        status: 'ERROR' as const,
+                        transactionId: null
+                    }
+                };
+            }
+
             const loadResult = await loadWallet(password);
             if (!loadResult.success || !loadResult.data) {
                 return {
@@ -314,15 +339,8 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
                 setWalletState(prev => ({ ...prev, inAppAccount: accountId })),
             recoverKey,
             verifyMetadataSync,
-            setPasswordModalContext: (context: {
-                isOpen: boolean;
-                transaction: string | null;
-                description: string;
-                transactionPromise: null | Promise<any>;
-            }) => {
-                // Implementation of setPasswordModalContext
-            },
-            walletType: null
+            setPasswordModalContext: (context) => setPasswordModalContext(context),
+            walletType: walletState.isInAppWallet ? 'inApp' : null
         }}>
             {children}
         </InAppWalletContext.Provider>

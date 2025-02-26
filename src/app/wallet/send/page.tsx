@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { TransferTransaction, AccountId, Hbar, TokenId, HbarUnit, Client, TransactionId } from '@hashgraph/sdk';
-import { transactionToBase64String, SignAndExecuteTransactionParams } from '@hashgraph/hedera-wallet-connect';
+import { transactionToBase64String, SignAndExecuteTransactionParams, base64StringToTransaction } from '@hashgraph/hedera-wallet-connect';
 import { handleInAppTransaction, handleInAppPasswordSubmit } from '@/app/lib/transactions/inAppWallet';
 import { handleExtensionTransaction } from '@/app/lib/transactions/extensionWallet';
 import { useSupabase } from '@/app/hooks/useSupabase';
@@ -37,7 +37,7 @@ export default function SendPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingBalances, setIsLoadingBalances] = useState(true);
-  const { inAppAccount, signTransaction, walletType } = useInAppWallet();
+  const { inAppAccount, signTransaction, walletType, isInAppWallet } = useInAppWallet();
   const { supabase } = useSupabase();
   const { 
     password, 
@@ -107,83 +107,106 @@ export default function SendPage() {
     e.preventDefault();
     e.stopPropagation();
     
+    console.log('[SendPage] Starting submit handler with values:', { recipient, amount, selectedToken });
+    
     if (!inAppAccount) {
-      setError('Wallet not connected');
-      return;
+        console.error('[SendPage] No wallet connected');
+        setError('Wallet not connected');
+        return;
     }
 
     setError(null);
     setIsLoading(true);
 
     try {
-      try {
-        AccountId.fromString(recipient);
-      } catch {
-        setIsLoading(false);
-        setError('Invalid Hedera account ID format');
-        return;
-      }
+        console.log('[SendPage] Validating inputs');
+        try {
+            AccountId.fromString(recipient);
+        } catch (err) {
+            console.error('[SendPage] Invalid account ID:', err);
+            setIsLoading(false);
+            setError('Invalid Hedera account ID format');
+            return;
+        }
 
-      const numAmount = parseFloat(amount);
-      if (isNaN(numAmount) || numAmount <= 0) {
-        setIsLoading(false);
-        setError('Invalid amount');
-        return;
-      }
-      if (numAmount > parseFloat(selectedToken.balance)) {
-        setIsLoading(false);
-        setError('Insufficient balance');
-        return;
-      }
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            console.error('[SendPage] Invalid amount:', amount);
+            setIsLoading(false);
+            setError('Invalid amount');
+            return;
+        }
+        if (numAmount > parseFloat(selectedToken.balance)) {
+            console.error('[SendPage] Insufficient balance:', { amount: numAmount, balance: selectedToken.balance });
+            setIsLoading(false);
+            setError('Insufficient balance');
+            return;
+        }
 
-      let transaction;
-      if (selectedToken.isHbar) {
-        transaction = new TransferTransaction()
-          .addHbarTransfer(inAppAccount, new Hbar(-numAmount))
-          .addHbarTransfer(recipient, new Hbar(numAmount))
-          .setTransactionId(TransactionId.generate(inAppAccount))
-          .freezeWith(client);
-      } else {
-        const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
-        transaction = new TransferTransaction()
-          .addTokenTransfer(TokenId.fromString(selectedToken.id), inAppAccount, -tokenAmount)
-          .addTokenTransfer(TokenId.fromString(selectedToken.id), recipient, tokenAmount)
-          .setTransactionId(TransactionId.generate(inAppAccount))
-          .freezeWith(client);
-      }
+        console.log('[SendPage] Creating transaction');
+        let transaction;
+        if (selectedToken.isHbar) {
+            transaction = new TransferTransaction()
+                .addHbarTransfer(inAppAccount, new Hbar(-numAmount))
+                .addHbarTransfer(recipient, new Hbar(numAmount))
+                .setTransactionId(TransactionId.generate(inAppAccount))
+                .freezeWith(client);
+            console.log('[SendPage] Created HBAR transaction');
+        } else {
+            const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
+            transaction = new TransferTransaction()
+                .addTokenTransfer(TokenId.fromString(selectedToken.id), inAppAccount, -tokenAmount)
+                .addTokenTransfer(TokenId.fromString(selectedToken.id), recipient, tokenAmount)
+                .setTransactionId(TransactionId.generate(inAppAccount))
+                .freezeWith(client);
+            console.log('[SendPage] Created token transaction');
+        }
 
-      const encodedTx = transactionToBase64String(transaction);
+        console.log('[SendPage] Encoding transaction');
+        const encodedTx = transactionToBase64String(transaction);
 
-      await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
+        console.log('[SendPage] Executing transaction');
+        const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
+        console.log('[SendPage] Transaction execution result:', result);
 
-      setAmount('');
-      setRecipient('');
-      
+        // Only clear form if we get a successful result
+        if (result?.status === 'SUCCESS') {
+            setAmount('');
+            setRecipient('');
+            console.log('[SendPage] Transaction successful, form cleared');
+        } else {
+            console.error('[SendPage] Transaction failed:', result);
+            setError('Transaction failed. Please try again.');
+        }
+        
     } catch (err: any) {
-      setError(err.message);
+        console.error('[SendPage] Error in submit handler:', err);
+        setError(err.message || 'Transaction failed. Please try again.');
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   };
 
   const executeTransaction = async (tx: string, description: string) => {
+    console.log('[SendPage] Starting executeTransaction');
     if (!inAppAccount) throw new Error("No active account");
     
-    if (walletType === 'inApp') {
-      return new Promise((resolve, reject) => {
-        setPasswordModalContext({
-          isOpen: true,
-          transaction: tx,
-          description: description,
-          transactionPromise: { resolve, reject }
-        });
-      });
+    console.log('[SendPage] Wallet type check:', { walletType, isInAppWallet });
+    
+    if (isInAppWallet) {
+        console.log('[SendPage] Handling inApp transaction');
+        return handleInAppTransaction(
+            tx,
+            signTransaction,
+            setPasswordModalContext
+        );
     } else {
-      return handleExtensionTransaction(
-        tx, 
-        inAppAccount,
-        (params: SignAndExecuteTransactionParams) => signTransaction(params.transactionList, '')
-      );
+        console.log('[SendPage] Handling extension transaction');
+        return handleExtensionTransaction(
+            tx, 
+            inAppAccount,
+            (params: SignAndExecuteTransactionParams) => signTransaction(params.transactionList, '')
+        );
     }
   };
 
@@ -211,12 +234,14 @@ export default function SendPage() {
       setError(error.message === 'OperationError' ? 'Invalid password. Please try again.' : error.message);
       if (error.message === 'OperationError') {
         setIsSubmitting(false);
+        setIsLoading(false);
         return;
       }
       resetPasswordModal();
     }
     
     setIsSubmitting(false);
+    setIsLoading(false);
   };
 
   if (isLoadingBalances) {
