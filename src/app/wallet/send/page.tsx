@@ -127,14 +127,16 @@ export default function SendPage() {
       // Create appropriate transaction based on token type
       let transaction;
       if (selectedToken.isHbar) {
-        transaction = new TransferTransaction()
+        transaction = await new TransferTransaction()
           .addHbarTransfer(inAppAccount, new Hbar(-numAmount))
-          .addHbarTransfer(recipient, new Hbar(numAmount));
+          .addHbarTransfer(recipient, new Hbar(numAmount))
+          .freezeWith(client);
       } else {
         const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
-        transaction = new TransferTransaction()
+        transaction = await new TransferTransaction()
           .addTokenTransfer(TokenId.fromString(selectedToken.id), inAppAccount, -tokenAmount)
-          .addTokenTransfer(TokenId.fromString(selectedToken.id), recipient, tokenAmount);
+          .addTokenTransfer(TokenId.fromString(selectedToken.id), recipient, tokenAmount)
+          .freezeWith(client);
       }
 
       const encodedTx = transactionToBase64String(transaction);
