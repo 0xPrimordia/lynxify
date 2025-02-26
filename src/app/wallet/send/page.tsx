@@ -119,15 +119,21 @@ export default function SendPage() {
       try {
         AccountId.fromString(recipient);
       } catch {
-        throw new Error('Invalid Hedera account ID format');
+        setIsLoading(false);
+        setError('Invalid Hedera account ID format');
+        return;
       }
 
       const numAmount = parseFloat(amount);
       if (isNaN(numAmount) || numAmount <= 0) {
-        throw new Error('Invalid amount');
+        setIsLoading(false);
+        setError('Invalid amount');
+        return;
       }
       if (numAmount > parseFloat(selectedToken.balance)) {
-        throw new Error('Insufficient balance');
+        setIsLoading(false);
+        setError('Insufficient balance');
+        return;
       }
 
       let transaction;
@@ -167,7 +173,9 @@ export default function SendPage() {
       return new Promise((resolve, reject) => {
         handleInAppTransaction(tx, signTransaction, (context) => {
           setPasswordModalContext({
-            ...context,
+            isOpen: true,
+            transaction: tx,
+            description: description,
             transactionPromise: { resolve, reject }
           });
         });
@@ -182,7 +190,7 @@ export default function SendPage() {
   };
 
   const handlePasswordSubmit = async () => {
-    if (!passwordModalContext.transaction) return;
+    if (!passwordModalContext.transaction || !passwordModalContext.transactionPromise) return;
     
     setIsSubmitting(true);
     try {
@@ -194,12 +202,14 @@ export default function SendPage() {
       );
       
       if (result.status === 'ERROR') {
-        passwordModalContext.transactionPromise?.reject(new Error(result.error));
+        passwordModalContext.transactionPromise.reject(new Error(result.error));
       } else {
-        passwordModalContext.transactionPromise?.resolve(result);
+        passwordModalContext.transactionPromise.resolve(result);
       }
     } catch (error) {
-      passwordModalContext.transactionPromise?.reject(error);
+      if (passwordModalContext.transactionPromise.reject) {
+        passwordModalContext.transactionPromise.reject(error);
+      }
     } finally {
       setIsSubmitting(false);
       resetPasswordModal();
@@ -278,7 +288,7 @@ export default function SendPage() {
           </div>
 
           {error && (
-            <div className="p-4 bg-red-900/50 border border-red-800 text-red-200 rounded-lg">
+            <div className="p-4 bg-red-900/50 border border-red-800 text-red-200 rounded-lg" role="alert">
               {error}
             </div>
           )}
