@@ -149,51 +149,53 @@ export default function SendPage() {
             // Create transfer with explicit AccountId objects and proper validation
             const senderAccountId = AccountId.fromString(inAppAccount);
             const recipientAccountId = AccountId.fromString(recipient);
+            const hbarAmount = Hbar.from(numAmount, HbarUnit.Hbar);
             
-            console.log('[SendPage] Account details:', {
+            console.log('[SendPage] Creating HBAR transfer:', {
                 sender: senderAccountId.toString(),
                 recipient: recipientAccountId.toString(),
-                amount: numAmount
+                amount: hbarAmount.toString()
             });
-            
-            // Create the transaction with more explicit steps
-            const transferTx = new TransferTransaction();
-            
-            // Convert amount to tinybars
-            const hbarAmount = new Hbar(numAmount);
-            
-            // Add transfers with proper Hbar conversion
-            console.log('[SendPage] Adding sender transfer');
-            transferTx.addHbarTransfer(senderAccountId, hbarAmount.negated());
-            
-            console.log('[SendPage] Adding recipient transfer');
-            transferTx.addHbarTransfer(recipientAccountId, hbarAmount);
-            
-            console.log('[SendPage] Setting transaction parameters');
-            transferTx
+
+            // Create the transaction exactly following the Hedera docs pattern
+            transaction = await new TransferTransaction()
+                .addHbarTransfer(senderAccountId, hbarAmount.negated())
+                .addHbarTransfer(recipientAccountId, hbarAmount)
                 .setTransactionId(TransactionId.generate(senderAccountId))
-                .setMaxTransactionFee(new Hbar(2));
-            
-            console.log('[SendPage] Freezing transaction');
-            transaction = await transferTx.freezeWith(client);
-                
-            console.log('[SendPage] Transaction details:', {
-                transactionId: transaction.transactionId?.toString(),
-                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString()),
-                transfers: JSON.stringify(transaction.hbarTransfers),
-                maxFee: transaction.maxTransactionFee?.toString()
+                .setMaxTransactionFee(new Hbar(2))
+                .freezeWith(client);
+
+            console.log('[SendPage] Transfer transaction created:', {
+                id: transaction.transactionId?.toString() ?? 'unknown',
+                transfers: transaction.hbarTransfers,
+                maxFee: transaction.maxTransactionFee?.toString() ?? '2 ℏ'
             });
         } else {
             // Token transfer case
+            const tokenId = TokenId.fromString(selectedToken.id);
+            const senderAccountId = AccountId.fromString(inAppAccount);
+            const recipientAccountId = AccountId.fromString(recipient);
             const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
-            const transferTx = new TransferTransaction()
-                .addTokenTransfer(TokenId.fromString(selectedToken.id), AccountId.fromString(inAppAccount), -tokenAmount)
-                .addTokenTransfer(TokenId.fromString(selectedToken.id), AccountId.fromString(recipient), tokenAmount)
-                .setTransactionId(TransactionId.generate(AccountId.fromString(inAppAccount)))
-                .setMaxTransactionFee(new Hbar(2));
 
-            console.log('[SendPage] Created token transaction');
-            transaction = await transferTx.freezeWith(client);
+            console.log('[SendPage] Creating token transfer:', {
+                token: tokenId.toString(),
+                sender: senderAccountId.toString(),
+                recipient: recipientAccountId.toString(),
+                amount: tokenAmount
+            });
+
+            transaction = await new TransferTransaction()
+                .addTokenTransfer(tokenId, senderAccountId, -tokenAmount)
+                .addTokenTransfer(tokenId, recipientAccountId, tokenAmount)
+                .setTransactionId(TransactionId.generate(senderAccountId))
+                .setMaxTransactionFee(new Hbar(2))
+                .freezeWith(client);
+
+            console.log('[SendPage] Token transfer created:', {
+                id: transaction.transactionId?.toString() ?? 'unknown',
+                transfers: transaction.tokenTransfers,
+                maxFee: transaction.maxTransactionFee?.toString() ?? '2 ℏ'
+            });
         }
 
         console.log('[SendPage] Encoding transaction');
