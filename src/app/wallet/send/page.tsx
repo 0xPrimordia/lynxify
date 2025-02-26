@@ -153,27 +153,42 @@ export default function SendPage() {
             console.log('[SendPage] Account details:', {
                 sender: {
                     original: inAppAccount,
-                    parsed: senderAccountId.toString()
+                    parsed: senderAccountId.toString(),
+                    type: typeof senderAccountId
                 },
                 recipient: {
                     original: recipient,
-                    parsed: recipientAccountId.toString()
+                    parsed: recipientAccountId.toString(),
+                    type: typeof recipientAccountId
                 },
-                amount: numAmount
+                amount: {
+                    value: numAmount,
+                    type: typeof numAmount
+                }
             });
             
-            transaction = await new TransferTransaction()
-                .addHbarTransfer(senderAccountId, new Hbar(-numAmount))
-                .addHbarTransfer(recipientAccountId, new Hbar(numAmount))
-                .setTransactionId(TransactionId.generate(senderAccountId))
+            // Create the transaction with more explicit steps
+            const transferTx = new TransferTransaction();
+            
+            // Add transfers one at a time with logging
+            console.log('[SendPage] Adding sender transfer');
+            transferTx.addHbarTransfer(senderAccountId, new Hbar(-numAmount));
+            
+            console.log('[SendPage] Adding recipient transfer');
+            transferTx.addHbarTransfer(recipientAccountId, new Hbar(numAmount));
+            
+            console.log('[SendPage] Setting transaction parameters');
+            transferTx.setTransactionId(TransactionId.generate(senderAccountId))
                 .setNodeAccountIds([new AccountId(3)])
-                .setMaxTransactionFee(new Hbar(2))
-                .freezeWith(client);
+                .setMaxTransactionFee(new Hbar(2));
+            
+            console.log('[SendPage] Freezing transaction');
+            transaction = await transferTx.freezeWith(client);
                 
             console.log('[SendPage] Transaction details:', {
                 transactionId: transaction.transactionId?.toString(),
                 nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString()),
-                transfers: transaction.hbarTransfers,
+                transfers: JSON.stringify(transaction.hbarTransfers),
                 maxFee: transaction.maxTransactionFee?.toString()
             });
         } else {
