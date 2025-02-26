@@ -177,14 +177,6 @@ export default function SendPage() {
           description: description,
           transactionPromise: { resolve, reject }
         });
-        
-        handleInAppTransaction(tx, signTransaction, (context) => {
-          setPasswordModalContext(prev => ({
-            ...prev,
-            ...context,
-            transactionPromise: prev.transactionPromise
-          }));
-        });
       });
     } else {
       return handleExtensionTransaction(
@@ -211,18 +203,20 @@ export default function SendPage() {
         passwordModalContext.transactionPromise.resolve(result);
         setAmount('');
         setRecipient('');
+        resetPasswordModal();
       } else {
-        passwordModalContext.transactionPromise.reject(new Error(result.error));
+        throw new Error(result.error || 'Transaction failed');
       }
     } catch (error: any) {
-      if (passwordModalContext.transactionPromise.reject) {
-        passwordModalContext.transactionPromise.reject(error);
+      setError(error.message === 'OperationError' ? 'Invalid password. Please try again.' : error.message);
+      if (error.message === 'OperationError') {
+        setIsSubmitting(false);
+        return;
       }
-      setError(error.message);
-    } finally {
-      setIsSubmitting(false);
       resetPasswordModal();
     }
+    
+    setIsSubmitting(false);
   };
 
   if (isLoadingBalances) {

@@ -79,16 +79,26 @@ export const handleInAppPasswordSubmit = async (
         const result = await signTransaction(transaction, password);
         console.log('Sign transaction result:', result);
         
-        setPasswordModal({
-            isOpen: false,
-            description: '',
-            transaction: null,
-            transactionPromise: null
-        });
-        
-        return result;
-    } catch (error) {
+        if (result.status === 'SUCCESS') {
+            setPasswordModal({
+                isOpen: false,
+                description: '',
+                transaction: null,
+                transactionPromise: null
+            });
+            return result;
+        } else {
+            throw new Error(result.error || 'Transaction failed');
+        }
+    } catch (error: any) {
         console.error('Password submission error:', error);
+        
+        // If it's a decryption error, keep the modal open
+        if (error.message === 'OperationError' || error.message.includes('Decryption failed')) {
+            throw new Error('Invalid password. Please try again.');
+        }
+        
+        // For other errors, close the modal
         setPasswordModal({
             isOpen: false,
             description: '',
