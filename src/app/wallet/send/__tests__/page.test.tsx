@@ -400,4 +400,44 @@ describe('SendPage', () => {
       expect(mockSDK.freezeWith).toHaveBeenCalled();
     });
   });
+
+  it('should display password modal when sending transaction', async () => {
+    const user = userEvent.setup();
+    render(
+      <TestWrapper>
+        <SendPage />
+      </TestWrapper>
+    );
+
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading balances...')).not.toBeInTheDocument();
+    });
+
+    // Fill in send form
+    await user.type(screen.getByPlaceholderText('0.0.123456'), '0.0.654321');
+    await user.type(screen.getByPlaceholderText('0.00'), '1.5');
+
+    // Click send button
+    await user.click(screen.getByText('Send'));
+
+    // Verify the password modal appears with correct content
+    await waitFor(() => {
+      expect(screen.getByTestId('password-modal')).toBeInTheDocument();
+      expect(screen.getByText('Send 1.5 HBAR to 0.0.654321')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Enter your wallet password')).toBeInTheDocument();
+      expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+    });
+
+    // Enter password
+    await user.type(screen.getByPlaceholderText('Enter your wallet password'), 'testpassword');
+    
+    // Submit password
+    await user.click(screen.getByTestId('submit-button'));
+
+    // Verify the modal closes and transaction completes
+    await waitFor(() => {
+      expect(screen.queryByTestId('password-modal')).not.toBeInTheDocument();
+    });
+  });
 }); 

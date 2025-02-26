@@ -32,20 +32,13 @@ export const handleInAppTransaction = async (
             : "Enter your password to confirm the swap transaction.";
     }
 
-    // Reset context before setting new one
-    setContext({
-        isOpen: false,
-        transaction: null,
-        description: '',
-        transactionPromise: null
-    });
-
-    // Set the new context
+    // Set the context with the transaction and description
+    // Do NOT reset the transactionPromise as it's passed from the caller
     setContext({
         isOpen: true,
         transaction,
         description,
-        transactionPromise: null
+        transactionPromise: null // This will be set by the caller
     });
 };
 
