@@ -157,10 +157,7 @@ export default function SendPage() {
             });
             
             // Create the transaction with more explicit steps
-            const transferTx = new TransferTransaction()
-                .setTransactionId(TransactionId.generate(senderAccountId))
-                .setNodeAccountIds([new AccountId(3)])
-                .setMaxTransactionFee(new Hbar(2));
+            const transferTx = new TransferTransaction();
             
             // Convert amount to tinybars
             const hbarAmount = new Hbar(numAmount);
@@ -173,6 +170,9 @@ export default function SendPage() {
             transferTx.addHbarTransfer(recipientAccountId, hbarAmount);
             
             console.log('[SendPage] Setting transaction parameters');
+            transferTx
+                .setTransactionId(TransactionId.generate(senderAccountId))
+                .setMaxTransactionFee(new Hbar(2));
             
             console.log('[SendPage] Freezing transaction');
             transaction = await transferTx.freezeWith(client);
@@ -184,15 +184,16 @@ export default function SendPage() {
                 maxFee: transaction.maxTransactionFee?.toString()
             });
         } else {
+            // Token transfer case
             const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
-            transaction = await new TransferTransaction()
+            const transferTx = new TransferTransaction()
                 .addTokenTransfer(TokenId.fromString(selectedToken.id), AccountId.fromString(inAppAccount), -tokenAmount)
                 .addTokenTransfer(TokenId.fromString(selectedToken.id), AccountId.fromString(recipient), tokenAmount)
                 .setTransactionId(TransactionId.generate(AccountId.fromString(inAppAccount)))
-                .setNodeAccountIds([new AccountId(3)])
-                .setMaxTransactionFee(new Hbar(2))
-                .freezeWith(client);
+                .setMaxTransactionFee(new Hbar(2));
+
             console.log('[SendPage] Created token transaction');
+            transaction = await transferTx.freezeWith(client);
         }
 
         console.log('[SendPage] Encoding transaction');
