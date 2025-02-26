@@ -98,7 +98,6 @@ export default function SendPage() {
   }, [inAppAccount]);
 
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    console.log('Submit handler called');
     e.preventDefault();
     e.stopPropagation();
     
@@ -107,7 +106,6 @@ export default function SendPage() {
       return;
     }
 
-    console.log('Past initial checks');  // Debug log
     setError(null);
     setIsLoading(true);
 
@@ -147,37 +145,39 @@ export default function SendPage() {
 
       const encodedTx = transactionToBase64String(transaction);
 
-      if (walletType === 'inApp') {
-        await new Promise((resolve, reject) => {
-          handleInAppTransaction(
-            encodedTx,
-            signTransaction,
-            (context) => setPasswordModalContext({
-              isOpen: true,
-              transaction: encodedTx,
-              description: context.description,
-              transactionPromise: new Promise((res, rej) => {
-                resolve(res);
-                reject(rej);
-              })
-            })
-          );
-        });
-      } else {
-        await handleExtensionTransaction(
-          encodedTx,
-          inAppAccount,
-          (params: SignAndExecuteTransactionParams) => signTransaction(params.transactionList, '')
-        );
-      }
+      await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
 
       setAmount('');
       setRecipient('');
-
+      
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const executeTransaction = async (tx: string, description: string) => {
+    if (!inAppAccount) throw new Error("No active account");
+    
+    if (walletType === 'inApp') {
+      return new Promise((resolve, reject) => {
+        handleInAppTransaction(tx, signTransaction, (context) => {
+          setPasswordModalContext({
+            ...context,
+            transactionPromise: new Promise((res, rej) => {
+              resolve(res);
+              reject(rej);
+            })
+          });
+        });
+      });
+    } else {
+      return handleExtensionTransaction(
+        tx, 
+        inAppAccount,
+        (params: SignAndExecuteTransactionParams) => signTransaction(params.transactionList, '')
+      );
     }
   };
 
