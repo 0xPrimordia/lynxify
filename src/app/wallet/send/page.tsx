@@ -97,13 +97,17 @@ export default function SendPage() {
     fetchBalances();
   }, [inAppAccount]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    console.log('Submit handler called');
     e.preventDefault();
+    e.stopPropagation();
+    
     if (!inAppAccount) {
       setError('Wallet not connected');
       return;
     }
-    
+
+    console.log('Past initial checks');  // Debug log
     setError(null);
     setIsLoading(true);
 
@@ -190,7 +194,7 @@ export default function SendPage() {
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-white mb-6">Send Tokens</h1>
       
-      <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+      <form className="space-y-6" noValidate>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Select Token
@@ -255,7 +259,8 @@ export default function SendPage() {
         )}
 
         <button
-          type="submit"
+          type="button"
+          onClick={handleSubmit}
           disabled={isLoading}
           className="w-full py-3 px-4 border border-transparent rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
