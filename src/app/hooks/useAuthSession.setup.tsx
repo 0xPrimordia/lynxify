@@ -93,7 +93,9 @@ const mockInAppWalletContext = {
     error: null,
     isRecoveryInProgress: false,
     isOperationInProgress: false,
-    verifyMetadataSync: jest.fn()
+    verifyMetadataSync: jest.fn(),
+    setPasswordModalContext: jest.fn(),
+    walletType: 'inApp' as const,
 };
 
 // Wrapper component for providing context in tests
