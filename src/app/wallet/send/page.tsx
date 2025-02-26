@@ -194,7 +194,7 @@ export default function SendPage() {
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-white mb-6">Send Tokens</h1>
       
-      <form className="space-y-6" noValidate>
+      <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Select Token
@@ -266,7 +266,7 @@ export default function SendPage() {
         >
           {isLoading ? 'Sending...' : 'Send'}
         </button>
-      </form>
+      </div>
     </div>
   );
 } 
