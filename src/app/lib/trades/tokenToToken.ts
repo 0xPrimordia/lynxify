@@ -21,6 +21,11 @@ export const swapTokenToToken = async (
   outputTokenDecimals: number
 ) => {
   try {
+    // Validate amount is not in hex format
+    if (amountIn.startsWith('0x')) {
+      throw new Error('Amount cannot be in hex format');
+    }
+
     const amountInSmallestUnit = (Number(amountIn) * Math.pow(10, inputTokenDecimals)).toString();
     
     // Check allowance first
@@ -63,11 +68,11 @@ export const swapTokenToToken = async (
     const slippagePercent = slippageBasisPoints / 10000;
     const outputMinimum = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
-    // Construct path
-    const path = Buffer.concat([
-      Buffer.from(ContractId.fromString(inputToken).toSolidityAddress().replace('0x', ''), 'hex'),
-      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-      Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
+    // Convert to ethers-compatible format
+    const path = ethers.concat([
+      ethers.getBytes(ContractId.fromString(inputToken).toSolidityAddress()),
+      ethers.getBytes('0x' + fee.toString(16).padStart(6, '0')),
+      ethers.getBytes(ContractId.fromString(outputToken).toSolidityAddress())
     ]);
 
     // ExactInputParams

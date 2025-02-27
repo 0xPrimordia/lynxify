@@ -20,7 +20,7 @@ export const swapHbarToToken = async (
 ) => {
   try {
     // Parse amount to tinybars
-    const amountInSmallestUnit = Hbar.from(amountIn, HbarUnit.Hbar).toTinybars().toString();
+    const amountInSmallestUnit = Hbar.from(Number(amountIn), HbarUnit.Hbar).toTinybars();
     
     // Get quote
     const quoteAmount = await getQuoteExactInput(
@@ -63,7 +63,7 @@ export const swapHbarToToken = async (
     const transaction = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
       .setGas(3_000_000)
-      .setPayableAmount(Hbar.from(amountIn, HbarUnit.Hbar))
+      .setPayableAmount(Hbar.from(Number(amountIn), HbarUnit.Hbar))
       .setFunctionParameters(Buffer.from(encodedData.slice(2), 'hex'))
       .setTransactionId(TransactionId.generate(recipientAddress));
 

@@ -1,4 +1,4 @@
-import { ContractExecuteTransaction, TransactionId, TokenAssociateTransaction, AccountId, ContractId, ContractFunctionParameters } from '@hashgraph/sdk';
+import { ContractExecuteTransaction, TransactionId, TokenAssociateTransaction, AccountId, ContractId, ContractFunctionParameters, Long } from '@hashgraph/sdk';
 import { AbiCoder } from 'ethers';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 import axios from 'axios';
@@ -66,7 +66,7 @@ export const approveTokenForSwap = async (
         "approve",
         new ContractFunctionParameters()
           .addAddress(ContractId.fromString(SWAP_ROUTER_ADDRESS).toSolidityAddress())
-          .addUint256(amountInSmallestUnit)
+          .addUint256(Long.fromString(amountInSmallestUnit))
       )
       .setTransactionId(TransactionId.generate(recipientAddress));
 

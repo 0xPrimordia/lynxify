@@ -14,6 +14,7 @@ import {
 const navigation = [
     { name: 'Portfolio', href: '/wallet', icon: WalletIcon },
     { name: 'Send', href: '/wallet/send', icon: ArrowUpOnSquareIcon },
+    { name: 'Mint', href: '/wallet/mint', icon: CurrencyDollarIcon },
     { name: 'NFTs', href: '/wallet/nfts', icon: PhotoIcon },
     { name: 'History', href: '/wallet/history', icon: ClockIcon },
     { name: 'Staking', href: '/wallet/staking', icon: CurrencyDollarIcon },

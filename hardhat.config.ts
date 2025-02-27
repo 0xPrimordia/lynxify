@@ -1,10 +1,8 @@
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
-import dotenv from "dotenv";
+require("@nomicfoundation/hardhat-toolbox");
+require("@nomicfoundation/hardhat-ethers");
+require("dotenv").config({ path: '.env.local' });
 
-dotenv.config({ path: '.env.local' });
-
-const config: HardhatUserConfig = {
+const config = {
   solidity: {
     version: "0.8.20",
     settings: {
@@ -18,7 +16,7 @@ const config: HardhatUserConfig = {
     testnet: {
       url: process.env.TESTNET_ENDPOINT || "https://testnet.hashio.io/api",
       accounts: [
-        process.env.OPERATOR_KEY!,
+        process.env.OPERATOR_KEY,
       ],
       chainId: 296
     },
@@ -36,4 +34,4 @@ const config: HardhatUserConfig = {
   }
 };
 
-export default config; 
+module.exports = config; 

@@ -121,7 +121,7 @@ export interface PasswordModalContext {
     isOpen: boolean;
     description: string;
     transaction: string | null;
-    transactionPromise?: {
+    transactionPromise: {
         resolve: (value: any) => void;
         reject: (reason?: any) => void;
     } | null;

@@ -119,170 +119,92 @@ export default function SendPage() {
     console.log('[SendPage] Starting submit handler with values:', { recipient, amount, selectedToken });
     
     if (!inAppAccount) {
-        console.error('[SendPage] No wallet connected');
-        setError('Wallet not connected');
-        return;
+      console.error('[SendPage] No wallet connected');
+      setError('Wallet not connected');
+      return;
     }
 
     setError(null);
     setIsLoading(true);
 
     try {
-        console.log('[SendPage] Validating inputs');
-        let recipientAccountId: AccountId;
-        try {
-            recipientAccountId = AccountId.fromString(recipient);
-            
-            // Validate recipient account exists
-            const query = new AccountBalanceQuery().setAccountId(recipientAccountId);
-            await query.execute(client);
-            
-            console.log('[SendPage] Recipient account validated:', recipientAccountId.toString());
-        } catch (err) {
-            console.error('[SendPage] Account validation error:', err);
-            setIsLoading(false);
-            setError(err instanceof Error && err.message.includes('INVALID_ACCOUNT_ID') 
-                ? 'Invalid or non-existent Hedera account ID' 
-                : 'Invalid Hedera account ID format');
-            return;
-        }
-
-        const numAmount = parseFloat(amount);
-        if (isNaN(numAmount) || numAmount <= 0) {
-            console.error('[SendPage] Invalid amount:', amount);
-            setIsLoading(false);
-            setError('Invalid amount');
-            return;
-        }
-        if (numAmount > parseFloat(selectedToken.balance)) {
-            console.error('[SendPage] Insufficient balance:', { amount: numAmount, balance: selectedToken.balance });
-            setIsLoading(false);
-            setError('Insufficient balance');
-            return;
-        }
-
-        console.log('[SendPage] Creating transaction');
-        let transaction: TransferTransaction;
-        if (selectedToken.isHbar) {
-            // Create transfer with explicit AccountId objects and proper validation
-            const senderAccountId = AccountId.fromString(inAppAccount);
-            const hbarAmount = Hbar.from(numAmount, HbarUnit.Hbar);
-            
-            console.log('[SendPage] HBAR Transfer Details:');
-            console.log('- Sender Account ID:', senderAccountId.toString());
-            console.log('- Recipient Account ID:', recipientAccountId.toString());
-            console.log('- Transfer Amount:', hbarAmount.toString());
-
-            // Create the transaction exactly following the Hedera docs pattern
-            transaction = await new TransferTransaction()
-                .addHbarTransfer(senderAccountId, hbarAmount.negated())
-                .addHbarTransfer(recipientAccountId, hbarAmount)
-                .setTransactionId(TransactionId.generate(senderAccountId))
-                .setMaxTransactionFee(new Hbar(2))
-                .freezeWith(client);
-
-            // Log complete transaction details before encoding
-            console.log('[SendPage] Raw transaction hbarTransfers:', transaction.hbarTransfers);
-            const txTransfers = Array.from(Object.keys(transaction.hbarTransfers)).map(key => ({
-                account: key,
-                amount: transaction.hbarTransfers.get(key)?.toString()
-            }));
-
-            console.log('[SendPage] Transaction before encoding:', {
-                hbarTransfers: txTransfers,
-                transactionId: transaction.transactionId?.toString(),
-                nodeAccountIds: transaction.nodeAccountIds?.map(id => id.toString()),
-                maxTransactionFee: transaction.maxTransactionFee?.toString()
-            });
-
-            console.log('[SendPage] Encoding transaction');
-            const encodedTx = transactionToBase64String(transaction);
-
-            // Verify the transaction after encoding
-            console.log('[SendPage] Verifying encoded transaction');
-            const verifyTx = base64StringToTransaction(encodedTx) as TransferTransaction;
-            
-            // Log complete decoded transaction details
-            const verifyTxTransfers = Array.from(Object.keys(verifyTx.hbarTransfers)).map(key => ({
-                account: key,
-                amount: verifyTx.hbarTransfers.get(key)?.toString()
-            }));
-
-            console.log('[SendPage] Decoded transaction for verification:', {
-                hbarTransfers: verifyTxTransfers,
-                transactionId: verifyTx.transactionId?.toString(),
-                nodeAccountIds: verifyTx.nodeAccountIds?.map(id => id.toString()),
-                maxTransactionFee: verifyTx.maxTransactionFee?.toString()
-            });
-
-            // Verify critical transaction properties are preserved
-            const originalRecipientAmount = transaction.hbarTransfers.get(recipientAccountId.toString())?.toString();
-            const decodedRecipientAmount = verifyTx.hbarTransfers.get(recipientAccountId.toString())?.toString();
-            
-            if (originalRecipientAmount !== decodedRecipientAmount) {
-                console.error('[SendPage] Transaction amount mismatch after encoding/decoding:', {
-                    original: originalRecipientAmount,
-                    decoded: decodedRecipientAmount
-                });
-                throw new Error('Transaction data corrupted during encoding');
-            }
-
-            console.log('[SendPage] Executing transaction');
-            const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
-            console.log('[SendPage] Transaction execution result:', result);
-
-            // Only clear form if we get a successful result
-            if (result?.status === 'SUCCESS') {
-                setAmount('');
-                setRecipient('');
-                console.log('[SendPage] Transaction successful, form cleared');
-            } else {
-                console.error('[SendPage] Transaction failed:', result);
-                setError('Transaction failed. Please try again.');
-            }
-        } else {
-            // Token transfer case
-            const tokenId = TokenId.fromString(selectedToken.id);
-            const senderAccountId = AccountId.fromString(inAppAccount);
-            const recipientAccountId = AccountId.fromString(recipient);
-            const tokenAmount = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
-
-            console.log('[SendPage] Token Transfer Details:', {
-                token: tokenId.toString(),
-                sender: senderAccountId.toString(),
-                recipient: recipientAccountId.toString(),
-                amount: tokenAmount
-            });
-
-            transaction = await new TransferTransaction()
-                .addTokenTransfer(tokenId, senderAccountId, -tokenAmount)
-                .addTokenTransfer(tokenId, recipientAccountId, tokenAmount)
-                .setTransactionId(TransactionId.generate(senderAccountId))
-                .setMaxTransactionFee(new Hbar(2))
-                .freezeWith(client);
-
-            console.log('[SendPage] Encoding transaction');
-            const encodedTx = transactionToBase64String(transaction);
-
-            console.log('[SendPage] Executing transaction');
-            const result = await executeTransaction(encodedTx, `Send ${amount} ${selectedToken.symbol} to ${recipient}`);
-            console.log('[SendPage] Transaction execution result:', result);
-
-            // Only clear form if we get a successful result
-            if (result?.status === 'SUCCESS') {
-                setAmount('');
-                setRecipient('');
-                console.log('[SendPage] Transaction successful, form cleared');
-            } else {
-                console.error('[SendPage] Transaction failed:', result);
-                setError('Transaction failed. Please try again.');
-            }
-        }
-    } catch (err: any) {
-        console.error('[SendPage] Error in submit handler:', err);
-        setError(err.message || 'Transaction failed. Please try again.');
-    } finally {
+      console.log('[SendPage] Validating inputs');
+      let recipientAccountId: AccountId;
+      try {
+        recipientAccountId = AccountId.fromString(recipient);
+        
+        // Validate recipient account exists
+        const query = new AccountBalanceQuery().setAccountId(recipientAccountId);
+        await query.execute(client);
+        
+        console.log('[SendPage] Recipient account validated:', recipientAccountId.toString());
+      } catch (err) {
+        console.error('[SendPage] Account validation error:', err);
         setIsLoading(false);
+        setError(err instanceof Error && err.message.includes('INVALID_ACCOUNT_ID') 
+          ? 'Invalid or non-existent Hedera account ID' 
+          : 'Invalid Hedera account ID format');
+        return;
+      }
+
+      console.log('[SendPage] Creating transaction');
+      const senderAccountId = AccountId.fromString(inAppAccount);
+      const numAmount = Number(amount);
+      let transaction: Transaction;
+
+      if (selectedToken.isHbar) {
+        console.log('[SendPage] HBAR Transfer Details:', {
+          sender: senderAccountId.toString(),
+          recipient: recipientAccountId.toString(),
+          amount: numAmount
+        });
+
+        transaction = new TransferTransaction()
+          .addHbarTransfer(senderAccountId, Hbar.from(-numAmount, HbarUnit.Hbar))
+          .addHbarTransfer(recipientAccountId, Hbar.from(numAmount, HbarUnit.Hbar))
+          .setTransactionId(TransactionId.generate(senderAccountId))
+          .setMaxTransactionFee(Hbar.from(2, HbarUnit.Hbar))
+          .freezeWith(client);
+
+      } else {
+        const tokenId = TokenId.fromString(selectedToken.id);
+        const amountInSmallestUnit = Math.floor(numAmount * Math.pow(10, selectedToken.decimals));
+
+        console.log('[SendPage] Token Transfer Details:', {
+          token: tokenId.toString(),
+          sender: senderAccountId.toString(),
+          recipient: recipientAccountId.toString(),
+          amount: amountInSmallestUnit
+        });
+
+        transaction = new TransferTransaction()
+          .addTokenTransfer(tokenId, senderAccountId, -amountInSmallestUnit)
+          .addTokenTransfer(tokenId, recipientAccountId, amountInSmallestUnit)
+          .setTransactionId(TransactionId.generate(senderAccountId))
+          .setMaxTransactionFee(Hbar.from(2, HbarUnit.Hbar))
+          .freezeWith(client);
+      }
+
+      if (isInAppWallet) {
+        console.log('[SendPage] Handling in-app transaction');
+        return handleInAppTransaction(
+          transactionToBase64String(transaction),
+          signTransaction,
+          setPasswordModalContext
+        );
+      } else {
+        console.log('[SendPage] Handling extension transaction');
+        return handleExtensionTransaction(
+          transactionToBase64String(transaction), 
+          inAppAccount,
+          (params: SignAndExecuteTransactionParams) => signTransaction(params.transactionList, '')
+        );
+      }
+    } catch (err: any) {
+      console.error('[SendPage] Error in submit handler:', err);
+      setError(err.message || 'Transaction failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

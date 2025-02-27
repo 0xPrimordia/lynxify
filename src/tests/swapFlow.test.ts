@@ -25,6 +25,12 @@ jest.mock('axios', () => ({
     post: jest.fn().mockImplementation(() => Promise.reject(new Error('Transaction timestamp is too old')))
 }));
 
+// Mock the token utils module
+jest.mock('../app/lib/utils/tokens', () => ({
+  checkTokenAssociation: jest.fn(),
+  associateToken: jest.fn()
+}));
+
 describe('Swap Flow Tests', () => {
     let mockClient: Client;
     const mockAccount = "0.0.123456";
@@ -39,25 +45,20 @@ describe('Swap Flow Tests', () => {
         mockClient = {
             execute: jest.fn(),
         } as unknown as Client;
-
-        // Mock token association check
-        (checkTokenAssociation as jest.Mock) = jest.fn();
-        (associateToken as jest.Mock) = jest.fn();
     });
 
     it('should not generate duplicate association transactions', async () => {
         const associationCheckCalls: string[] = [];
         const associationTxCalls: string[] = [];
 
-        // Mock checkTokenAssociation to simulate different scenarios
-        (checkTokenAssociation as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+        // Set up mock implementations
+        (jest.mocked(checkTokenAssociation)).mockImplementation(async (...args: unknown[]) => {
             const [account, tokenId] = args as [string, string];
             associationCheckCalls.push(`${account}-${tokenId}`);
             return false;
         });
 
-        // Mock associateToken to track calls
-        (associateToken as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+        (jest.mocked(associateToken)).mockImplementation(async (...args: unknown[]) => {
             const [account, tokenId] = args as [string, string];
             const callKey = `${account}-${tokenId}`;
             if (associationTxCalls.includes(callKey)) {

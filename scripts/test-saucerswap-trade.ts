@@ -70,6 +70,7 @@ async function main() {
         const stopLossBasisPoints = 700;
         const buyOrderBasisPoints = 900;
         const tokenAddress = `0x${ContractId.fromString(sauceToken).toSolidityAddress()}`;
+        //@ts-ignore
         const hbarAmount = Hbar.from(process.env.HBAR_AMOUNT!, HbarUnit.Hbar);
         const amountInTinybar = hbarAmount.to(HbarUnit.Tinybar);
         
@@ -125,7 +126,9 @@ async function main() {
                     .addUint256(buyOrderBasisPoints)
                     .addString(operatorId.toString())
                     .addAddress(ContractId.fromString(sauceToken).toSolidityAddress())
+                    //@ts-ignore
                     .addUint256(amountInTinybar.toString())
+                    //@ts-ignore
                     .addUint256(amountInTinybar.toString())
             );
 

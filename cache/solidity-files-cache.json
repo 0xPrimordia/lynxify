@@ -371,6 +371,44 @@
       "artifacts": [
         "NFTSale"
       ]
+    },
+    "/Users/kevincompton/Sites/lynxify/src/app/contracts/LynxMinter.sol": {
+      "lastModificationDate": 1740628165232,
+      "contentHash": "466c4c94dd1c5eed22ee65fc3abf8c72",
+      "sourceName": "src/app/contracts/LynxMinter.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "IERC20",
+        "IHederaTokenService",
+        "LynxMinter"
+      ]
     }
   }
 }

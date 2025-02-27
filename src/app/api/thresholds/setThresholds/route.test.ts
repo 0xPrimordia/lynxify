@@ -44,6 +44,9 @@ jest.mock('@hashgraph/sdk', () => ({
             toSolidityAddress: () => '0x000000000000000000000000000000000000abcd'
         })
     },
+    Long: {
+        fromString: jest.fn().mockReturnValue('1000000000')
+    },
     ContractExecuteTransaction: jest.fn().mockReturnValue({
         setContractId: jest.fn().mockReturnThis(),
         setGas: jest.fn().mockReturnThis(),

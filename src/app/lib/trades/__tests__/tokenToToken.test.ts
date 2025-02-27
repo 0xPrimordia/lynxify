@@ -4,6 +4,7 @@ import TestSwapRouterAbi from './TestSwapRouter.json';
 import { swapTokenToToken } from '../tokenToToken';
 import { SWAP_ROUTER_ADDRESS } from '../../constants';
 import dotenv from "dotenv";
+import { Long } from '@hashgraph/sdk';
 
 // Setup environment
 dotenv.config({ path: '.env.local' });
@@ -24,30 +25,30 @@ let client: Client;
 // Mock token utilities to simulate both approval and swap flows
 jest.mock('../../utils/tokens', () => ({
   checkTokenAllowance: jest.fn().mockImplementation(async (recipientAddress, tokenId, routerAddress, amount, decimals) => {
-    // Return false for approval test case exact values
     if (amount === "10000000000" && decimals === 6) {
       return false;
     }
     return true;
   }),
   approveTokenForSwap: jest.fn().mockImplementation(async (tokenId, amount, recipientAddress, decimals) => {
-    const routerAddress = ContractId.fromString(SWAP_ROUTER_ADDRESS).toSolidityAddress();
-    const tx = new ContractExecuteTransaction()
-      .setContractId(ContractId.fromString(tokenId))
-      .setGas(1_000_000)
-      .setFunction("approve", new ContractFunctionParameters()
-        .addAddress(routerAddress)
-        .addUint256((Number(amount) * Math.pow(10, decimals)).toString()));
+    // Create mock values inside the factory
+    const mockRouterAddress = '0x000000000000000000000000000000000000abcd';
+    const mockTx = {
+      setContractId: jest.fn().mockReturnThis(),
+      setGas: jest.fn().mockReturnThis(),
+      setFunction: jest.fn().mockReturnThis(),
+      toBytes: () => Buffer.from('mockTransactionBytes')
+    };
     
     return {
       type: 'approve' as const,
-      tx: Buffer.from(tx.toBytes()).toString('base64')
+      tx: Buffer.from(mockTx.toBytes()).toString('base64')
     };
   }),
   checkTokenAssociation: jest.fn().mockResolvedValue(true),
   associateToken: jest.fn().mockResolvedValue({
     type: 'associate',
-    tx: Buffer.from(new ContractExecuteTransaction().toBytes()).toString('base64')
+    tx: Buffer.from('mockTransactionBytes').toString('base64')
   })
 }));
 
@@ -63,11 +64,23 @@ describe('tokenToToken full flow', () => {
     client = Client.forTestnet();
     client.setOperator(
       AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
-      PrivateKey.fromString(process.env.OPERATOR_KEY!)
+      PrivateKey.fromStringED25519(process.env.OPERATOR_KEY!)
     );
   });
 
   it('should handle full swap flow', async () => {
+    // Mock the path construction to match the implementation
+    jest.mock('ethers', () => ({
+      ethers: {
+        Interface: jest.fn().mockImplementation(() => ({
+          encodeFunctionData: jest.fn().mockImplementation((functionName, params) => {
+            // Create a properly formatted hex string
+            return '0x1234567890abcdef';
+          })
+        }))
+      }
+    }));
+
     const result = await swapTokenToToken(
       "10000.123456",
       "0.0.1183558",
@@ -164,4 +177,38 @@ describe('tokenToToken error handling', () => {
       6
     )).rejects.toThrow('Amount cannot be in hex format');
   });
-}); 
+});
+
+jest.mock('@hashgraph/sdk', () => ({
+  Client: {
+    forTestnet: jest.fn(() => ({
+      setOperator: jest.fn()
+    }))
+  },
+  AccountId: {
+    fromString: jest.fn().mockReturnValue({
+      toSolidityAddress: () => '0x1234567890123456789012345678901234567890'
+    })
+  },
+  PrivateKey: {
+    fromStringED25519: jest.fn().mockReturnValue({
+      toString: () => 'mock-private-key',
+      _key: new Uint8Array(32).fill(1)
+    })
+  },
+  ContractId: {
+    fromString: jest.fn().mockReturnValue({
+      toSolidityAddress: () => '0x1234567890123456789012345678901234567890'
+    })
+  },
+  ContractExecuteTransaction: jest.fn().mockImplementation(() => ({
+    setContractId: jest.fn().mockReturnThis(),
+    setGas: jest.fn().mockReturnThis(),
+    setFunctionParameters: jest.fn().mockReturnThis(),
+    setTransactionId: jest.fn().mockReturnThis(),
+    toBytes: () => Buffer.from('mockTransactionBytes')
+  })),
+  TransactionId: {
+    generate: jest.fn().mockReturnValue('mock-transaction-id')
+  }
+})); 

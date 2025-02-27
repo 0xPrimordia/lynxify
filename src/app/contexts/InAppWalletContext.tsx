@@ -6,6 +6,7 @@ import { supabase } from '@/utils/supabase';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import { decrypt } from '@/lib/utils/encryption';
 import { attemptRecovery, retrievePrivateKey } from '@/lib/utils/keyStorage';
+import { PasswordModalContext } from '@/app/types';
 
 export interface WalletOperationResult<T> {
     success: boolean;
@@ -28,7 +29,7 @@ export interface InAppWalletContextType {
     setInAppAccount: (accountId: string) => void;
     recoverKey: (userId: string) => Promise<WalletOperationResult<void>>;
     verifyMetadataSync: (currentMetadata: any, storedMetadata: any) => Promise<WalletOperationResult<boolean>>;
-    setPasswordModalContext: (context: PasswordModalState | ((prevContext: PasswordModalState) => PasswordModalState)) => void;
+    setPasswordModalContext: (context: PasswordModalContext | ((prevContext: PasswordModalContext) => PasswordModalContext)) => void;
     walletType: 'inApp' | 'extension' | null;
 }
 
@@ -39,16 +40,7 @@ interface WalletState {
     error: string | null;
     isRecoveryInProgress: boolean;
     isOperationInProgress: boolean;
-}
-
-interface PasswordModalState {
-    isOpen: boolean;
-    transaction: string | null;
-    description: string;
-    transactionPromise: {
-        resolve: (value: any) => void;
-        reject: (reason?: any) => void;
-    } | null;
+    passwordModalContext: PasswordModalContext;
 }
 
 export const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
@@ -60,7 +52,13 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         inAppPrivateKey: null,
         error: null,
         isRecoveryInProgress: false,
-        isOperationInProgress: false
+        isOperationInProgress: false,
+        passwordModalContext: {
+            isOpen: false,
+            transaction: null,
+            description: '',
+            transactionPromise: null
+        }
     });
     
     const operationLock = useRef<boolean>(false);
@@ -68,14 +66,6 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
     const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' 
         ? Client.forMainnet() 
         : Client.forTestnet();
-
-    // Add state for password modal context with proper typing
-    const [passwordModalContext, setPasswordModalContext] = useState<PasswordModalState>({
-        isOpen: false,
-        transaction: null,
-        description: '',
-        transactionPromise: null
-    });
 
     useEffect(() => {
         const checkInAppWallet = async () => {
@@ -367,7 +357,13 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
                 setWalletState(prev => ({ ...prev, inAppAccount: accountId })),
             recoverKey,
             verifyMetadataSync,
-            setPasswordModalContext: (context) => setPasswordModalContext(context),
+            setPasswordModalContext: (context: PasswordModalContext | ((prevContext: PasswordModalContext) => PasswordModalContext)) => 
+                setWalletState(prev => ({ 
+                    ...prev, 
+                    passwordModalContext: typeof context === 'function' 
+                        ? context(prev.passwordModalContext) 
+                        : context 
+                })),
             walletType: walletState.isInAppWallet ? 'inApp' : null
         }}>
             {children}
