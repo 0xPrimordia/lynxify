@@ -146,6 +146,7 @@ async function validateTestEnvironment() {
         console.log('- Spender:', process.env.CONTRACT_ADDRESS);
         console.log('- Amount:', testAmount);
         
+       
         const approveTx = new ContractExecuteTransaction()
           .setContractId(ContractId.fromString(tokenA.toString()))
           .setGas(1000000)
@@ -154,6 +155,7 @@ async function validateTestEnvironment() {
             "approve",
             new ContractFunctionParameters()
               .addAddress(process.env.CONTRACT_ADDRESS!)
+               //@ts-ignore
               .addUint256(testAmount)
           );
 
