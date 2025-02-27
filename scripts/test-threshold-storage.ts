@@ -39,7 +39,9 @@ async function setAndVerifyThreshold(client: Client, contractId: string, hederaA
             .addUint256(buyOrderBasisPoints)
             .addString(hederaAccountId)
             .addAddress(tokenAddress)
+            //@ts-ignore
             .addUint256(stopLossAmount)
+            //@ts-ignore
             .addUint256(buyOrderAmount)
         );
 
