@@ -4,6 +4,7 @@ import {
   ContractCallQuery,
   ContractFunctionParameters,
   ContractId,
+  Long,
 } from "@hashgraph/sdk";
 import { ThresholdContractParams } from './types';
 
@@ -21,7 +22,7 @@ export const setThresholds = async (
         .addUint256(params.basisPoints)
         .addString(params.accountId)
         .addAddress(ContractId.fromString(params.tokenAddress).toSolidityAddress())
-        .addUint256(params.amount)
+        .addUint256(Long.fromString(params.amount.toString()))
     );
 
   return transaction;
