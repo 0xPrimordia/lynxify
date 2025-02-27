@@ -1,0 +1,10 @@
+---
+description: Contract Test Flow
+globs: 
+---
+
+# Deploy before running tests
+
+deploy updates to the contract to testnet before running tests or you will not see your changes.
+
+Context: given this project's requirements and Hedera's architecture, the current approach of deploying to testnet for tests is actually the recommended way to ensure your contract works correctly with all Hedera-specific features.
