@@ -68,16 +68,15 @@ export const swapTokenToToken = async (
     const slippagePercent = slippageBasisPoints / 10000;
     const outputMinimum = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
-    // Convert to ethers-compatible format
-    const path = ethers.concat([
-      ethers.getBytes(ContractId.fromString(inputToken).toSolidityAddress()),
-      ethers.getBytes('0x' + fee.toString(16).padStart(6, '0')),
-      ethers.getBytes(ContractId.fromString(outputToken).toSolidityAddress())
-    ]);
+    // Construct path as a hex string for ethers.js
+    const inputAddress = ContractId.fromString(inputToken).toSolidityAddress().replace('0x', '');
+    const feeHex = fee.toString(16).padStart(6, '0');
+    const outputAddress = ContractId.fromString(outputToken).toSolidityAddress().replace('0x', '');
+    const pathHex = `0x${inputAddress}${feeHex}${outputAddress}`;
 
     // ExactInputParams
     const params = {
-      path: path,
+      path: pathHex,
       recipient: AccountId.fromString(recipientAddress).toSolidityAddress(),
       deadline: deadline,
       amountIn: amountInSmallestUnit,

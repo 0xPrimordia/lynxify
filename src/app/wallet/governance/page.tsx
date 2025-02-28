@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useSupabase } from '@/app/hooks/useSupabase';
+import Link from 'next/link';
+import GovernanceNav from '@/app/components/GovernanceNav';
 
 export default function GovernanceDashboard() {
   const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +31,7 @@ export default function GovernanceDashboard() {
 
   return (
     <div className="w-full">
-      <h1 className="text-3xl font-bold mb-6 text-white">LYNX Governance Dashboard</h1>
+      <GovernanceNav currentSection="dashboard" />
       
       {isLoading ? (
         <div className="flex justify-center">
