@@ -1,6 +1,7 @@
 import { PasswordModalContext } from '@/app/types';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import { TokenAssociateTransaction, TransferTransaction, ContractExecuteTransaction, Transaction } from '@hashgraph/sdk';
+import { withTimeout } from '../utils/timeout';
 
 interface DecodedTransaction extends Transaction {
     type?: string;
@@ -105,22 +106,46 @@ export const handleInAppPasswordSubmit = async (
         }
 
         console.log('[handleInAppPasswordSubmit] Attempting to sign transaction');
-        const result = await signTransaction(transaction, password);
-        console.log('[handleInAppPasswordSubmit] Sign transaction result:', result);
-        
-        if (!result.success) {
-            console.error('[handleInAppPasswordSubmit] Transaction signing failed:', result.error);
-            throw new Error(result.error || 'Transaction failed');
+        // Add timeout to prevent hanging
+        try {
+            const result = await withTimeout(
+                signTransaction(transaction, password),
+                30000, // 30 seconds timeout
+                'Transaction signing timed out. The network might be congested or there could be a connection issue.'
+            );
+            
+            console.log('[handleInAppPasswordSubmit] Sign transaction result:', result);
+            
+            if (!result.success) {
+                console.error('[handleInAppPasswordSubmit] Transaction signing failed:', result.error);
+                throw new Error(result.error || 'Transaction failed');
+            }
+            
+            setPasswordModal({
+                isOpen: false,
+                description: '',
+                transaction: null,
+                transactionPromise: null
+            });
+            
+            return result.data;
+        } catch (error: unknown) {
+            console.error('[handleInAppPasswordSubmit] Password submission error:', error);
+            // Keep modal open on password error
+            if (error instanceof Error && (error.message === 'OperationError' || error.message.includes('Decryption failed'))) {
+                console.log('[handleInAppPasswordSubmit] Password error, keeping modal open');
+                throw new Error('Invalid password. Please try again.');
+            }
+            // Close modal on other errors
+            console.log('[handleInAppPasswordSubmit] Non-password error, closing modal');
+            setPasswordModal({
+                isOpen: false,
+                description: '',
+                transaction: null,
+                transactionPromise: null
+            });
+            return { status: 'ERROR', error: error instanceof Error ? error.message : 'Unknown error' };
         }
-        
-        setPasswordModal({
-            isOpen: false,
-            description: '',
-            transaction: null,
-            transactionPromise: null
-        });
-        
-        return result.data;
     } catch (error: unknown) {
         console.error('[handleInAppPasswordSubmit] Password submission error:', error);
         // Keep modal open on password error
@@ -136,6 +161,6 @@ export const handleInAppPasswordSubmit = async (
             transaction: null,
             transactionPromise: null
         });
-        throw error;
+        return { status: 'ERROR', error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }; 
