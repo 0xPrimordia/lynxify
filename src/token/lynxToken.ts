@@ -13,7 +13,7 @@ export class LynxTokenCreator {
         name: "LYNX Index Token",
         symbol: "LYNX",
         decimals: 8,
-        maxSupply: BigInt("100000000000") // 1 billion with 8 decimals
+        maxSupply: BigInt("100000000000") 
     };
 
     constructor(
