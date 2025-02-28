@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import TestnetAlert from '@/app/components/TestnetAlert';
+import GovernanceNav from '@/app/components/GovernanceNav';
 
 interface TokenRatios {
   hbar: number;
@@ -164,250 +166,254 @@ export default function CompositionPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-white mb-8">Token Composition</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-gray-900 p-6 rounded-lg">
-          <h2 className="text-xl font-semibold text-white mb-4">Current Composition</h2>
-          <div className="mb-6">
-            <div ref={containerRef} className="w-full h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+    <div className="w-full">
+      <TestnetAlert />
+      <GovernanceNav currentSection="composition" />
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold text-white mb-8">Token Composition</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-gray-900 p-6 rounded-lg">
+            <h2 className="text-xl font-semibold text-white mb-4">Current Composition</h2>
+            <div className="mb-6">
+              <div ref={containerRef} className="w-full h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <div className="text-sm text-gray-400">HBAR</div>
+                <div className="text-xl font-semibold text-white">
+                  {(tokenData?.currentRatios.hbar ?? 0) * 100}%
+                </div>
+              </div>
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <div className="text-sm text-gray-400">SAUCE</div>
+                <div className="text-xl font-semibold text-white">
+                  {(tokenData?.currentRatios.sauce ?? 0) * 100}%
+                </div>
+              </div>
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <div className="text-sm text-gray-400">CLXY</div>
+                <div className="text-xl font-semibold text-white">
+                  {(tokenData?.currentRatios.clxy ?? 0) * 100}%
+                </div>
+              </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="bg-gray-700 p-3 rounded-lg">
-              <div className="text-sm text-gray-400">HBAR</div>
-              <div className="text-xl font-semibold text-white">
-                {(tokenData?.currentRatios.hbar ?? 0) * 100}%
+          <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
+            <h2 className="text-xl font-semibold mb-4 text-white">Market Data</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr>
+                    <th className="text-left py-2 text-gray-300">Token</th>
+                    <th className="text-left py-2 text-gray-300">Price</th>
+                    <th className="text-left py-2 text-gray-300">24h Change</th>
+                    <th className="text-left py-2 text-gray-300">Market Cap</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  <tr>
+                    <td className="py-3 text-gray-300">HBAR</td>
+                    <td className="py-3 text-gray-300">${tokenData?.marketData.prices.hbar.toFixed(4)}</td>
+                    <td className={`py-3 ${(tokenData?.marketData.change24h.hbar ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(tokenData?.marketData.change24h.hbar ?? 0) >= 0 ? '+' : ''}
+                      {tokenData?.marketData.change24h.hbar.toFixed(2)}%
+                    </td>
+                    <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.hbar ?? 0) / 1000000).toFixed(0)}M</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 text-gray-300">SAUCE</td>
+                    <td className="py-3 text-gray-300">${tokenData?.marketData.prices.sauce.toFixed(4)}</td>
+                    <td className={`py-3 ${(tokenData?.marketData.change24h.sauce ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(tokenData?.marketData.change24h.sauce ?? 0) >= 0 ? '+' : ''}
+                      {tokenData?.marketData.change24h.sauce.toFixed(2)}%
+                    </td>
+                    <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.sauce ?? 0) / 1000000).toFixed(0)}M</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 text-gray-300">CLXY</td>
+                    <td className="py-3 text-gray-300">${tokenData?.marketData.prices.clxy.toFixed(4)}</td>
+                    <td className={`py-3 ${(tokenData?.marketData.change24h.clxy ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(tokenData?.marketData.change24h.clxy ?? 0) >= 0 ? '+' : ''}
+                      {tokenData?.marketData.change24h.clxy.toFixed(2)}%
+                    </td>
+                    <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.clxy ?? 0) / 1000000).toFixed(0)}M</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
+            <h2 className="text-xl font-semibold mb-4 text-white">Composition Simulator</h2>
+            <p className="text-gray-300 mb-4">
+              Adjust the sliders to simulate different token compositions and see how they would affect the index.
+            </p>
+            
+            <div className="space-y-6 mt-6">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-300">HBAR</span>
+                  <span className="font-medium text-white">
+                    {simulatedRatios ? (simulatedRatios.hbar * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.01" 
+                  value={simulatedRatios?.hbar ?? 0.33333}
+                  onChange={(e) => handleRatioChange('hbar', parseFloat(e.target.value))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-300">SAUCE</span>
+                  <span className="font-medium text-white">
+                    {simulatedRatios ? (simulatedRatios.sauce * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.01" 
+                  value={simulatedRatios?.sauce ?? 0.33333}
+                  onChange={(e) => handleRatioChange('sauce', parseFloat(e.target.value))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-300">CLXY</span>
+                  <span className="font-medium text-white">
+                    {simulatedRatios ? (simulatedRatios.clxy * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.01" 
+                  value={simulatedRatios?.clxy ?? 0.33333}
+                  onChange={(e) => handleRatioChange('clxy', parseFloat(e.target.value))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
               </div>
             </div>
-            <div className="bg-gray-700 p-3 rounded-lg">
-              <div className="text-sm text-gray-400">SAUCE</div>
-              <div className="text-xl font-semibold text-white">
-                {(tokenData?.currentRatios.sauce ?? 0) * 100}%
-              </div>
-            </div>
-            <div className="bg-gray-700 p-3 rounded-lg">
-              <div className="text-sm text-gray-400">CLXY</div>
-              <div className="text-xl font-semibold text-white">
-                {(tokenData?.currentRatios.clxy ?? 0) * 100}%
+            
+            <div className="mt-8">
+              <h3 className="text-lg font-medium mb-3 text-white">Simulation Results</h3>
+              
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-400">Volatility Estimate</div>
+                    <div className="text-xl font-semibold text-white">
+                      {simulatedRatios ? (
+                        (simulatedRatios.hbar * 0.05 + 
+                         simulatedRatios.sauce * 0.12 + 
+                         simulatedRatios.clxy * 0.18) * 100
+                      ).toFixed(2) : 0}%
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm text-gray-400">Expected Return</div>
+                    <div className="text-xl font-semibold text-green-400">
+                      {simulatedRatios ? (
+                        (simulatedRatios.hbar * 0.025 + 
+                         simulatedRatios.sauce * -0.012 + 
+                         simulatedRatios.clxy * 0.057) * 100
+                      ).toFixed(2) : 0}%
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm text-gray-400">Liquidity Score</div>
+                    <div className="text-xl font-semibold text-white">
+                      {simulatedRatios ? (
+                        (simulatedRatios.hbar * 10 + 
+                         simulatedRatios.sauce * 7 + 
+                         simulatedRatios.clxy * 5) / 10
+                      ).toFixed(1) : 0}/10
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm text-gray-400">Risk Assessment</div>
+                    <div className="text-xl font-semibold text-white">
+                      {simulatedRatios ? 
+                        (simulatedRatios.hbar > 0.5 ? 'Low' : 
+                         simulatedRatios.clxy > 0.4 ? 'High' : 'Moderate') 
+                        : 'Moderate'}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-gray-600">
+                  <button 
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
+                    onClick={() => {
+                      // In a real app, this would create a proposal
+                      alert('This would create a governance proposal with your suggested ratios');
+                    }}
+                  >
+                    Create Proposal with These Ratios
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
         
-        <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-semibold mb-4 text-white">Market Data</h2>
+        <div className="mt-6 bg-gray-800 rounded-lg p-6 shadow-lg">
+          <h2 className="text-xl font-semibold mb-4 text-white">Historical Composition</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <th className="text-left py-2 text-gray-300">Token</th>
-                  <th className="text-left py-2 text-gray-300">Price</th>
-                  <th className="text-left py-2 text-gray-300">24h Change</th>
-                  <th className="text-left py-2 text-gray-300">Market Cap</th>
+                  <th className="text-left py-2 text-gray-300">Date</th>
+                  <th className="text-left py-2 text-gray-300">HBAR</th>
+                  <th className="text-left py-2 text-gray-300">SAUCE</th>
+                  <th className="text-left py-2 text-gray-300">CLXY</th>
+                  <th className="text-left py-2 text-gray-300">Change Reason</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
-                <tr>
-                  <td className="py-3 text-gray-300">HBAR</td>
-                  <td className="py-3 text-gray-300">${tokenData?.marketData.prices.hbar.toFixed(4)}</td>
-                  <td className={`py-3 ${(tokenData?.marketData.change24h.hbar ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {(tokenData?.marketData.change24h.hbar ?? 0) >= 0 ? '+' : ''}
-                    {tokenData?.marketData.change24h.hbar.toFixed(2)}%
-                  </td>
-                  <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.hbar ?? 0) / 1000000).toFixed(0)}M</td>
-                </tr>
-                <tr>
-                  <td className="py-3 text-gray-300">SAUCE</td>
-                  <td className="py-3 text-gray-300">${tokenData?.marketData.prices.sauce.toFixed(4)}</td>
-                  <td className={`py-3 ${(tokenData?.marketData.change24h.sauce ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {(tokenData?.marketData.change24h.sauce ?? 0) >= 0 ? '+' : ''}
-                    {tokenData?.marketData.change24h.sauce.toFixed(2)}%
-                  </td>
-                  <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.sauce ?? 0) / 1000000).toFixed(0)}M</td>
-                </tr>
-                <tr>
-                  <td className="py-3 text-gray-300">CLXY</td>
-                  <td className="py-3 text-gray-300">${tokenData?.marketData.prices.clxy.toFixed(4)}</td>
-                  <td className={`py-3 ${(tokenData?.marketData.change24h.clxy ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {(tokenData?.marketData.change24h.clxy ?? 0) >= 0 ? '+' : ''}
-                    {tokenData?.marketData.change24h.clxy.toFixed(2)}%
-                  </td>
-                  <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.clxy ?? 0) / 1000000).toFixed(0)}M</td>
-                </tr>
+                {tokenData?.historicalRatios.map((item, index) => (
+                  <tr key={index}>
+                    <td className="py-3 text-gray-300">{item.date}</td>
+                    <td className="py-3 text-gray-300">{(item.ratios.hbar * 100).toFixed(1)}%</td>
+                    <td className="py-3 text-gray-300">{(item.ratios.sauce * 100).toFixed(1)}%</td>
+                    <td className="py-3 text-gray-300">{(item.ratios.clxy * 100).toFixed(1)}%</td>
+                    <td className="py-3 text-gray-300">
+                      {index === 0 ? 'Initial Composition' : 'Governance Vote #1'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
-        
-        <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-semibold mb-4 text-white">Composition Simulator</h2>
-          <p className="text-gray-300 mb-4">
-            Adjust the sliders to simulate different token compositions and see how they would affect the index.
-          </p>
-          
-          <div className="space-y-6 mt-6">
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-gray-300">HBAR</span>
-                <span className="font-medium text-white">
-                  {simulatedRatios ? (simulatedRatios.hbar * 100).toFixed(1) : 0}%
-                </span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.01" 
-                value={simulatedRatios?.hbar ?? 0.33333}
-                onChange={(e) => handleRatioChange('hbar', parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-            
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-gray-300">SAUCE</span>
-                <span className="font-medium text-white">
-                  {simulatedRatios ? (simulatedRatios.sauce * 100).toFixed(1) : 0}%
-                </span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.01" 
-                value={simulatedRatios?.sauce ?? 0.33333}
-                onChange={(e) => handleRatioChange('sauce', parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-            
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-gray-300">CLXY</span>
-                <span className="font-medium text-white">
-                  {simulatedRatios ? (simulatedRatios.clxy * 100).toFixed(1) : 0}%
-                </span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.01" 
-                value={simulatedRatios?.clxy ?? 0.33333}
-                onChange={(e) => handleRatioChange('clxy', parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-          </div>
-          
-          <div className="mt-8">
-            <h3 className="text-lg font-medium mb-3 text-white">Simulation Results</h3>
-            
-            <div className="bg-gray-700 p-4 rounded-lg">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-gray-400">Volatility Estimate</div>
-                  <div className="text-xl font-semibold text-white">
-                    {simulatedRatios ? (
-                      (simulatedRatios.hbar * 0.05 + 
-                       simulatedRatios.sauce * 0.12 + 
-                       simulatedRatios.clxy * 0.18) * 100
-                    ).toFixed(2) : 0}%
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-gray-400">Expected Return</div>
-                  <div className="text-xl font-semibold text-green-400">
-                    {simulatedRatios ? (
-                      (simulatedRatios.hbar * 0.025 + 
-                       simulatedRatios.sauce * -0.012 + 
-                       simulatedRatios.clxy * 0.057) * 100
-                    ).toFixed(2) : 0}%
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-gray-400">Liquidity Score</div>
-                  <div className="text-xl font-semibold text-white">
-                    {simulatedRatios ? (
-                      (simulatedRatios.hbar * 10 + 
-                       simulatedRatios.sauce * 7 + 
-                       simulatedRatios.clxy * 5) / 10
-                    ).toFixed(1) : 0}/10
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-gray-400">Risk Assessment</div>
-                  <div className="text-xl font-semibold text-white">
-                    {simulatedRatios ? 
-                      (simulatedRatios.hbar > 0.5 ? 'Low' : 
-                       simulatedRatios.clxy > 0.4 ? 'High' : 'Moderate') 
-                      : 'Moderate'}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-gray-600">
-                <button 
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
-                  onClick={() => {
-                    // In a real app, this would create a proposal
-                    alert('This would create a governance proposal with your suggested ratios');
-                  }}
-                >
-                  Create Proposal with These Ratios
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="mt-6 bg-gray-800 rounded-lg p-6 shadow-lg">
-        <h2 className="text-xl font-semibold mb-4 text-white">Historical Composition</h2>
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <th className="text-left py-2 text-gray-300">Date</th>
-                <th className="text-left py-2 text-gray-300">HBAR</th>
-                <th className="text-left py-2 text-gray-300">SAUCE</th>
-                <th className="text-left py-2 text-gray-300">CLXY</th>
-                <th className="text-left py-2 text-gray-300">Change Reason</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {tokenData?.historicalRatios.map((item, index) => (
-                <tr key={index}>
-                  <td className="py-3 text-gray-300">{item.date}</td>
-                  <td className="py-3 text-gray-300">{(item.ratios.hbar * 100).toFixed(1)}%</td>
-                  <td className="py-3 text-gray-300">{(item.ratios.sauce * 100).toFixed(1)}%</td>
-                  <td className="py-3 text-gray-300">{(item.ratios.clxy * 100).toFixed(1)}%</td>
-                  <td className="py-3 text-gray-300">
-                    {index === 0 ? 'Initial Composition' : 'Governance Vote #1'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

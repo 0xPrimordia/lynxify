@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createChart, ColorType, LineStyle } from 'lightweight-charts';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import GovernanceNav from '@/app/components/GovernanceNav';
+import TestnetAlert from '@/app/components/TestnetAlert';
 
 // Define proper types for our data structures
 interface MarketConditions {
@@ -371,6 +372,7 @@ export default function RebalancingPage() {
   if (isLoading) {
     return (
       <div className="w-full">
+        <TestnetAlert />
         <GovernanceNav currentSection="rebalancing" />
         <div className="flex justify-center py-12">
           <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
@@ -382,6 +384,7 @@ export default function RebalancingPage() {
   if (error) {
     return (
       <div className="w-full">
+        <TestnetAlert />
         <GovernanceNav currentSection="rebalancing" />
         <div className="bg-red-900/30 border border-red-500 text-red-200 p-4 rounded mb-6">
           {error}
@@ -398,6 +401,7 @@ export default function RebalancingPage() {
 
   return (
     <div className="w-full">
+      <TestnetAlert />
       <GovernanceNav currentSection="rebalancing" />
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

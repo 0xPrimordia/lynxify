@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import Link from 'next/link';
 import GovernanceNav from '@/app/components/GovernanceNav';
+import TestnetAlert from '@/app/components/TestnetAlert';
 
 export default function GovernanceDashboard() {
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +32,7 @@ export default function GovernanceDashboard() {
 
   return (
     <div className="w-full">
+      <TestnetAlert />
       <GovernanceNav currentSection="dashboard" />
       
       {isLoading ? (
