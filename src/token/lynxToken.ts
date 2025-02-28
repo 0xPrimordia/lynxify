@@ -1,4 +1,4 @@
-const { HederaAgentKit } = require('hedera-agent-kit');
+import { HederaAgentKit } from 'hedera-agent-kit';
 
 interface LynxTokenConfig {
     name: string;
@@ -7,8 +7,8 @@ interface LynxTokenConfig {
     maxSupply: bigint;
 }
 
-module.exports.LynxTokenCreator = class LynxTokenCreator {
-    private readonly kit: typeof HederaAgentKit;
+export class LynxTokenCreator {
+    private readonly kit: HederaAgentKit;
     private readonly config: LynxTokenConfig = {
         name: "LYNX Index Token",
         symbol: "LYNX",

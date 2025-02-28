@@ -18,6 +18,7 @@ const navigation = [
     { name: 'NFTs', href: '/wallet/nfts', icon: PhotoIcon },
     { name: 'History', href: '/wallet/history', icon: ClockIcon },
     { name: 'Staking', href: '/wallet/staking', icon: CurrencyDollarIcon },
+    { name: 'Governance', href: '/wallet/governance', icon: ClockIcon },
     { name: 'Export', href: '/wallet/export', icon: ArrowUpOnSquareIcon },
 ];
 
