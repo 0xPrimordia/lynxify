@@ -9,9 +9,16 @@ const {
     ContractFunctionParameters: HederaFunctionParams,
     Hbar: HederaHbar
 } = require("@hashgraph/sdk");
+const { PriceFeedService } = require('./priceFeed');
+
+interface MintRequest {
+    amount: string;
+    recipientId: string;
+}
 
 class MinterService {
-    client: any;
+    private client: any;
+    private priceFeed: typeof PriceFeedService;
     isListening: boolean;
     operatorId: string;
     operatorKey: string;
@@ -25,6 +32,53 @@ class MinterService {
             HederaPrivateKey.fromString(config.operatorKey)
         );
         this.isListening = false;
+        
+        this.priceFeed = new PriceFeedService(
+            config.operatorId,
+            config.operatorKey,
+            config.network
+        );
+    }
+
+    private async getMarketConditions() {
+        const [hbarData, sauceData, clxyData] = await Promise.all([
+            this.priceFeed.getTokenPrice('HBAR'),
+            this.priceFeed.getTokenPrice('SAUCE'),
+            this.priceFeed.getTokenPrice('CLXY')
+        ]);
+
+        // Get historical data for volatility analysis
+        const [hbarHistory, sauceHistory, clxyHistory] = await Promise.all([
+            this.priceFeed.getHistoricalData('HBAR', '24h'),
+            this.priceFeed.getHistoricalData('SAUCE', '24h'),
+            this.priceFeed.getHistoricalData('CLXY', '24h')
+        ]);
+
+        return {
+            prices: {
+                hbar: hbarData.price,
+                sauce: sauceData.price,
+                clxy: clxyData.price
+            },
+            volatility: {
+                hbar: hbarData.volatility || 0.1,
+                sauce: sauceData.volatility || 0.15,
+                clxy: clxyData.volatility || 0.2
+            },
+            liquidity: {
+                hbar: this.calculateLiquidity(hbarHistory),
+                sauce: this.calculateLiquidity(sauceHistory),
+                clxy: this.calculateLiquidity(clxyHistory)
+            }
+        };
+    }
+
+    private calculateLiquidity(history: { volume?: number[] }): number {
+        if (!history.volume || history.volume.length === 0) {
+            return 1000000; // fallback value
+        }
+        // Use 24h average volume as a liquidity indicator
+        return history.volume.reduce((a, b) => a + b, 0) / history.volume.length;
     }
 
     async mintLynx(amount: string, recipientId: string) {

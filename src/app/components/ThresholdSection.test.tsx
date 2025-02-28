@@ -20,8 +20,13 @@ jest.mock('@hashgraph/hedera-wallet-connect', () => ({
 
 // Mock dependencies
 jest.mock('@/app/lib/threshold');
-jest.mock('@/app/lib/tokens/thresholdAssociation');
-jest.mock('@/app/lib/utils/tokens');
+jest.mock('@/app/lib/tokens/thresholdAssociation', () => ({
+    verifyThresholdTokens: jest.fn()
+}));
+jest.mock('@/app/lib/utils/tokens', () => ({
+    associateToken: jest.fn(),
+    getTokenImageUrl: jest.fn()
+}));
 
 // Mock NextUI components
 jest.mock('@nextui-org/react', () => ({
@@ -133,37 +138,27 @@ describe('ThresholdSection', () => {
         mockExecuteTransaction.mockResolvedValueOnce({ status: 'SUCCESS' });
         mockSaveThresholds.mockResolvedValueOnce(undefined);
 
-        const { container, debug } = render(<ThresholdSection {...defaultProps} />);
+        render(<ThresholdSection {...defaultProps} />);
         
         // Click expand button first
         const expandButton = screen.getByRole('button', { 
-            name: 'Expand limit section'
+            name: /Expand limit section/i
         });
-        console.log('Before click - Expanded state:', expandButton.getAttribute('aria-expanded'));
         fireEvent.click(expandButton);
-        console.log('After click - Expanded state:', expandButton.getAttribute('aria-expanded'));
         
-        // Debug the entire rendered output
-        console.log('\nFull component structure:');
-        debug();
-
-        // Try to find the button with more lenient query
-        const allButtons = screen.getAllByRole('button');
-        console.log('\nAll available buttons:', 
-            allButtons.map(button => ({
-                text: button.textContent,
-                ariaLabel: button.getAttribute('aria-label')
-            }))
-        );
-
-        // Original test continues...
+        // Click the Set Limit Order button
         const limitButton = screen.getByRole('button', { 
             name: /Set Limit Order/i 
         });
         fireEvent.click(limitButton);
 
         await waitFor(() => {
-            expect(verifyThresholdTokens).toHaveBeenCalled();
+            expect(verifyThresholdTokens).toHaveBeenCalledWith(
+                '0.0.123456',
+                'token1',
+                'token2',
+                expect.any(Boolean)
+            );
             expect(associateToken).toHaveBeenCalledWith('0.0.123456', 'token1');
             expect(mockExecuteTransaction).toHaveBeenCalledWith(
                 'mockAssociateTx',
@@ -189,11 +184,11 @@ describe('ThresholdSection', () => {
 
         // Click expand button first
         const expandButton = screen.getByRole('button', { 
-            name: 'Expand limit section'
+            name: /Expand limit section/i
         });
         fireEvent.click(expandButton);
 
-        // Now click the Set Limit Order button
+        // Click the Set Limit Order button
         const limitButton = screen.getByRole('button', { 
             name: /Set Limit Order/i 
         });
@@ -215,11 +210,11 @@ describe('ThresholdSection', () => {
 
         // Click expand button first
         const expandButton = screen.getByRole('button', { 
-            name: 'Expand limit section'
+            name: /Expand limit section/i
         });
         fireEvent.click(expandButton);
 
-        // Now click the Set Limit Order button
+        // Click the Set Limit Order button
         const limitButton = screen.getByRole('button', { 
             name: /Set Limit Order/i 
         });
@@ -228,6 +223,7 @@ describe('ThresholdSection', () => {
         await waitFor(() => {
             expect(associateToken).not.toHaveBeenCalled();
             expect(mockExecuteTransaction).not.toHaveBeenCalled();
+            expect(mockSaveThresholds).toHaveBeenCalled();
             expect(mockResetThresholdForm).toHaveBeenCalled();
         });
     });
@@ -241,11 +237,11 @@ describe('ThresholdSection', () => {
 
         // Click expand button first
         const expandButton = screen.getByRole('button', { 
-            name: 'Expand limit section'
+            name: /Expand limit section/i
         });
         fireEvent.click(expandButton);
 
-        // Now click the Set Limit Order button
+        // Click the Set Limit Order button
         const limitButton = screen.getByRole('button', { 
             name: /Set Limit Order/i 
         });
@@ -255,6 +251,33 @@ describe('ThresholdSection', () => {
             expect(mockSetError).toHaveBeenCalledWith('Network error');
             expect(mockSetIsSubmitting).toHaveBeenCalledWith(false);
             expect(mockResetThresholdForm).not.toHaveBeenCalled();
+        });
+    });
+
+    it('should handle API errors when setting threshold', async () => {
+        (verifyThresholdTokens as jest.Mock).mockResolvedValueOnce({
+            needsAssociation: false
+        });
+        mockSaveThresholds.mockRejectedValueOnce(
+            new Error('API Error: Unauthorized')
+        );
+
+        render(<ThresholdSection {...defaultProps} />);
+
+        // Click expand button first
+        const expandButton = screen.getByRole('button', { 
+            name: /Expand limit section/i
+        });
+        fireEvent.click(expandButton);
+
+        // Click the Set Limit Order button
+        const limitButton = screen.getByRole('button', { 
+            name: /Set Limit Order/i 
+        });
+        fireEvent.click(limitButton);
+
+        await waitFor(() => {
+            expect(mockSetError).toHaveBeenCalledWith('API Error: Unauthorized');
         });
     });
 
@@ -313,43 +336,6 @@ describe('ThresholdSection', () => {
             fee: 3000,
             slippageBasisPoints: 50
         });
-    });
-
-    it('should handle API errors when setting threshold', async () => {
-        const mockVerifyThresholdTokens = require('@/app/lib/tokens/thresholdAssociation').verifyThresholdTokens;
-        mockVerifyThresholdTokens.mockResolvedValue({
-            needsAssociation: false
-        });
-
-        const mockSaveThresholds = jest.fn().mockRejectedValue(
-            new Error('API Error: Unauthorized')
-        );
-
-        const { getByText, getAllByRole } = render(
-            <ThresholdSection 
-                {...defaultProps}
-                saveThresholds={mockSaveThresholds}
-            />
-        );
-
-        // Expand section
-        fireEvent.click(getByText('+'));
-
-        // Get inputs by role
-        const inputs = getAllByRole('spinbutton');
-        const [priceInput, capInput] = inputs;
-
-        // Set threshold values
-        await act(async () => {
-            fireEvent.change(priceInput, { target: { value: '1.5' } });
-            fireEvent.change(capInput, { target: { value: '100' } });
-        });
-
-        await act(async () => {
-            fireEvent.click(getByText('Set Limit Order'));
-        });
-
-        expect(defaultProps.setError).toHaveBeenCalledWith('API Error: Unauthorized');
     });
 
     it('should validate input values before submission', async () => {
