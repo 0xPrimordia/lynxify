@@ -55,8 +55,7 @@ async function deployMinterMain() {
     console.log("Creating contract...");
     const contractCreateTx = new MinterContractCreate()
         .setBytecodeFileId(bytecodeFileId!)
-        .setGas(1000000)
-        .setAdminKey(operatorKey)
+        .setGas(3000000)
         .setConstructorParameters(
             new MinterFunctionParams()
                 .addAddress(MinterAccountId.fromString(process.env.LYNX_TOKEN_ID!).toSolidityAddress())
