@@ -10,15 +10,20 @@ const {
 const testFs = require('fs').promises;
 const testPath = require('path');
 
+// Load environment variables from .env.local
+require('dotenv').config({ path: '.env.local' });
+
 async function deployTestTokens() {
     if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY) {
         throw new Error('Missing environment variables. Required: NEXT_PUBLIC_OPERATOR_ID, OPERATOR_KEY');
     }
 
+    console.log("Using operator ID:", process.env.NEXT_PUBLIC_OPERATOR_ID);
+
     const client = TestTokenClient.forTestnet();
     client.setOperator(
-        TestAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!),
-        TestPrivateKey.fromString(process.env.OPERATOR_KEY!)
+        TestAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID),
+        TestPrivateKey.fromString(process.env.OPERATOR_KEY)
     );
 
     // Create SAUCE test token
@@ -26,10 +31,10 @@ async function deployTestTokens() {
         .setTokenName("Test SAUCE")
         .setTokenSymbol("tSAUCE")
         .setDecimals(8)
-        .setInitialSupply(1000000000) // 10 tokens with 8 decimals
-        .setTreasuryAccountId(TestAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!))
-        .setAdminKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY!))
-        .setSupplyKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY!))
+        .setInitialSupply(100000000000000) // 1,000,000 tokens with 8 decimals
+        .setTreasuryAccountId(TestAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID))
+        .setAdminKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY))
+        .setSupplyKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY))
         .setTokenType(TestTokenType.FungibleCommon)
         .setSupplyType(TestTokenSupplyType.Infinite)
         .setMaxTransactionFee(new TestHbar(30))
@@ -44,10 +49,10 @@ async function deployTestTokens() {
         .setTokenName("Test CLXY")
         .setTokenSymbol("tCLXY")
         .setDecimals(8)
-        .setInitialSupply(1000000000) // 10 tokens with 8 decimals
-        .setTreasuryAccountId(TestAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!))
-        .setAdminKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY!))
-        .setSupplyKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY!))
+        .setInitialSupply(100000000000000) // 1,000,000 tokens with 8 decimals
+        .setTreasuryAccountId(TestAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID))
+        .setAdminKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY))
+        .setSupplyKey(TestPrivateKey.fromString(process.env.OPERATOR_KEY))
         .setTokenType(TestTokenType.FungibleCommon)
         .setSupplyType(TestTokenSupplyType.Infinite)
         .setMaxTransactionFee(new TestHbar(30))

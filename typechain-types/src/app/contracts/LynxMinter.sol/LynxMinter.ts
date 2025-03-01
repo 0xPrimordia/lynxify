@@ -27,8 +27,6 @@ export interface LynxMinterInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "RATIO_PRECISION"
-      | "associateTokens"
-      | "checkSupply"
       | "clxyToken"
       | "confirmMint"
       | "getBalance"
@@ -39,37 +37,21 @@ export interface LynxMinterInterface extends Interface {
       | "owner"
       | "pendingMints"
       | "sauceToken"
-      | "totalClxyDeposited"
       | "totalHbarDeposited"
       | "totalLynxMinted"
-      | "totalSauceDeposited"
-      | "verifySupply"
       | "withdrawHBAR"
-      | "withdrawToken"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
-      | "DebugCheckSupply"
       | "DebugConfirmMint"
-      | "DebugConstructor"
       | "DebugMint"
       | "DebugOwner"
       | "LynxMinted"
-      | "MaxMintableUpdated"
-      | "SupplyVerified"
   ): EventFragment;
 
   encodeFunctionData(
     functionFragment: "RATIO_PRECISION",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "associateTokens",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "checkSupply",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "clxyToken", values?: undefined): string;
@@ -98,10 +80,6 @@ export interface LynxMinterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "totalClxyDeposited",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "totalHbarDeposited",
     values?: undefined
   ): string;
@@ -110,32 +88,12 @@ export interface LynxMinterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "totalSauceDeposited",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "verifySupply",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "withdrawHBAR",
     values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "withdrawToken",
-    values: [AddressLike, BigNumberish]
   ): string;
 
   decodeFunctionResult(
     functionFragment: "RATIO_PRECISION",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "associateTokens",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "checkSupply",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "clxyToken", data: BytesLike): Result;
@@ -158,10 +116,6 @@ export interface LynxMinterInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "sauceToken", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "totalClxyDeposited",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "totalHbarDeposited",
     data: BytesLike
   ): Result;
@@ -170,49 +124,9 @@ export interface LynxMinterInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "totalSauceDeposited",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "verifySupply",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "withdrawHBAR",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "withdrawToken",
-    data: BytesLike
-  ): Result;
-}
-
-export namespace DebugCheckSupplyEvent {
-  export type InputTuple = [
-    message: string,
-    hbarBalance: BigNumberish,
-    sauceBalance: BigNumberish,
-    clxyBalance: BigNumberish,
-    totalLynxMinted: BigNumberish
-  ];
-  export type OutputTuple = [
-    message: string,
-    hbarBalance: bigint,
-    sauceBalance: bigint,
-    clxyBalance: bigint,
-    totalLynxMinted: bigint
-  ];
-  export interface OutputObject {
-    message: string;
-    hbarBalance: bigint;
-    sauceBalance: bigint;
-    clxyBalance: bigint;
-    totalLynxMinted: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace DebugConfirmMintEvent {
@@ -236,31 +150,6 @@ export namespace DebugConfirmMintEvent {
     owner: string;
     nonce: bigint;
     isPending: boolean;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace DebugConstructorEvent {
-  export type InputTuple = [
-    lynx: AddressLike,
-    sauce: AddressLike,
-    clxy: AddressLike,
-    sender: AddressLike
-  ];
-  export type OutputTuple = [
-    lynx: string,
-    sauce: string,
-    clxy: string,
-    sender: string
-  ];
-  export interface OutputObject {
-    lynx: string;
-    sauce: string;
-    clxy: string;
-    sender: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -339,43 +228,6 @@ export namespace LynxMintedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace MaxMintableUpdatedEvent {
-  export type InputTuple = [amount: BigNumberish];
-  export type OutputTuple = [amount: bigint];
-  export interface OutputObject {
-    amount: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace SupplyVerifiedEvent {
-  export type InputTuple = [
-    hbarBalance: BigNumberish,
-    sauceBalance: BigNumberish,
-    clxyBalance: BigNumberish,
-    lynxSupply: BigNumberish
-  ];
-  export type OutputTuple = [
-    hbarBalance: bigint,
-    sauceBalance: bigint,
-    clxyBalance: bigint,
-    lynxSupply: bigint
-  ];
-  export interface OutputObject {
-    hbarBalance: bigint;
-    sauceBalance: bigint;
-    clxyBalance: bigint;
-    lynxSupply: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export interface LynxMinter extends BaseContract {
   connect(runner?: ContractRunner | null): LynxMinter;
   waitForDeployment(): Promise<this>;
@@ -421,10 +273,6 @@ export interface LynxMinter extends BaseContract {
 
   RATIO_PRECISION: TypedContractMethod<[], [bigint], "view">;
 
-  associateTokens: TypedContractMethod<[], [void], "nonpayable">;
-
-  checkSupply: TypedContractMethod<[], [boolean], "view">;
-
   clxyToken: TypedContractMethod<[], [string], "view">;
 
   confirmMint: TypedContractMethod<
@@ -449,24 +297,12 @@ export interface LynxMinter extends BaseContract {
 
   sauceToken: TypedContractMethod<[], [string], "view">;
 
-  totalClxyDeposited: TypedContractMethod<[], [bigint], "view">;
-
   totalHbarDeposited: TypedContractMethod<[], [bigint], "view">;
 
   totalLynxMinted: TypedContractMethod<[], [bigint], "view">;
 
-  totalSauceDeposited: TypedContractMethod<[], [bigint], "view">;
-
-  verifySupply: TypedContractMethod<[], [boolean], "nonpayable">;
-
   withdrawHBAR: TypedContractMethod<
     [amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
-  withdrawToken: TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -478,12 +314,6 @@ export interface LynxMinter extends BaseContract {
   getFunction(
     nameOrSignature: "RATIO_PRECISION"
   ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "associateTokens"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "checkSupply"
-  ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
     nameOrSignature: "clxyToken"
   ): TypedContractMethod<[], [string], "view">;
@@ -519,51 +349,21 @@ export interface LynxMinter extends BaseContract {
     nameOrSignature: "sauceToken"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "totalClxyDeposited"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "totalHbarDeposited"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "totalLynxMinted"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "totalSauceDeposited"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "verifySupply"
-  ): TypedContractMethod<[], [boolean], "nonpayable">;
-  getFunction(
     nameOrSignature: "withdrawHBAR"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "withdrawToken"
-  ): TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
 
-  getEvent(
-    key: "DebugCheckSupply"
-  ): TypedContractEvent<
-    DebugCheckSupplyEvent.InputTuple,
-    DebugCheckSupplyEvent.OutputTuple,
-    DebugCheckSupplyEvent.OutputObject
-  >;
   getEvent(
     key: "DebugConfirmMint"
   ): TypedContractEvent<
     DebugConfirmMintEvent.InputTuple,
     DebugConfirmMintEvent.OutputTuple,
     DebugConfirmMintEvent.OutputObject
-  >;
-  getEvent(
-    key: "DebugConstructor"
-  ): TypedContractEvent<
-    DebugConstructorEvent.InputTuple,
-    DebugConstructorEvent.OutputTuple,
-    DebugConstructorEvent.OutputObject
   >;
   getEvent(
     key: "DebugMint"
@@ -586,33 +386,8 @@ export interface LynxMinter extends BaseContract {
     LynxMintedEvent.OutputTuple,
     LynxMintedEvent.OutputObject
   >;
-  getEvent(
-    key: "MaxMintableUpdated"
-  ): TypedContractEvent<
-    MaxMintableUpdatedEvent.InputTuple,
-    MaxMintableUpdatedEvent.OutputTuple,
-    MaxMintableUpdatedEvent.OutputObject
-  >;
-  getEvent(
-    key: "SupplyVerified"
-  ): TypedContractEvent<
-    SupplyVerifiedEvent.InputTuple,
-    SupplyVerifiedEvent.OutputTuple,
-    SupplyVerifiedEvent.OutputObject
-  >;
 
   filters: {
-    "DebugCheckSupply(string,uint256,uint256,uint256,uint256)": TypedContractEvent<
-      DebugCheckSupplyEvent.InputTuple,
-      DebugCheckSupplyEvent.OutputTuple,
-      DebugCheckSupplyEvent.OutputObject
-    >;
-    DebugCheckSupply: TypedContractEvent<
-      DebugCheckSupplyEvent.InputTuple,
-      DebugCheckSupplyEvent.OutputTuple,
-      DebugCheckSupplyEvent.OutputObject
-    >;
-
     "DebugConfirmMint(string,address,address,uint256,bool)": TypedContractEvent<
       DebugConfirmMintEvent.InputTuple,
       DebugConfirmMintEvent.OutputTuple,
@@ -622,17 +397,6 @@ export interface LynxMinter extends BaseContract {
       DebugConfirmMintEvent.InputTuple,
       DebugConfirmMintEvent.OutputTuple,
       DebugConfirmMintEvent.OutputObject
-    >;
-
-    "DebugConstructor(address,address,address,address)": TypedContractEvent<
-      DebugConstructorEvent.InputTuple,
-      DebugConstructorEvent.OutputTuple,
-      DebugConstructorEvent.OutputObject
-    >;
-    DebugConstructor: TypedContractEvent<
-      DebugConstructorEvent.InputTuple,
-      DebugConstructorEvent.OutputTuple,
-      DebugConstructorEvent.OutputObject
     >;
 
     "DebugMint(string,uint256,uint256)": TypedContractEvent<
@@ -666,28 +430,6 @@ export interface LynxMinter extends BaseContract {
       LynxMintedEvent.InputTuple,
       LynxMintedEvent.OutputTuple,
       LynxMintedEvent.OutputObject
-    >;
-
-    "MaxMintableUpdated(uint256)": TypedContractEvent<
-      MaxMintableUpdatedEvent.InputTuple,
-      MaxMintableUpdatedEvent.OutputTuple,
-      MaxMintableUpdatedEvent.OutputObject
-    >;
-    MaxMintableUpdated: TypedContractEvent<
-      MaxMintableUpdatedEvent.InputTuple,
-      MaxMintableUpdatedEvent.OutputTuple,
-      MaxMintableUpdatedEvent.OutputObject
-    >;
-
-    "SupplyVerified(uint256,uint256,uint256,uint256)": TypedContractEvent<
-      SupplyVerifiedEvent.InputTuple,
-      SupplyVerifiedEvent.OutputTuple,
-      SupplyVerifiedEvent.OutputObject
-    >;
-    SupplyVerified: TypedContractEvent<
-      SupplyVerifiedEvent.InputTuple,
-      SupplyVerifiedEvent.OutputTuple,
-      SupplyVerifiedEvent.OutputObject
     >;
   };
 }
