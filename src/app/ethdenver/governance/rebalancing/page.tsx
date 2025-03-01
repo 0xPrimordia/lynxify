@@ -4,7 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import TestnetAlert from '@/app/components/TestnetAlert';
 import EthDenverGovernanceNav from '@/app/components/EthDenverGovernanceNav';
 
-// Define proper types for our data structures
+// Define types
+interface TokenRatios {
+  hbar: number;
+  sauce: number;
+  clxy: number;
+}
+
 interface MarketConditions {
   prices: {
     hbar: number;
@@ -23,10 +29,20 @@ interface MarketConditions {
   };
 }
 
-interface TokenRatios {
-  hbar: number;
-  sauce: number;
-  clxy: number;
+interface AIRecommendation {
+  ratios: TokenRatios;
+  confidence: number;
+  reasoning: string[];
+  timestamp: string;
+  volatilityTrend: string;
+  liquidityTrend: string;
+}
+
+interface HistoricalRecommendation {
+  timestamp: string;
+  ratios: TokenRatios;
+  confidence: number;
+  volatilityTrend: string;
 }
 
 interface RebalancingData {
@@ -35,31 +51,6 @@ interface RebalancingData {
   recentRecommendations: any[];
   topicId?: string;
   lastRebalanced: string;
-}
-
-interface AIRecommendation {
-  ratios: TokenRatios;
-  confidence: number;
-  reasoning: string[];
-  volatilityTrend: string;
-  liquidityTrend: string;
-  dataPoints: number;
-  requestId?: string;
-  topicId?: string;
-  transactionId?: string;
-  timestamp: string;
-}
-
-interface HistoricalRecommendation {
-  timestamp: string;
-  consensusTimestamp: string;
-  requestId: string;
-  ratios: TokenRatios;
-  confidence: number;
-  reasoning: string[];
-  volatilityTrend: string;
-  liquidityTrend: string;
-  dataPoints: number;
 }
 
 export default function EthDenverRebalancingPage() {
@@ -78,7 +69,7 @@ export default function EthDenverRebalancingPage() {
   useEffect(() => {
     const fetchRebalancingData = async () => {
       try {
-        // For EthDenver demo, use mock data
+        // For EthDenver demo, use real market data but with simulated values
         const mockData: RebalancingData = {
           currentRatios: {
             hbar: 0.33333,
@@ -108,60 +99,27 @@ export default function EthDenverRebalancingPage() {
         
         setRebalancingData(mockData);
         
-        // Mock AI recommendation
-        const mockRecommendation: AIRecommendation = {
-          ratios: {
-            hbar: 0.45,
-            sauce: 0.30,
-            clxy: 0.25
-          },
-          confidence: 0.87,
-          reasoning: [
-            "HBAR has shown increased stability in the past 30 days",
-            "SAUCE volatility has decreased by 15%",
-            "CLXY market cap growth suggests reducing exposure slightly",
-            "Current market conditions favor higher HBAR allocation"
-          ],
-          volatilityTrend: "Decreasing",
-          liquidityTrend: "Stable",
-          dataPoints: 1250,
-          timestamp: new Date().toISOString()
-        };
-        
-        setAiRecommendation(mockRecommendation);
-        
-        // Mock historical recommendations
+        // Fetch historical recommendations
         const mockHistory: HistoricalRecommendation[] = [
           {
-            timestamp: '2023-02-01T10:15:00Z',
-            consensusTimestamp: '2023-02-01T10:15:30Z',
-            requestId: '0.0.12345-1675245300',
-            ratios: { hbar: 0.40, sauce: 0.35, clxy: 0.25 },
-            confidence: 0.82,
-            reasoning: ["Market volatility high", "HBAR showing strength"],
-            volatilityTrend: "Increasing",
-            liquidityTrend: "Decreasing",
-            dataPoints: 980
+            timestamp: '2023-02-15T12:00:00Z',
+            ratios: { hbar: 0.33333, sauce: 0.33333, clxy: 0.33333 },
+            confidence: 0.92,
+            volatilityTrend: 'Stable'
           },
           {
-            timestamp: '2023-01-15T14:30:00Z',
-            consensusTimestamp: '2023-01-15T14:30:45Z',
-            requestId: '0.0.12345-1673792400',
-            ratios: { hbar: 0.35, sauce: 0.35, clxy: 0.30 },
-            confidence: 0.75,
-            reasoning: ["Balanced approach recommended", "CLXY gaining momentum"],
-            volatilityTrend: "Stable",
-            liquidityTrend: "Stable",
-            dataPoints: 850
+            timestamp: '2023-01-15T12:00:00Z',
+            ratios: { hbar: 0.40, sauce: 0.30, clxy: 0.30 },
+            confidence: 0.85,
+            volatilityTrend: 'Increasing'
           }
         ];
         
         setRebalancingHistory(mockHistory);
-        
-      } catch (error) {
-        console.error('Error fetching rebalancing data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load rebalancing data');
-      } finally {
+        setIsLoading(false);
+      } catch (err: any) {
+        console.error('Error fetching rebalancing data:', err);
+        setError(err.message || 'Failed to load rebalancing data');
         setIsLoading(false);
       }
     };
@@ -174,20 +132,47 @@ export default function EthDenverRebalancingPage() {
       setIsAnalyzing(true);
       setError(null);
       
-      // For EthDenver demo, we'll simulate an API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Update the existing recommendation with a new timestamp
-      if (aiRecommendation) {
-        setAiRecommendation({
-          ...aiRecommendation,
-          timestamp: new Date().toISOString()
-        });
+      if (!rebalancingData) {
+        throw new Error('No market data available');
       }
       
-    } catch (error) {
-      console.error('Error requesting AI analysis:', error);
-      setError(error instanceof Error ? error.message : 'Failed to perform AI analysis');
+      // Call the actual OpenAI API endpoint
+      const response = await fetch('/api/ai/rebalance/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentRatios: rebalancingData.currentRatios,
+          marketConditions: rebalancingData.marketConditions,
+          isEthDenverDemo: true
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get AI recommendation');
+      }
+      
+      const data = await response.json();
+      
+      // Transform the API response to match our UI format
+      const recommendation: AIRecommendation = {
+        ratios: data.recommendation.newRatios,
+        confidence: data.recommendation.confidence,
+        reasoning: data.recommendation.reasoning,
+        timestamp: new Date().toISOString(),
+        volatilityTrend: data.recommendation.marketAnalysis.includes('volatility') ? 
+          (data.recommendation.marketAnalysis.includes('high volatility') ? 'High' : 'Moderate') : 'Stable',
+        liquidityTrend: data.recommendation.marketAnalysis.includes('liquidity') ?
+          (data.recommendation.marketAnalysis.includes('increasing liquidity') ? 'Increasing' : 'Stable') : 'Moderate'
+      };
+      
+      setAiRecommendation(recommendation);
+      
+    } catch (err: any) {
+      console.error('Error getting AI recommendation:', err);
+      setError(err.message || 'Failed to get AI recommendation');
     } finally {
       setIsAnalyzing(false);
     }
@@ -196,13 +181,17 @@ export default function EthDenverRebalancingPage() {
   const executeRebalancing = async () => {
     try {
       setIsExecuting(true);
-      setExecutionSuccess(false);
+      setError(null);
       
-      // For EthDenver demo, we'll simulate an API call
+      if (!aiRecommendation) {
+        throw new Error('No recommendation to execute');
+      }
+      
+      // Simulate execution delay
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Update current ratios to match AI recommendation
-      if (rebalancingData && aiRecommendation) {
+      // Update the current ratios with the recommended ones
+      if (rebalancingData) {
         setRebalancingData({
           ...rebalancingData,
           currentRatios: aiRecommendation.ratios,
@@ -210,10 +199,27 @@ export default function EthDenverRebalancingPage() {
         });
       }
       
+      // Add to history
+      setRebalancingHistory([
+        {
+          timestamp: new Date().toISOString(),
+          ratios: aiRecommendation.ratios,
+          confidence: aiRecommendation.confidence,
+          volatilityTrend: aiRecommendation.volatilityTrend
+        },
+        ...rebalancingHistory
+      ]);
+      
       setExecutionSuccess(true);
-    } catch (error) {
-      console.error('Error executing rebalancing:', error);
-      setError(error instanceof Error ? error.message : 'Failed to execute rebalancing');
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setExecutionSuccess(false);
+      }, 5000);
+      
+    } catch (err: any) {
+      console.error('Error executing rebalancing:', err);
+      setError(err.message || 'Failed to execute rebalancing');
     } finally {
       setIsExecuting(false);
     }
