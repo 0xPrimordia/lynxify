@@ -36,7 +36,7 @@ export default function MintPage() {
         password, 
         setPassword, 
         passwordModalContext,
-        setPasswordModalContext: setPasswordModalContextFromPasswordModal,
+        setPasswordModalContext,
         resetPasswordModal 
     } = usePasswordModal();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,7 +119,7 @@ export default function MintPage() {
             const result = await handleInAppTransaction(
                 transaction,
                 signTransaction,
-                setPasswordModalContextFromPasswordModal
+                setPasswordModalContext
             );
 
             if ((result as any)?.status === 'SUCCESS') {
@@ -146,7 +146,7 @@ export default function MintPage() {
                 passwordModalContext.transaction,
                 password,
                 signTransaction,
-                setPasswordModalContextFromPasswordModal
+                setPasswordModalContext
             );
             
             if (result.status === 'SUCCESS') {
@@ -173,6 +173,15 @@ export default function MintPage() {
     return (
         <div className="w-full mx-auto">
             <TestnetAlert />
+            
+            <PasswordModal
+                context={passwordModalContext}
+                password={password}
+                setPassword={setPassword}
+                onSubmit={handlePasswordSubmit}
+                setContext={setPasswordModalContext}
+                isSubmitting={isSubmitting}
+            />
             
             <div className="container mx-auto px-4 py-8">
                 <h1 className="text-2xl font-bold mb-6">Mint LYNX Index Token</h1>
