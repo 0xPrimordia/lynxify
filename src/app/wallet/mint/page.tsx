@@ -8,6 +8,7 @@ import { handleInAppTransaction, handleInAppPasswordSubmit } from '@/app/lib/tra
 import { PasswordModalContext } from '@/app/types';
 import { usePasswordModal } from '@/app/hooks/usePasswordModal';
 import { PasswordModal } from '@/app/components/PasswordModal';
+import TestnetAlert from '@/app/components/TestnetAlert';
 
 interface TokenBalance {
     hbar: string;
@@ -169,102 +170,106 @@ export default function MintPage() {
     };
 
     return (
-        <div className="container mx-auto px-4 py-8">
-            <h1 className="text-2xl font-bold mb-6">Mint LYNX Index Token</h1>
+        <div className="w-full mx-auto">
+            <TestnetAlert />
             
-            <div className="bg-gray-900 rounded-lg p-6 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl">Token Balances</h2>
-                    <button 
-                        onClick={fetchBalances}
-                        className="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
+            <div className="container mx-auto px-4 py-8">
+                <h1 className="text-2xl font-bold mb-6">Mint LYNX Index Token</h1>
+                
+                <div className="bg-gray-900 rounded-lg p-6 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl">Token Balances</h2>
+                        <button 
+                            onClick={fetchBalances}
+                            className="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
+                        >
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-gray-800 p-3 rounded">
+                            <div className="text-gray-400 text-sm">HBAR</div>
+                            <div className="text-xl font-semibold">{balances.hbar}</div>
+                        </div>
+                        <div className="bg-gray-800 p-3 rounded">
+                            <div className="text-gray-400 text-sm">SAUCE</div>
+                            <div className="text-xl font-semibold">{balances.sauce}</div>
+                        </div>
+                        <div className="bg-gray-800 p-3 rounded">
+                            <div className="text-gray-400 text-sm">CLXY</div>
+                            <div className="text-xl font-semibold">{balances.clxy}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <form onSubmit={handleMint} className="bg-gray-900 rounded-lg p-6 mb-6">
+                    <div className="mb-6">
+                        <label className="block text-sm text-gray-400 mb-1">HBAR Amount</label>
+                        <input
+                            type="number"
+                            value={amounts.hbar}
+                            onChange={(e) => handleAmountChange('hbar', e.target.value)}
+                            placeholder="Enter HBAR amount"
+                            className="w-full bg-gray-800 border border-gray-700 rounded p-2"
+                            min="0"
+                            step="0.000001"
+                        />
+                    </div>
+                    
+                    <div className="mb-6">
+                        <label className="block text-sm text-gray-400 mb-1">SAUCE Amount</label>
+                        <input
+                            type="number"
+                            value={amounts.sauce}
+                            onChange={(e) => handleAmountChange('sauce', e.target.value)}
+                            placeholder="Enter SAUCE amount"
+                            className="w-full bg-gray-800 border border-gray-700 rounded p-2"
+                            min="0"
+                            step="0.000001"
+                        />
+                    </div>
+                    
+                    <div className="mb-6">
+                        <label className="block text-sm text-gray-400 mb-1">CLXY Amount</label>
+                        <input
+                            type="number"
+                            value={amounts.clxy}
+                            onChange={(e) => handleAmountChange('clxy', e.target.value)}
+                            placeholder="Enter CLXY amount"
+                            className="w-full bg-gray-800 border border-gray-700 rounded p-2"
+                            min="0"
+                            step="0.000001"
+                        />
+                    </div>
+                    
+                    <div className="bg-gray-800 p-4 rounded-lg mb-6">
+                        <div className="text-gray-400 text-sm mb-1">Estimated LYNX Output</div>
+                        <div className="text-2xl font-bold">{estimatedLynx} LYNX</div>
+                    </div>
+                    
+                    <button
+                        type="submit"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
+                        disabled={isSubmitting || !estimatedLynx || parseFloat(estimatedLynx) <= 0}
                     >
-                        Refresh
+                        {isSubmitting ? 'Processing...' : 'Mint LYNX'}
                     </button>
-                </div>
+                </form>
                 
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-gray-800 p-3 rounded">
-                        <div className="text-gray-400 text-sm">HBAR</div>
-                        <div className="text-xl font-semibold">{balances.hbar}</div>
+                <div className="bg-gray-900 rounded-lg p-6">
+                    <h2 className="text-xl mb-4">How LYNX Minting Works</h2>
+                    <div className="text-gray-300 space-y-3">
+                        <p>
+                            LYNX is minted using an equal 1:1:1 ratio of HBAR, SAUCE, and CLXY tokens.
+                        </p>
+                        <p>
+                            For every 1 HBAR, 1 SAUCE, and 1 CLXY deposited, you receive 1 LYNX token.
+                        </p>
+                        <p>
+                            This balanced approach ensures that LYNX maintains stable backing from all three assets.
+                        </p>
                     </div>
-                    <div className="bg-gray-800 p-3 rounded">
-                        <div className="text-gray-400 text-sm">SAUCE</div>
-                        <div className="text-xl font-semibold">{balances.sauce}</div>
-                    </div>
-                    <div className="bg-gray-800 p-3 rounded">
-                        <div className="text-gray-400 text-sm">CLXY</div>
-                        <div className="text-xl font-semibold">{balances.clxy}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <form onSubmit={handleMint} className="bg-gray-900 rounded-lg p-6 mb-6">
-                <div className="mb-6">
-                    <label className="block text-sm text-gray-400 mb-1">HBAR Amount</label>
-                    <input
-                        type="number"
-                        value={amounts.hbar}
-                        onChange={(e) => handleAmountChange('hbar', e.target.value)}
-                        placeholder="Enter HBAR amount"
-                        className="w-full bg-gray-800 border border-gray-700 rounded p-2"
-                        min="0"
-                        step="0.000001"
-                    />
-                </div>
-                
-                <div className="mb-6">
-                    <label className="block text-sm text-gray-400 mb-1">SAUCE Amount</label>
-                    <input
-                        type="number"
-                        value={amounts.sauce}
-                        onChange={(e) => handleAmountChange('sauce', e.target.value)}
-                        placeholder="Enter SAUCE amount"
-                        className="w-full bg-gray-800 border border-gray-700 rounded p-2"
-                        min="0"
-                        step="0.000001"
-                    />
-                </div>
-                
-                <div className="mb-6">
-                    <label className="block text-sm text-gray-400 mb-1">CLXY Amount</label>
-                    <input
-                        type="number"
-                        value={amounts.clxy}
-                        onChange={(e) => handleAmountChange('clxy', e.target.value)}
-                        placeholder="Enter CLXY amount"
-                        className="w-full bg-gray-800 border border-gray-700 rounded p-2"
-                        min="0"
-                        step="0.000001"
-                    />
-                </div>
-                
-                <div className="bg-gray-800 p-4 rounded-lg mb-6">
-                    <div className="text-gray-400 text-sm mb-1">Estimated LYNX Output</div>
-                    <div className="text-2xl font-bold">{estimatedLynx} LYNX</div>
-                </div>
-                
-                <button
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
-                    disabled={isSubmitting || !estimatedLynx || parseFloat(estimatedLynx) <= 0}
-                >
-                    {isSubmitting ? 'Processing...' : 'Mint LYNX'}
-                </button>
-            </form>
-            
-            <div className="bg-gray-900 rounded-lg p-6">
-                <h2 className="text-xl mb-4">How LYNX Minting Works</h2>
-                <div className="text-gray-300 space-y-3">
-                    <p>
-                        LYNX is minted using an equal 1:1:1 ratio of HBAR, SAUCE, and CLXY tokens.
-                    </p>
-                    <p>
-                        For every 1 HBAR, 1 SAUCE, and 1 CLXY deposited, you receive 1 LYNX token.
-                    </p>
-                    <p>
-                        This balanced approach ensures that LYNX maintains stable backing from all three assets.
-                    </p>
                 </div>
             </div>
         </div>
