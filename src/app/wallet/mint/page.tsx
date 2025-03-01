@@ -92,7 +92,8 @@ export default function MintPage() {
         });
     };
 
-    const handleMint = async () => {
+    const handleMint = async (e: React.FormEvent) => {
+        e.preventDefault(); // Prevent default form submission
         try {
             setIsLoading(true);
             setError(null);
