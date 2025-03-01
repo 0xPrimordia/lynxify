@@ -14,7 +14,7 @@ export default function EthDenverGovernanceDashboard() {
     const fetchDashboardData = async () => {
       try {
         // Use a dedicated EthDenver endpoint
-        const response = await fetch('/api/ethdenver/governance/dashboard');
+        const response = await fetch('/api/ai/rebalance');
         if (!response.ok) throw new Error('Failed to fetch dashboard data');
         const data = await response.json();
         setDashboardData(data);
