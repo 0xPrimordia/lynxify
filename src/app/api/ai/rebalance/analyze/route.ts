@@ -22,6 +22,7 @@ interface MarketConditions {
 interface RebalanceRequest {
   currentRatios: TokenRatios;
   marketConditions: MarketConditions;
+  isEthDenverDemo?: boolean;
 }
 
 interface AIRecommendation {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { currentRatios, marketConditions } = requestData;
+    const { currentRatios, marketConditions, isEthDenverDemo } = requestData;
     
     // Validate input
     if (!currentRatios || !marketConditions) {
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     const REBALANCING_TOPIC_ID = process.env.LYNX_REBALANCING_TOPIC_ID;
     
     try {
-      if (REBALANCING_TOPIC_ID) {
+      if (REBALANCING_TOPIC_ID && !isEthDenverDemo) {
         console.log("Initializing HCS service");
         hcsService = new HCSService({
           operatorId: process.env.NEXT_PUBLIC_OPERATOR_ID!,
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
         });
         console.log("HCS message submitted successfully");
       } else {
-        console.log("Skipping HCS integration - no topic ID provided");
+        console.log("Skipping HCS integration - no topic ID provided or EthDenver demo");
       }
     } catch (hcsError) {
       console.error("Error with HCS service:", hcsError);
@@ -231,7 +232,7 @@ Ensure that all ratios sum to exactly 1.
     
     // Record the recommendation on HCS (with error handling)
     try {
-      if (REBALANCING_TOPIC_ID && hcsService) {
+      if (REBALANCING_TOPIC_ID && !isEthDenverDemo && hcsService) {
         console.log("Recording recommendation on HCS");
         await hcsService.submitMessage(REBALANCING_TOPIC_ID, {
           type: 'REBALANCE_RECOMMENDATION',
@@ -258,7 +259,7 @@ Ensure that all ratios sum to exactly 1.
       requestId,
       currentRatios,
       recommendation,
-      transactionId: REBALANCING_TOPIC_ID ? 'recorded-on-hcs' : 'hcs-disabled'
+      transactionId: REBALANCING_TOPIC_ID && !isEthDenverDemo ? 'recorded-on-hcs' : 'hcs-disabled'
     });
     
   } catch (error) {

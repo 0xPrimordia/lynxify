@@ -11,9 +11,7 @@ export async function POST(req: Request) {
         const sauceValue = Math.floor(parseFloat(sauceAmount) * 1e8);
         const clxyValue = Math.floor(parseFloat(clxyAmount) * 1e8);
 
-        const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' 
-            ? Client.forMainnet() 
-            : Client.forTestnet();
+        const client = Client.forTestnet();
             
         const senderAccountId = AccountId.fromString(accountId);
         const contractAddress = ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!).toSolidityAddress();
