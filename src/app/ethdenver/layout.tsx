@@ -55,7 +55,7 @@ export default function EthDenverLayout({
             </div>
             <div>
               <a 
-                href="https://github.com/yourusername/lynx-protocol" 
+                href="https://github.com/0xPrimordia/lynxify" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-gray-300 hover:text-white"
