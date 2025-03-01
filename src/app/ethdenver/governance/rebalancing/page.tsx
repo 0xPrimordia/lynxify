@@ -486,7 +486,7 @@ export default function EthDenverRebalancingPage() {
               ) : (
                 <div className="text-center py-12 text-gray-400">
                   <p>No AI recommendation available</p>
-                  <p className="text-sm mt-2">Click "Request AI Analysis" to generate a recommendation</p>
+                  <p className="text-sm mt-2">Click &quot;Request AI Analysis&quot; to generate a recommendation</p>
                 </div>
               )}
             </div>

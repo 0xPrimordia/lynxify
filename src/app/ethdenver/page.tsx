@@ -53,7 +53,7 @@ export default function EthDenverLanding() {
           <li>LYNX token minting interface</li>
         </ul>
         <p className="text-gray-300">
-          The demo uses real AI technology through OpenAI's API but simulates blockchain interactions.
+          The demo uses real AI technology through OpenAI&apos;s API but simulates blockchain interactions.
         </p>
       </div>
       
