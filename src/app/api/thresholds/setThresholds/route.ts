@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/utils/supabase';
-import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId } from '@hashgraph/sdk';
+import { Client, ContractExecuteTransaction, PrivateKey, AccountId, ContractFunctionParameters, ContractId, Hbar, Long } from '@hashgraph/sdk';
 import { ethers } from 'ethers';
 import { cookies } from 'next/headers';
-import { User, Threshold } from '@/app/types';  // Import types
+import { User, Threshold } from '@/app/types';
 
 export async function POST(req: NextRequest) {
   try {
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     // Modified price conversion with bounds checking
     const priceBasisPoints = Math.max(1, Math.min(10000, Math.floor(body.price * 10000)));
-    const formattedCap = ethers.parseUnits(body.cap.toString(), 18);
+    const formattedCap = Long.fromString(ethers.parseUnits(body.cap.toString(), 18).toString());
     
     // Convert token IDs to solidity addresses
     const tokenAAddress = `0x${ContractId.fromString(body.tokenA).toSolidityAddress()}`;
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
             .addString(hederaAccountId)
             .addAddress(tokenAAddress)
             .addAddress(tokenBAddress)
-            .addUint256(formattedCap.toString())
+            .addUint256(formattedCap)
         );
 
       console.log('Executing contract transaction...');

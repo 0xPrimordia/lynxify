@@ -1,11 +1,12 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar, TransactionReceipt } from "@hashgraph/sdk";
+import { PrivateKey, Transaction, TransactionId, Client, AccountCreateTransaction, Hbar, TransactionReceipt, TransferTransaction } from "@hashgraph/sdk";
 import { supabase } from '@/utils/supabase';
 import { base64StringToTransaction } from "@hashgraph/hedera-wallet-connect";
 import { decrypt } from '@/lib/utils/encryption';
 import { attemptRecovery, retrievePrivateKey } from '@/lib/utils/keyStorage';
+import { PasswordModalContext } from '@/app/types';
 
 export interface WalletOperationResult<T> {
     success: boolean;
@@ -28,12 +29,7 @@ export interface InAppWalletContextType {
     setInAppAccount: (accountId: string) => void;
     recoverKey: (userId: string) => Promise<WalletOperationResult<void>>;
     verifyMetadataSync: (currentMetadata: any, storedMetadata: any) => Promise<WalletOperationResult<boolean>>;
-    setPasswordModalContext: (context: {
-        isOpen: boolean;
-        transaction: string | null;
-        description: string;
-        transactionPromise: null | Promise<any>;
-    }) => void;
+    setPasswordModalContext: (context: PasswordModalContext | ((prevContext: PasswordModalContext) => PasswordModalContext)) => void;
     walletType: 'inApp' | 'extension' | null;
 }
 
@@ -44,6 +40,7 @@ interface WalletState {
     error: string | null;
     isRecoveryInProgress: boolean;
     isOperationInProgress: boolean;
+    passwordModalContext: PasswordModalContext;
 }
 
 export const InAppWalletContext = createContext<InAppWalletContextType | undefined>(undefined);
@@ -55,7 +52,13 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         inAppPrivateKey: null,
         error: null,
         isRecoveryInProgress: false,
-        isOperationInProgress: false
+        isOperationInProgress: false,
+        passwordModalContext: {
+            isOpen: false,
+            transaction: null,
+            description: '',
+            transactionPromise: null
+        }
     });
     
     const operationLock = useRef<boolean>(false);
@@ -169,6 +172,18 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
         setWalletState(prev => ({ ...prev, isOperationInProgress: true, error: null }));
         
         try {
+            // Only try to load the wallet if a password is provided
+            if (!password) {
+                return {
+                    success: false,
+                    error: 'Password required',
+                    data: {
+                        status: 'ERROR' as const,
+                        transactionId: null
+                    }
+                };
+            }
+
             const loadResult = await loadWallet(password);
             if (!loadResult.success || !loadResult.data) {
                 return {
@@ -182,15 +197,43 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
             }
 
             const tx = base64StringToTransaction(transaction);
+            console.log("[InAppWalletContext] Decoded transaction:", {
+                type: tx.constructor.name,
+                hbarTransfers: tx instanceof TransferTransaction ? tx.hbarTransfers : null,
+                transactionId: tx.transactionId?.toString(),
+                nodeAccountIds: tx.nodeAccountIds?.map(id => id.toString())
+            });
+
             const signedTx = await tx.sign(loadResult.data);
+            console.log("[InAppWalletContext] Signed transaction:", {
+                type: signedTx.constructor.name,
+                hbarTransfers: signedTx instanceof TransferTransaction ? signedTx.hbarTransfers : null,
+                transactionId: signedTx.transactionId?.toString(),
+                nodeAccountIds: signedTx.nodeAccountIds?.map(id => id.toString())
+            });
+
+            // Log transaction details before execution
+            if (tx instanceof TransferTransaction) {
+                const transferTx = tx as TransferTransaction;
+                console.log("[InAppWalletContext] Transaction Details:");
+                console.log("- Sender Account ID:", walletState.inAppAccount);
+                console.log("- HBAR Transfers:", transferTx.hbarTransfers);
+                console.log("- Token Transfers:", transferTx.tokenTransfers);
+                console.log("- Max Transaction Fee:", transferTx.maxTransactionFee?.toString());
+            }
+
+            console.log("[InAppWalletContext] Executing signed transaction...");
             const response = await signedTx.execute(client);
+            console.log("[InAppWalletContext] Transaction executed, ID:", response.transactionId.toString());
             
+            console.log("[InAppWalletContext] Waiting for transaction receipt...");
             const receiptPromise = response.getReceipt(client);
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Transaction receipt timeout')), 30000)
             );
             
             const receipt = await Promise.race([receiptPromise, timeoutPromise]) as TransactionReceipt;
+            console.log("[InAppWalletContext] Transaction status:", receipt.status.toString());
             
             if (receipt.status._code !== 22) { // Not SUCCESS
                 return {
@@ -314,15 +357,14 @@ export const InAppWalletProvider = ({ children }: { children: React.ReactNode })
                 setWalletState(prev => ({ ...prev, inAppAccount: accountId })),
             recoverKey,
             verifyMetadataSync,
-            setPasswordModalContext: (context: {
-                isOpen: boolean;
-                transaction: string | null;
-                description: string;
-                transactionPromise: null | Promise<any>;
-            }) => {
-                // Implementation of setPasswordModalContext
-            },
-            walletType: null
+            setPasswordModalContext: (context: PasswordModalContext | ((prevContext: PasswordModalContext) => PasswordModalContext)) => 
+                setWalletState(prev => ({ 
+                    ...prev, 
+                    passwordModalContext: typeof context === 'function' 
+                        ? context(prev.passwordModalContext) 
+                        : context 
+                })),
+            walletType: walletState.isInAppWallet ? 'inApp' : null
         }}>
             {children}
         </InAppWalletContext.Provider>

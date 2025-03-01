@@ -116,7 +116,7 @@ describe("NFTSale", function () {
                     .setAccountId(account.accountId)
                     .execute(client);
 
-                if (balance.hbars.toTinybars() > 0) {
+                if (balance.hbars.toTinybars().toNumber() > 0) {
                     const transferTx = await new TransferTransaction()
                         .addHbarTransfer(account.accountId, balance.hbars.negated())
                         .addHbarTransfer(AccountId.fromString(OPERATOR_ID), balance.hbars)

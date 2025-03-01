@@ -121,7 +121,7 @@ export interface PasswordModalContext {
     isOpen: boolean;
     description: string;
     transaction: string | null;
-    transactionPromise?: {
+    transactionPromise: {
         resolve: (value: any) => void;
         reject: (reason?: any) => void;
     } | null;
@@ -179,4 +179,21 @@ export interface WalletOperationResult<T> {
     success: boolean;
     data?: T;
     error?: string;
+}
+
+export type TokenRatios = {
+  [key: string]: number;
+};
+
+export interface AIRecommendation {
+    ratios: TokenRatios;
+    confidence: number;
+    reasoning: string[];
+    volatilityTrend: string;
+    liquidityTrend: string;
+    dataPoints: number;
+    requestId?: string;
+    topicId?: string;
+    transactionId?: string;
+    timestamp?: string;
 }

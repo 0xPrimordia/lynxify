@@ -38,6 +38,7 @@ import { handleInAppTransaction, handlePasswordSubmit as handleInAppPasswordSubm
 import { handleExtensionTransaction } from '../lib/transactions/extensionWallet';
 import { PasswordModal } from '../components/PasswordModal';
 import { PasswordModalContext } from '../types';
+import { withTimeout } from '../lib/utils/timeout';
 
 export default function DexPage() {
     const router = useRouter();
@@ -247,14 +248,7 @@ export default function DexPage() {
         if (!activeAccount) throw new Error("No active account");
         
         if (walletType === 'inApp') {
-            return new Promise((resolve, reject) => {
-                handleInAppTransaction(tx, signTransaction, (context) => {
-                    setPasswordModalContext({
-                        ...context,
-                        transactionPromise: { resolve, reject }
-                    });
-                });
-            });
+            return handleInAppTransaction(tx, signTransaction, setPasswordModalContext);
         } else if (walletType === 'extension') {
             return handleExtensionTransaction(tx, account, signAndExecuteTransaction);
         }
@@ -268,11 +262,15 @@ export default function DexPage() {
         setIsSubmitting(true);
         try {
             console.log('Calling handleInAppPasswordSubmit...');
-            const result = await handleInAppPasswordSubmit(
-                passwordModalContext.transaction,
-                password,
-                signTransaction,
-                setPasswordModalContext
+            const result = await withTimeout(
+                handleInAppPasswordSubmit(
+                    passwordModalContext.transaction,
+                    password,
+                    signTransaction,
+                    setPasswordModalContext
+                ),
+                45000, // 45 seconds timeout (longer than the inner timeout)
+                'Transaction processing timed out. The network might be congested.'
             );
             
             if (result.status === 'ERROR') {
@@ -281,6 +279,12 @@ export default function DexPage() {
                 passwordModalContext.transactionPromise?.resolve(result);
             }
         } catch (error) {
+            console.error('Transaction timed out or failed:', error);
+            setAlertState({
+                isVisible: true,
+                message: error instanceof Error ? error.message : 'Transaction timed out',
+                type: 'danger'
+            });
             passwordModalContext.transactionPromise?.reject(error);
         } finally {
             setIsSubmitting(false);

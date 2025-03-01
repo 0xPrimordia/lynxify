@@ -19,8 +19,15 @@ export const swapHbarToToken = async (
   outputTokenDecimals: number
 ) => {
   try {
+    // Validate input
+    const parsedAmount = Number(amountIn);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      throw new Error('Amount must be greater than zero');
+    }
+
     // Parse amount to tinybars
-    const amountInSmallestUnit = Hbar.from(amountIn, HbarUnit.Hbar).toTinybars().toString();
+    const hbarAmount = Hbar.from(parsedAmount, HbarUnit.Hbar);
+    const amountInSmallestUnit = hbarAmount.toTinybars().toString(); // Convert Long to string
     
     // Get quote
     const quoteAmount = await getQuoteExactInput(
@@ -36,19 +43,18 @@ export const swapHbarToToken = async (
     const slippagePercent = slippageBasisPoints / 10000;
     const outputMinInTokens = (BigInt(quoteAmount) * BigInt(Math.floor((1 - slippagePercent) * 10000)) / BigInt(10000)).toString();
 
-    // Construct path
-    const path = Buffer.concat([
-      Buffer.from(ContractId.fromString(WHBAR_ID).toSolidityAddress().replace('0x', ''), 'hex'),
-      Buffer.from(fee.toString(16).padStart(6, '0'), 'hex'),
-      Buffer.from(ContractId.fromString(outputToken).toSolidityAddress().replace('0x', ''), 'hex')
-    ]);
+    // Construct path - convert to hex string for ethers.js
+    const whbarAddress = ContractId.fromString(WHBAR_ID).toSolidityAddress().replace('0x', '');
+    const feeHex = fee.toString(16).padStart(6, '0');
+    const outputAddress = ContractId.fromString(outputToken).toSolidityAddress().replace('0x', '');
+    const pathHex = `0x${whbarAddress}${feeHex}${outputAddress}`;
 
     // ExactInputParams
     const params = {
-      path: path,
+      path: pathHex, // Use hex string instead of Buffer
       recipient: AccountId.fromString(recipientAddress).toSolidityAddress(),
       deadline: deadline,
-      amountIn: amountInSmallestUnit,
+      amountIn: amountInSmallestUnit, // String representation of the Long
       amountOutMinimum: outputMinInTokens
     };
 
@@ -63,7 +69,7 @@ export const swapHbarToToken = async (
     const transaction = new ContractExecuteTransaction()
       .setContractId(ContractId.fromString(SWAP_ROUTER_ADDRESS))
       .setGas(3_000_000)
-      .setPayableAmount(Hbar.from(amountIn, HbarUnit.Hbar))
+      .setPayableAmount(hbarAmount) // Use the Hbar object directly
       .setFunctionParameters(Buffer.from(encodedData.slice(2), 'hex'))
       .setTransactionId(TransactionId.generate(recipientAddress));
 
