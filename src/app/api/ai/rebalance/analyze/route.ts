@@ -52,6 +52,7 @@ const generateMockRecommendation = (currentRatios: TokenRatios): AIRecommendatio
 };
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   console.log("API route called: /api/ai/rebalance/analyze");
   
   try {
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
     try {
       requestData = await request.json() as RebalanceRequest;
       console.log("Request data parsed successfully:", JSON.stringify(requestData));
+      console.log(`Time elapsed after parsing request: ${Date.now() - startTime}ms`);
     } catch (parseError) {
       console.error("Error parsing request JSON:", parseError);
       return NextResponse.json(
@@ -158,6 +160,9 @@ Your response should be in JSON format with the following structure:
 Ensure that all ratios sum to exactly 1.
 `;
 
+    // Before OpenAI call
+    console.log(`Time elapsed before OpenAI call: ${Date.now() - startTime}ms`);
+    
     // Call OpenAI API with error handling
     let recommendation: AIRecommendation;
     
@@ -171,6 +176,8 @@ Ensure that all ratios sum to exactly 1.
         ],
         temperature: 0.7,
       });
+      
+      console.log(`Time elapsed after OpenAI call: ${Date.now() - startTime}ms`);
       
       const responseContent = completion.choices[0].message.content;
       console.log("OpenAI response received");
@@ -213,10 +220,14 @@ Ensure that all ratios sum to exactly 1.
       }
     } catch (openaiError) {
       console.error("OpenAI API error:", openaiError);
+      console.log(`Time elapsed at OpenAI error: ${Date.now() - startTime}ms`);
       // Fall back to mock data
       console.log("Using mock recommendation due to OpenAI API error");
       recommendation = generateMockRecommendation(currentRatios);
     }
+    
+    // Before HCS
+    console.log(`Time elapsed before HCS: ${Date.now() - startTime}ms`);
     
     // Record the recommendation on HCS (with error handling)
     try {
@@ -241,6 +252,7 @@ Ensure that all ratios sum to exactly 1.
     }
     
     // Return the response
+    console.log(`Total time elapsed: ${Date.now() - startTime}ms`);
     console.log("Returning successful response");
     return NextResponse.json({
       requestId,
@@ -251,6 +263,7 @@ Ensure that all ratios sum to exactly 1.
     
   } catch (error) {
     console.error('Unhandled error in rebalance analysis:', error);
+    console.log(`Time elapsed at error: ${Date.now() - startTime}ms`);
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
