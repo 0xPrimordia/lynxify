@@ -170,9 +170,8 @@ export default function MintPage() {
     };
 
     return (
-        <div className="max-w-lg mx-auto">
+        <div className="w-full mx-auto">
             <TestnetAlert />
-            <h1 className="text-2xl font-bold text-white mb-6">Mint LYNX</h1>
             
             <div className="container mx-auto px-4 py-8">
                 <h1 className="text-2xl font-bold mb-6">Mint LYNX Index Token</h1>
