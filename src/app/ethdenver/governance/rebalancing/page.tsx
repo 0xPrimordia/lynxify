@@ -158,7 +158,11 @@ export default function EthDenverRebalancingPage() {
       
       // Transform the API response to match our UI format
       const recommendation: AIRecommendation = {
-        ratios: data.recommendation.newRatios,
+        ratios: {
+          hbar: data.recommendation.newRatios.HBAR,
+          sauce: data.recommendation.newRatios.SAUCE,
+          clxy: data.recommendation.newRatios.CLXY
+        },
         confidence: data.recommendation.confidence,
         reasoning: data.recommendation.reasoning,
         timestamp: new Date().toISOString(),
