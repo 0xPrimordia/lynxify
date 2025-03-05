@@ -1,152 +1,221 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import TestnetAlert from '@/app/components/TestnetAlert';
 import GovernanceNav from '@/app/components/GovernanceNav';
 
-interface TokenRatios {
-  hbar: number;
-  sauce: number;
-  clxy: number;
+interface TokenData {
+  name: string;
+  allocation: number;
 }
 
-interface TokenData {
-  currentRatios: TokenRatios;
-  marketData: {
-    prices: {
-      hbar: number;
-      sauce: number;
-      clxy: number;
-    };
-    change24h: {
-      hbar: number;
-      sauce: number;
-      clxy: number;
-    };
-    marketCap: {
-      hbar: number;
-      sauce: number;
-      clxy: number;
-    };
+interface CategoryData {
+  name: string;
+  tokens: {
+    [key: string]: TokenData;
   };
-  historicalRatios: {
-    date: string;
-    ratios: TokenRatios;
-  }[];
+  allTokens: string[]; // All available tokens in this category
+}
+
+interface CompositionData {
+  categories: {
+    [key: string]: CategoryData;
+  };
+  aiRecommendation?: {
+    categories: {
+      [key: string]: CategoryData;
+    };
+    reasoning: string;
+  };
 }
 
 export default function CompositionPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [tokenData, setTokenData] = useState<TokenData | null>(null);
-  const [simulatedRatios, setSimulatedRatios] = useState<TokenRatios>({
-    hbar: 0.33333,
-    sauce: 0.33333,
-    clxy: 0.33334
-  });
+  const [compositionData, setCompositionData] = useState<CompositionData | null>(null);
+  const [desiredComposition, setDesiredComposition] = useState<CompositionData | null>(null);
+  const [showVoteButton, setShowVoteButton] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const chartContainerRef = useRef<HTMLDivElement>(null);
   const { supabase } = useSupabase();
-  const [chartData, setChartData] = useState<any[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchTokenData = async () => {
+    const fetchCompositionData = async () => {
       try {
         // In a real implementation, this would fetch from an API
         // For now, we'll use mock data
-        const mockData: TokenData = {
-          currentRatios: {
-            hbar: 0.33333,
-            sauce: 0.33333,
-            clxy: 0.33333
-          },
-          marketData: {
-            prices: {
-              hbar: 0.068,
-              sauce: 0.0042,
-              clxy: 0.0015
+        const mockData: CompositionData = {
+          categories: {
+            "Smart Contract Platforms": {
+              name: "Smart Contract Platforms",
+              tokens: {
+                "HBAR": { name: "HBAR", allocation: 70 },
+                "WETH": { name: "WETH", allocation: 20 },
+                "WBTC": { name: "WBTC", allocation: 10 }
+              },
+              allTokens: ["HBAR", "WETH", "WBTC", "WAVAX", "WSOL"]
             },
-            change24h: {
-              hbar: 2.5,
-              sauce: -1.2,
-              clxy: 5.7
+            "DeFi & DEX Tokens": {
+              name: "DeFi & DEX Tokens",
+              tokens: {
+                "SAUCE": { name: "SAUCE", allocation: 50 },
+                "xSAUCE": { name: "xSAUCE", allocation: 30 },
+                "HBARX": { name: "HBARX", allocation: 20 }
+              },
+              allTokens: ["SAUCE", "xSAUCE", "HBARX", "HLQT", "SGB"]
             },
-            marketCap: {
-              hbar: 2100000000,
-              sauce: 42000000,
-              clxy: 15000000
+            "Stablecoins": {
+              name: "Stablecoins",
+              tokens: {
+                "USDC": { name: "USDC", allocation: 60 },
+                "USDT": { name: "USDT", allocation: 30 },
+                "DAI": { name: "DAI", allocation: 10 }
+              },
+              allTokens: ["USDC", "USDT", "DAI", "HCHF", "BUSD"]
+            },
+            "Enterprise & Utility Tokens": {
+              name: "Enterprise & Utility Tokens",
+              tokens: {
+                "CLXY": { name: "CLXY", allocation: 40 },
+                "DOVU": { name: "DOVU", allocation: 40 },
+                "HST": { name: "HST", allocation: 20 }
+              },
+              allTokens: ["CLXY", "DOVU", "HST", "HBAR+", "ATMA"]
+            },
+            "GameFi & NFT Infrastructure": {
+              name: "GameFi & NFT Infrastructure",
+              tokens: {
+                "JAM": { name: "JAM", allocation: 35 },
+                "KARATE": { name: "KARATE", allocation: 35 },
+                "PACK": { name: "PACK", allocation: 30 }
+              },
+              allTokens: ["JAM", "KARATE", "PACK", "GRELF", "STEAM"]
             }
           },
-          historicalRatios: [
-            {
-              date: '2023-05-01',
-              ratios: { hbar: 0.33333, sauce: 0.33333, clxy: 0.33333 }
+          aiRecommendation: {
+            categories: {
+              "Smart Contract Platforms": {
+                name: "Smart Contract Platforms",
+                tokens: {
+                  "HBAR": { name: "HBAR", allocation: 65 },
+                  "WETH": { name: "WETH", allocation: 25 },
+                  "WBTC": { name: "WBTC", allocation: 10 }
+                },
+                allTokens: ["HBAR", "WETH", "WBTC", "WAVAX", "WSOL"]
+              },
+              "DeFi & DEX Tokens": {
+                name: "DeFi & DEX Tokens",
+                tokens: {
+                  "SAUCE": { name: "SAUCE", allocation: 45 },
+                  "xSAUCE": { name: "xSAUCE", allocation: 35 },
+                  "HBARX": { name: "HBARX", allocation: 20 }
+                },
+                allTokens: ["SAUCE", "xSAUCE", "HBARX", "HLQT", "SGB"]
+              },
+              "Stablecoins": {
+                name: "Stablecoins",
+                tokens: {
+                  "USDC": { name: "USDC", allocation: 55 },
+                  "USDT": { name: "USDT", allocation: 30 },
+                  "DAI": { name: "DAI", allocation: 15 }
+                },
+                allTokens: ["USDC", "USDT", "DAI", "HCHF", "BUSD"]
+              },
+              "Enterprise & Utility Tokens": {
+                name: "Enterprise & Utility Tokens",
+                tokens: {
+                  "CLXY": { name: "CLXY", allocation: 45 },
+                  "DOVU": { name: "DOVU", allocation: 35 },
+                  "HST": { name: "HST", allocation: 20 }
+                },
+                allTokens: ["CLXY", "DOVU", "HST", "HBAR+", "ATMA"]
+              },
+              "GameFi & NFT Infrastructure": {
+                name: "GameFi & NFT Infrastructure",
+                tokens: {
+                  "JAM": { name: "JAM", allocation: 40 },
+                  "KARATE": { name: "KARATE", allocation: 30 },
+                  "PACK": { name: "PACK", allocation: 30 }
+                },
+                allTokens: ["JAM", "KARATE", "PACK", "GRELF", "STEAM"]
+              }
             },
-            {
-              date: '2023-06-15',
-              ratios: { hbar: 0.4, sauce: 0.35, clxy: 0.25 }
-            }
-          ]
+            reasoning: "Based on recent market performance and ecosystem developments, we recommend slightly increasing WETH allocation due to its strong DeFi ecosystem growth. For DeFi tokens, xSAUCE has shown improved liquidity metrics warranting a higher allocation. In stablecoins, DAI's improved collateralization ratio suggests a modest increase."
+          }
         };
         
-        setTokenData(mockData);
-        setSimulatedRatios(mockData.currentRatios);
+        setCompositionData(mockData);
+        setDesiredComposition(JSON.parse(JSON.stringify(mockData))); // Deep copy
       } catch (error) {
-        console.error('Error fetching token data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load token data');
+        console.error('Error fetching composition data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load composition data');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchTokenData();
+    fetchCompositionData();
   }, []);
 
-  useEffect(() => {
-    if (tokenData?.currentRatios) {
-      setChartData([
-        { name: 'HBAR', value: tokenData.currentRatios.hbar },
-        { name: 'SAUCE', value: tokenData.currentRatios.sauce },
-        { name: 'CLXY', value: tokenData.currentRatios.clxy }
-      ]);
-    }
-  }, [tokenData]);
+  const handleTokenChange = (category: string, currentToken: string, newToken: string) => {
+    if (!desiredComposition) return;
+    
+    const updatedComposition = JSON.parse(JSON.stringify(desiredComposition));
+    const tokenData = updatedComposition.categories[category].tokens[currentToken];
+    
+    // Remove the current token and add the new one with the same allocation
+    delete updatedComposition.categories[category].tokens[currentToken];
+    updatedComposition.categories[category].tokens[newToken] = {
+      name: newToken,
+      allocation: tokenData.allocation
+    };
+    
+    setDesiredComposition(updatedComposition);
+    setShowVoteButton(true);
+  };
 
-  const handleRatioChange = (token: keyof TokenRatios, value: number) => {
-    if (!simulatedRatios) return;
-    
-    // Calculate how much we need to adjust the other tokens
-    const currentValue = simulatedRatios[token];
-    const difference = value - currentValue;
-    
-    // Adjust other tokens proportionally
-    const otherTokens = Object.keys(simulatedRatios).filter(
-      t => t !== token
-    ) as Array<keyof TokenRatios>;
-    
-    const totalOtherValue = otherTokens.reduce(
-      (sum, t) => sum + simulatedRatios[t], 
-      0
+  const handleVoteSubmit = async () => {
+    try {
+      // In a real implementation, this would submit to an API
+      console.log('Submitting vote with composition:', desiredComposition);
+      alert('Your vote has been submitted successfully!');
+      setShowVoteButton(false);
+    } catch (error) {
+      console.error('Error submitting vote:', error);
+      alert('Failed to submit vote. Please try again.');
+    }
+  };
+
+  const handleSuggestCategory = () => {
+    // In a real implementation, this would open a modal or navigate to a form
+    alert('This would open a form to suggest a new token category');
+  };
+
+  const renderTokenCategory = (categoryName: string, categoryData: CategoryData, isEditable: boolean = false) => {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <h3 className="text-xl font-semibold text-white mb-4">{categoryName}</h3>
+        <div className="space-y-4">
+          {Object.entries(categoryData.tokens).map(([tokenName, tokenData]) => (
+            <div key={tokenName} className="flex justify-between items-center">
+              {isEditable ? (
+                <select 
+                  className="bg-gray-700 text-white p-2 rounded w-1/2"
+                  value={tokenName}
+                  onChange={(e) => handleTokenChange(categoryName, tokenName, e.target.value)}
+                >
+                  {categoryData.allTokens.map(token => (
+                    <option key={token} value={token}>{token}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-gray-300">{tokenName}</span>
+              )}
+              <span className="font-medium text-white">{tokenData.allocation}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
     );
-    
-    const newRatios = { ...simulatedRatios };
-    newRatios[token] = value;
-    
-    // Distribute the difference proportionally among other tokens
-    otherTokens.forEach(t => {
-      const proportion = simulatedRatios[t] / totalOtherValue;
-      newRatios[t] = Math.max(0, simulatedRatios[t] - (difference * proportion));
-    });
-    
-    // Normalize to ensure sum is 1
-    const sum = Object.values(newRatios).reduce((a, b) => a + b, 0);
-    Object.keys(newRatios).forEach(t => {
-      newRatios[t as keyof TokenRatios] = newRatios[t as keyof TokenRatios] / sum;
-    });
-    
-    setSimulatedRatios(newRatios);
   };
 
   if (isLoading) {
@@ -170,249 +239,51 @@ export default function CompositionPage() {
       <TestnetAlert />
       <GovernanceNav currentSection="composition" />
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-white mb-8">Token Composition</h1>
+        <h1 className="text-3xl font-bold text-white mb-8">Token Composition Governance</h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 gap-8">
+          {/* Current Composition */}
           <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-xl font-semibold text-white mb-4">Current Composition</h2>
-            <div className="mb-6">
-              <div ref={containerRef} className="w-full h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <h2 className="text-2xl font-semibold text-white mb-6">Current Composition</h2>
             
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <div className="text-sm text-gray-400">HBAR</div>
-                <div className="text-xl font-semibold text-white">
-                  {(tokenData?.currentRatios.hbar ?? 0) * 100}%
-                </div>
-              </div>
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <div className="text-sm text-gray-400">SAUCE</div>
-                <div className="text-xl font-semibold text-white">
-                  {(tokenData?.currentRatios.sauce ?? 0) * 100}%
-                </div>
-              </div>
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <div className="text-sm text-gray-400">CLXY</div>
-                <div className="text-xl font-semibold text-white">
-                  {(tokenData?.currentRatios.clxy ?? 0) * 100}%
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4 text-white">Market Data</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left py-2 text-gray-300">Token</th>
-                    <th className="text-left py-2 text-gray-300">Price</th>
-                    <th className="text-left py-2 text-gray-300">24h Change</th>
-                    <th className="text-left py-2 text-gray-300">Market Cap</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  <tr>
-                    <td className="py-3 text-gray-300">HBAR</td>
-                    <td className="py-3 text-gray-300">${tokenData?.marketData.prices.hbar.toFixed(4)}</td>
-                    <td className={`py-3 ${(tokenData?.marketData.change24h.hbar ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(tokenData?.marketData.change24h.hbar ?? 0) >= 0 ? '+' : ''}
-                      {tokenData?.marketData.change24h.hbar.toFixed(2)}%
-                    </td>
-                    <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.hbar ?? 0) / 1000000).toFixed(0)}M</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 text-gray-300">SAUCE</td>
-                    <td className="py-3 text-gray-300">${tokenData?.marketData.prices.sauce.toFixed(4)}</td>
-                    <td className={`py-3 ${(tokenData?.marketData.change24h.sauce ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(tokenData?.marketData.change24h.sauce ?? 0) >= 0 ? '+' : ''}
-                      {tokenData?.marketData.change24h.sauce.toFixed(2)}%
-                    </td>
-                    <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.sauce ?? 0) / 1000000).toFixed(0)}M</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 text-gray-300">CLXY</td>
-                    <td className="py-3 text-gray-300">${tokenData?.marketData.prices.clxy.toFixed(4)}</td>
-                    <td className={`py-3 ${(tokenData?.marketData.change24h.clxy ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(tokenData?.marketData.change24h.clxy ?? 0) >= 0 ? '+' : ''}
-                      {tokenData?.marketData.change24h.clxy.toFixed(2)}%
-                    </td>
-                    <td className="py-3 text-gray-300">${((tokenData?.marketData.marketCap.clxy ?? 0) / 1000000).toFixed(0)}M</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
-            <h2 className="text-xl font-semibold mb-4 text-white">Composition Simulator</h2>
-            <p className="text-gray-300 mb-4">
-              Adjust the sliders to simulate different token compositions and see how they would affect the index.
-            </p>
+            {compositionData && Object.entries(compositionData.categories).map(([categoryName, categoryData]) => (
+              renderTokenCategory(categoryName, categoryData, true)
+            ))}
             
-            <div className="space-y-6 mt-6">
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-300">HBAR</span>
-                  <span className="font-medium text-white">
-                    {simulatedRatios ? (simulatedRatios.hbar * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.01" 
-                  value={simulatedRatios?.hbar ?? 0.33333}
-                  onChange={(e) => handleRatioChange('hbar', parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-              
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-300">SAUCE</span>
-                  <span className="font-medium text-white">
-                    {simulatedRatios ? (simulatedRatios.sauce * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.01" 
-                  value={simulatedRatios?.sauce ?? 0.33333}
-                  onChange={(e) => handleRatioChange('sauce', parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-              
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-300">CLXY</span>
-                  <span className="font-medium text-white">
-                    {simulatedRatios ? (simulatedRatios.clxy * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.01" 
-                  value={simulatedRatios?.clxy ?? 0.33333}
-                  onChange={(e) => handleRatioChange('clxy', parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-            </div>
+            {showVoteButton && (
+              <button 
+                onClick={handleVoteSubmit}
+                className="mt-6 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold"
+              >
+                Submit Vote
+              </button>
+            )}
             
             <div className="mt-8">
-              <h3 className="text-lg font-medium mb-3 text-white">Simulation Results</h3>
-              
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-400">Volatility Estimate</div>
-                    <div className="text-xl font-semibold text-white">
-                      {simulatedRatios ? (
-                        (simulatedRatios.hbar * 0.05 + 
-                         simulatedRatios.sauce * 0.12 + 
-                         simulatedRatios.clxy * 0.18) * 100
-                      ).toFixed(2) : 0}%
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm text-gray-400">Expected Return</div>
-                    <div className="text-xl font-semibold text-green-400">
-                      {simulatedRatios ? (
-                        (simulatedRatios.hbar * 0.025 + 
-                         simulatedRatios.sauce * -0.012 + 
-                         simulatedRatios.clxy * 0.057) * 100
-                      ).toFixed(2) : 0}%
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm text-gray-400">Liquidity Score</div>
-                    <div className="text-xl font-semibold text-white">
-                      {simulatedRatios ? (
-                        (simulatedRatios.hbar * 10 + 
-                         simulatedRatios.sauce * 7 + 
-                         simulatedRatios.clxy * 5) / 10
-                      ).toFixed(1) : 0}/10
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm text-gray-400">Risk Assessment</div>
-                    <div className="text-xl font-semibold text-white">
-                      {simulatedRatios ? 
-                        (simulatedRatios.hbar > 0.5 ? 'Low' : 
-                         simulatedRatios.clxy > 0.4 ? 'High' : 'Moderate') 
-                        : 'Moderate'}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t border-gray-600">
-                  <button 
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
-                    onClick={() => {
-                      // In a real app, this would create a proposal
-                      alert('This would create a governance proposal with your suggested ratios');
-                    }}
-                  >
-                    Create Proposal with These Ratios
-                  </button>
-                </div>
-              </div>
+              <button 
+                onClick={handleSuggestCategory}
+                className="bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-lg font-semibold"
+              >
+                Suggest New Category
+              </button>
             </div>
           </div>
-        </div>
-        
-        <div className="mt-6 bg-gray-800 rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-semibold mb-4 text-white">Historical Composition</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <th className="text-left py-2 text-gray-300">Date</th>
-                  <th className="text-left py-2 text-gray-300">HBAR</th>
-                  <th className="text-left py-2 text-gray-300">SAUCE</th>
-                  <th className="text-left py-2 text-gray-300">CLXY</th>
-                  <th className="text-left py-2 text-gray-300">Change Reason</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700">
-                {tokenData?.historicalRatios.map((item, index) => (
-                  <tr key={index}>
-                    <td className="py-3 text-gray-300">{item.date}</td>
-                    <td className="py-3 text-gray-300">{(item.ratios.hbar * 100).toFixed(1)}%</td>
-                    <td className="py-3 text-gray-300">{(item.ratios.sauce * 100).toFixed(1)}%</td>
-                    <td className="py-3 text-gray-300">{(item.ratios.clxy * 100).toFixed(1)}%</td>
-                    <td className="py-3 text-gray-300">
-                      {index === 0 ? 'Initial Composition' : 'Governance Vote #1'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          
+          {/* AI Recommended Composition */}
+          <div className="bg-gray-900 p-6 rounded-lg">
+            <h2 className="text-2xl font-semibold text-white mb-6">AI Recommended Composition</h2>
+            
+            {compositionData?.aiRecommendation && Object.entries(compositionData.aiRecommendation.categories).map(([categoryName, categoryData]) => (
+              renderTokenCategory(categoryName, categoryData)
+            ))}
+            
+            <div className="mt-6 bg-blue-900/30 border border-blue-800 p-4 rounded-lg">
+              <h3 className="text-lg font-medium text-white mb-2">AI Reasoning</h3>
+              <p className="text-gray-300">
+                {compositionData?.aiRecommendation?.reasoning || 
+                  "Our AI analysis suggests this composition based on current market conditions, token performance, and ecosystem developments."}
+              </p>
+            </div>
           </div>
         </div>
       </div>
