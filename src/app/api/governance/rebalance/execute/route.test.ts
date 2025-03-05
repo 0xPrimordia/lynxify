@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { POST } from './route';
-import { HCSService } from '@/services/hcsService';
+import { HcsGovernanceService } from '@/services/hcsService';
 
 // Mock NextRequest and NextResponse
 jest.mock('next/server', () => {

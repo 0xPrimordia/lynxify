@@ -1,30 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import TestnetAlert from '@/app/components/TestnetAlert';
 import GovernanceNav from '@/app/components/GovernanceNav';
+import Image from 'next/image';
+import { getTokenImageUrl } from '@/app/lib/utils/tokens';
+import { useSaucerSwapContext } from '@/app/hooks/useTokens';
+import { Token } from '@/app/types';
+import { VT323 } from "next/font/google";
+import DaoTestControls from '@/app/components/governance/DaoTestControls';
+import { Alert } from "@nextui-org/react";
+
+const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 
 interface TokenData {
   name: string;
   allocation: number;
 }
 
-interface CategoryData {
+interface SectorData {
   name: string;
-  tokens: {
-    [key: string]: TokenData;
-  };
-  allTokens: string[]; // All available tokens in this category
+  selectedToken: string; // Currently selected token
+  tokens: string[]; // All available tokens in this sector
+  allocations?: { [key: string]: number }; // Optional allocations for display
 }
 
 interface CompositionData {
-  categories: {
-    [key: string]: CategoryData;
+  sectors: {
+    [key: string]: SectorData;
   };
   aiRecommendation?: {
-    categories: {
-      [key: string]: CategoryData;
+    sectors: {
+      [key: string]: SectorData;
     };
     reasoning: string;
   };
@@ -37,245 +45,748 @@ export default function CompositionPage() {
   const [showVoteButton, setShowVoteButton] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const { supabase } = useSupabase();
+  const { tokens } = useSaucerSwapContext();
+  const [userTopicId, setUserTopicId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [consensusComposition, setConsensusComposition] = useState<CompositionData | null>(null);
+  const [marketCapData, setMarketCapData] = useState<{[key: string]: number}>({
+    // Mock market cap data in millions
+    'HBAR': 2000,
+    'WETH': 200000,
+    'WBTC': 500000,
+    'WAVAX': 5000,
+    'WSOL': 8000,
+    'SAUCE': 50,
+    'xSAUCE': 20,
+    'HBARX': 30,
+    'HLQT': 15,
+    'SGB': 10,
+    'USDC': 30000,
+    'USDT': 35000,
+    'DAI': 5000,
+    'HCHF': 100,
+    'BUSD': 8000,
+    'CLXY': 200,
+    'DOVU': 50,
+    'HST': 30,
+    'HBAR+': 20,
+    'ATMA': 15,
+    'JAM': 40,
+    'KARATE': 30,
+    'PACK': 25,
+    'GRELF': 10,
+    'STEAM': 15
+  });
+  const [alertMessage, setAlertMessage] = useState<string | React.ReactNode | null>(null);
+  const [alertType, setAlertType] = useState<"success" | "error" | "warning" | "info">("info");
+  const alertTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Map token symbols to their CloudFront URLs
+  const getTokenIconUrl = (symbol: string): string => {
+    const tokenMap: Record<string, string> = {
+      'HBAR': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.15058.png',
+      'WETH': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1440.png',
+      'WBTC': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1439.png',
+      'WAVAX': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1442.png',
+      'WSOL': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1445.png',
+      'SAUCE': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1055.png',
+      'xSAUCE': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1188.png',
+      'HBARX': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1062.png',
+      'HLQT': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1465.png',
+      'SGB': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1092.png',
+      'USDC': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1063.png',
+      'USDT': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1064.png',
+      'DAI': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1066.png',
+      'HCHF': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1192.png',
+      'BUSD': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1065.png',
+      'CLXY': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1130.png',
+      'DOVU': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1362.png',
+      'HST': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1304.png',
+      'HBAR+': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1470.png',
+      'ATMA': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1366.png',
+      'JAM': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1159.png',
+      'KARATE': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1185.png',
+      'PACK': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1329.png',
+      'GRELF': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1364.png',
+      'STEAM': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1478.png',
+    };
+    
+    // Try to find the token in the SaucerSwap context first
+    if (tokens && Array.isArray(tokens)) {
+      const token = tokens.find((t: Token) => t.symbol === symbol);
+      if (token && token.icon) {
+        return getTokenImageUrl(token.icon);
+      }
+    }
+    
+    // Fall back to our hardcoded map
+    return tokenMap[symbol] || '/images/tokens/default.png';
+  };
+
+  // Calculate direct allocation percentages for selected tokens
+  const calculateDirectAllocations = (composition: CompositionData): CompositionData => {
+    // Create a deep copy to avoid reference issues
+    const updatedComposition: CompositionData = JSON.parse(JSON.stringify(composition));
+    
+    // Get all selected tokens and their market caps
+    const selectedTokensMarketCap: Record<string, number> = {};
+    let totalMarketCap = 0;
+    
+    for (const sectorKey in updatedComposition.sectors) {
+      const sector = updatedComposition.sectors[sectorKey];
+      const token = sector.selectedToken;
+      const marketCap = marketCapData[token] || 0;
+      
+      selectedTokensMarketCap[token] = marketCap;
+      totalMarketCap += marketCap;
+    }
+    
+    // Calculate percentage for each selected token
+    if (totalMarketCap > 0) {
+      for (const sectorKey in updatedComposition.sectors) {
+        const sector = updatedComposition.sectors[sectorKey];
+        const token = sector.selectedToken;
+        const marketCap = selectedTokensMarketCap[token];
+        
+        // Calculate percentage and round to nearest whole number
+        const percentage = Math.round((marketCap / totalMarketCap) * 100);
+        
+        // Initialize allocations if needed
+        if (!sector.allocations) {
+          sector.allocations = {};
+        }
+        
+        // Set allocation for the selected token
+        sector.allocations[token] = percentage;
+      }
+    }
+    
+    // Ensure allocations sum to 100%
+    let totalAllocation = 0;
+    let largestSectorKey = '';
+    let largestAllocation = 0;
+    
+    for (const sectorKey in updatedComposition.sectors) {
+      const sector = updatedComposition.sectors[sectorKey];
+      const allocation = sector.allocations?.[sector.selectedToken] || 0;
+      
+      totalAllocation += allocation;
+      
+      if (allocation > largestAllocation) {
+        largestAllocation = allocation;
+        largestSectorKey = sectorKey;
+      }
+    }
+    
+    // Adjust the largest allocation to make the total 100%
+    if (totalAllocation !== 100 && largestSectorKey) {
+      const largestSector = updatedComposition.sectors[largestSectorKey];
+      if (largestSector.allocations) {
+        const adjustment = 100 - totalAllocation;
+        largestSector.allocations[largestSector.selectedToken] += adjustment;
+      }
+    }
+    
+    return updatedComposition;
+  };
+
+  // Add this function to implement sector caps with hard enforcement
+  const calculateSectorCappedAllocations = (composition: CompositionData): CompositionData => {
+    const updatedComposition: CompositionData = JSON.parse(JSON.stringify(composition));
+    const MAX_SECTOR_WEIGHT = 40; // 40% maximum per sector
+    
+    console.log('Starting sector cap calculations...');
+    
+    // Step 1: Calculate raw sector weights based on market cap
+    const sectorMarketCaps: Record<string, number> = {};
+    let totalMarketCap = 0;
+    
+    for (const sectorKey in updatedComposition.sectors) {
+      const sector = updatedComposition.sectors[sectorKey];
+      let sectorCap = 0;
+      
+      // Calculate market cap for this sector
+      for (const token of sector.tokens) {
+        sectorCap += (marketCapData[token] || 0);
+      }
+      
+      sectorMarketCaps[sectorKey] = sectorCap;
+      totalMarketCap += sectorCap;
+      
+      console.log(`Sector: ${sectorKey}, Market Cap: ${sectorCap}, Selected Token: ${sector.selectedToken}`);
+    }
+    
+    console.log(`Total Market Cap across all sectors: ${totalMarketCap}`);
+    
+    // Step 2: Apply sector caps
+    const sectorWeights: Record<string, number> = {};
+    
+    // First pass - apply caps
+    for (const sectorKey in updatedComposition.sectors) {
+      const rawWeight = (sectorMarketCaps[sectorKey] / totalMarketCap) * 100;
+      sectorWeights[sectorKey] = Math.min(rawWeight, MAX_SECTOR_WEIGHT);
+      console.log(`Sector: ${sectorKey}, Raw Weight: ${rawWeight.toFixed(2)}%, Capped Weight: ${sectorWeights[sectorKey].toFixed(2)}%`);
+    }
+    
+    // Ensure minimum weights for small sectors (at least 5%)
+    for (const sectorKey in sectorWeights) {
+      if (sectorWeights[sectorKey] < 5) {
+        sectorWeights[sectorKey] = 5;
+        console.log(`Boosting ${sectorKey} to minimum 5%`);
+      }
+    }
+    
+    // Calculate total after caps and minimums
+    let totalWeight = Object.values(sectorWeights).reduce((sum, weight) => sum + weight, 0);
+    console.log(`Total Weight after caps and minimums: ${totalWeight.toFixed(2)}%`);
+    
+    // Normalize to 100%
+    for (const sectorKey in sectorWeights) {
+      sectorWeights[sectorKey] = Math.round((sectorWeights[sectorKey] / totalWeight) * 100);
+      console.log(`Sector: ${sectorKey}, Normalized Weight: ${sectorWeights[sectorKey]}%`);
+    }
+    
+    // HARD ENFORCE the maximum cap after normalization
+    let excessWeight = 0;
+    for (const sectorKey in sectorWeights) {
+      if (sectorWeights[sectorKey] > MAX_SECTOR_WEIGHT) {
+        excessWeight += sectorWeights[sectorKey] - MAX_SECTOR_WEIGHT;
+        console.log(`Hard capping ${sectorKey} from ${sectorWeights[sectorKey]}% to ${MAX_SECTOR_WEIGHT}%`);
+        sectorWeights[sectorKey] = MAX_SECTOR_WEIGHT;
+      }
+    }
+    
+    // Redistribute excess weight to other sectors proportionally
+    if (excessWeight > 0) {
+      const nonMaxSectors = Object.keys(sectorWeights).filter(key => sectorWeights[key] < MAX_SECTOR_WEIGHT);
+      const totalNonMaxWeight = nonMaxSectors.reduce((sum, key) => sum + sectorWeights[key], 0);
+      
+      for (const sectorKey of nonMaxSectors) {
+        const proportion = sectorWeights[sectorKey] / totalNonMaxWeight;
+        const addition = Math.round(excessWeight * proportion);
+        sectorWeights[sectorKey] += addition;
+        console.log(`Adding ${addition}% to ${sectorKey}, new weight: ${sectorWeights[sectorKey]}%`);
+      }
+    }
+    
+    // Ensure we sum to exactly 100% by adjusting the largest non-capped allocation if needed
+    let finalTotal = Object.values(sectorWeights).reduce((sum, weight) => sum + weight, 0);
+    if (finalTotal !== 100) {
+      const nonMaxSectors = Object.keys(sectorWeights).filter(key => sectorWeights[key] < MAX_SECTOR_WEIGHT);
+      let largestSector = '';
+      let largestWeight = 0;
+      
+      for (const sectorKey of nonMaxSectors) {
+        if (sectorWeights[sectorKey] > largestWeight) {
+          largestWeight = sectorWeights[sectorKey];
+          largestSector = sectorKey;
+        }
+      }
+      
+      if (largestSector) {
+        sectorWeights[largestSector] += (100 - finalTotal);
+        console.log(`Adjusted ${largestSector} by ${100 - finalTotal} to ensure total is 100%`);
+      }
+    }
+    
+    // Step 3: Apply sector weights to selected tokens
+    for (const sectorKey in updatedComposition.sectors) {
+      const sector = updatedComposition.sectors[sectorKey];
+      const sectorWeight = sectorWeights[sectorKey];
+      
+      if (!sector.allocations) {
+        sector.allocations = {};
+      }
+      
+      sector.allocations[sector.selectedToken] = sectorWeight;
+      console.log(`Setting allocation for ${sector.selectedToken} to ${sectorWeight}%`);
+    }
+    
+    return updatedComposition;
+  };
 
   useEffect(() => {
+    // Check for existing topic ID in localStorage
+    const savedTopicId = localStorage.getItem('lynx-user-topic-id');
+    if (savedTopicId) {
+      setUserTopicId(savedTopicId);
+    }
+    
     const fetchCompositionData = async () => {
       try {
         // In a real implementation, this would fetch from an API
-        // For now, we'll use mock data
+        // For now, we'll use mock data based on the notepad
         const mockData: CompositionData = {
-          categories: {
+          sectors: {
+            "Native Token": {
+              name: "Native Token",
+              selectedToken: "HBAR", // Only option
+              tokens: ["HBAR"], // Only one token in this sector
+            },
             "Smart Contract Platforms": {
               name: "Smart Contract Platforms",
-              tokens: {
-                "HBAR": { name: "HBAR", allocation: 70 },
-                "WETH": { name: "WETH", allocation: 20 },
-                "WBTC": { name: "WBTC", allocation: 10 }
-              },
-              allTokens: ["HBAR", "WETH", "WBTC", "WAVAX", "WSOL"]
+              selectedToken: "WETH", // Default selected token
+              tokens: ["WETH", "WBTC", "WAVAX", "WSOL"],
             },
             "DeFi & DEX Tokens": {
               name: "DeFi & DEX Tokens",
-              tokens: {
-                "SAUCE": { name: "SAUCE", allocation: 50 },
-                "xSAUCE": { name: "xSAUCE", allocation: 30 },
-                "HBARX": { name: "HBARX", allocation: 20 }
-              },
-              allTokens: ["SAUCE", "xSAUCE", "HBARX", "HLQT", "SGB"]
+              selectedToken: "SAUCE", // Default selected token
+              tokens: ["SAUCE", "xSAUCE", "HBARX", "HLQT", "SGB"],
             },
             "Stablecoins": {
               name: "Stablecoins",
-              tokens: {
-                "USDC": { name: "USDC", allocation: 60 },
-                "USDT": { name: "USDT", allocation: 30 },
-                "DAI": { name: "DAI", allocation: 10 }
-              },
-              allTokens: ["USDC", "USDT", "DAI", "HCHF", "BUSD"]
+              selectedToken: "USDC", // Default selected token
+              tokens: ["USDC", "USDT", "DAI", "HCHF", "BUSD"],
             },
             "Enterprise & Utility Tokens": {
               name: "Enterprise & Utility Tokens",
-              tokens: {
-                "CLXY": { name: "CLXY", allocation: 40 },
-                "DOVU": { name: "DOVU", allocation: 40 },
-                "HST": { name: "HST", allocation: 20 }
-              },
-              allTokens: ["CLXY", "DOVU", "HST", "HBAR+", "ATMA"]
+              selectedToken: "CLXY", // Default selected token
+              tokens: ["CLXY", "DOVU", "HST", "HBAR+", "ATMA"],
             },
             "GameFi & NFT Infrastructure": {
               name: "GameFi & NFT Infrastructure",
-              tokens: {
-                "JAM": { name: "JAM", allocation: 35 },
-                "KARATE": { name: "KARATE", allocation: 35 },
-                "PACK": { name: "PACK", allocation: 30 }
-              },
-              allTokens: ["JAM", "KARATE", "PACK", "GRELF", "STEAM"]
+              selectedToken: "JAM", // Default selected token
+              tokens: ["JAM", "KARATE", "PACK", "GRELF", "STEAM"],
             }
-          },
-          aiRecommendation: {
-            categories: {
-              "Smart Contract Platforms": {
-                name: "Smart Contract Platforms",
-                tokens: {
-                  "HBAR": { name: "HBAR", allocation: 65 },
-                  "WETH": { name: "WETH", allocation: 25 },
-                  "WBTC": { name: "WBTC", allocation: 10 }
-                },
-                allTokens: ["HBAR", "WETH", "WBTC", "WAVAX", "WSOL"]
-              },
-              "DeFi & DEX Tokens": {
-                name: "DeFi & DEX Tokens",
-                tokens: {
-                  "SAUCE": { name: "SAUCE", allocation: 45 },
-                  "xSAUCE": { name: "xSAUCE", allocation: 35 },
-                  "HBARX": { name: "HBARX", allocation: 20 }
-                },
-                allTokens: ["SAUCE", "xSAUCE", "HBARX", "HLQT", "SGB"]
-              },
-              "Stablecoins": {
-                name: "Stablecoins",
-                tokens: {
-                  "USDC": { name: "USDC", allocation: 55 },
-                  "USDT": { name: "USDT", allocation: 30 },
-                  "DAI": { name: "DAI", allocation: 15 }
-                },
-                allTokens: ["USDC", "USDT", "DAI", "HCHF", "BUSD"]
-              },
-              "Enterprise & Utility Tokens": {
-                name: "Enterprise & Utility Tokens",
-                tokens: {
-                  "CLXY": { name: "CLXY", allocation: 45 },
-                  "DOVU": { name: "DOVU", allocation: 35 },
-                  "HST": { name: "HST", allocation: 20 }
-                },
-                allTokens: ["CLXY", "DOVU", "HST", "HBAR+", "ATMA"]
-              },
-              "GameFi & NFT Infrastructure": {
-                name: "GameFi & NFT Infrastructure",
-                tokens: {
-                  "JAM": { name: "JAM", allocation: 40 },
-                  "KARATE": { name: "KARATE", allocation: 30 },
-                  "PACK": { name: "PACK", allocation: 30 }
-                },
-                allTokens: ["JAM", "KARATE", "PACK", "GRELF", "STEAM"]
-              }
-            },
-            reasoning: "Based on recent market performance and ecosystem developments, we recommend slightly increasing WETH allocation due to its strong DeFi ecosystem growth. For DeFi tokens, xSAUCE has shown improved liquidity metrics warranting a higher allocation. In stablecoins, DAI's improved collateralization ratio suggests a modest increase."
           }
         };
         
-        setCompositionData(mockData);
-        setDesiredComposition(JSON.parse(JSON.stringify(mockData))); // Deep copy
+        // Create AI recommendation with predefined allocations
+        const aiRecommendation = JSON.parse(JSON.stringify(mockData));
+        
+        // For AI recommendation, we'll use predefined allocations
+        aiRecommendation.sectors["Native Token"].allocations = { "HBAR": 20 };
+        aiRecommendation.sectors["Smart Contract Platforms"].allocations = { "WETH": 25 };
+        aiRecommendation.sectors["DeFi & DEX Tokens"].allocations = { "SAUCE": 15 };
+        aiRecommendation.sectors["Stablecoins"].allocations = { "USDC": 20 };
+        aiRecommendation.sectors["Enterprise & Utility Tokens"].allocations = { "CLXY": 10 };
+        aiRecommendation.sectors["GameFi & NFT Infrastructure"].allocations = { "JAM": 10 };
+        
+        // Add reasoning to AI recommendation
+        aiRecommendation.reasoning = "Our AI analysis suggests this composition based on current market conditions, token performance, and ecosystem developments.";
+        
+        // For current composition, calculate allocations with sector caps
+        const currentComposition = calculateSectorCappedAllocations(mockData);
+        
+        // Set composition data with both AI recommendation and sectors
+        setCompositionData({
+          sectors: mockData.sectors,
+          aiRecommendation: aiRecommendation
+        });
+        
+        setDesiredComposition(currentComposition);
+        setIsLoading(false);
       } catch (error) {
-        console.error('Error fetching composition data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load composition data');
-      } finally {
+        console.error('Error loading composition data:', error);
+        setError('Failed to load composition data');
         setIsLoading(false);
       }
     };
 
+    // Also fetch consensus data
     fetchCompositionData();
-  }, []);
+  }, [tokens]);
 
-  const handleTokenChange = (category: string, currentToken: string, newToken: string) => {
+  const handleTokenChange = (sector: string, newToken: string) => {
     if (!desiredComposition) return;
     
+    // Create a deep copy of the composition to avoid reference issues
     const updatedComposition = JSON.parse(JSON.stringify(desiredComposition));
-    const tokenData = updatedComposition.categories[category].tokens[currentToken];
     
-    // Remove the current token and add the new one with the same allocation
-    delete updatedComposition.categories[category].tokens[currentToken];
-    updatedComposition.categories[category].tokens[newToken] = {
-      name: newToken,
-      allocation: tokenData.allocation
-    };
+    // Update the selected token for this sector
+    updatedComposition.sectors[sector].selectedToken = newToken;
+    
+    // Recalculate allocations based on market cap with sector caps
+    const finalComposition = calculateSectorCappedAllocations(updatedComposition);
+    
+    // Update state with the new composition
+    setDesiredComposition(finalComposition);
+    setShowVoteButton(true);
+    
+    console.log('Updated composition:', finalComposition.sectors[sector]);
+  };
+
+  const handleAllocationChange = (sector: string, newAllocation: number) => {
+    if (!desiredComposition) return;
+    
+    const updatedComposition = { ...desiredComposition };
+    if (updatedComposition.sectors[sector].allocations) {
+      updatedComposition.sectors[sector].allocations![updatedComposition.sectors[sector].selectedToken] = newAllocation;
+    }
     
     setDesiredComposition(updatedComposition);
     setShowVoteButton(true);
   };
 
+  // Helper function to show alerts with transaction hash
+  const showAlert = (message: string, type: "success" | "error" | "warning" | "info" = "info", txId?: string) => {
+    console.log(`Showing alert: ${message} (${type}), Transaction ID:`, txId);
+    
+    // Extract txHash if available
+    let txHash = txId;
+    if (txId && txId.startsWith('{')) {
+      try {
+        const txData = JSON.parse(txId);
+        if (txData.txHash) {
+          txHash = txData.txHash;
+        }
+      } catch (e) {
+        console.error("Error parsing transaction data:", e);
+      }
+    }
+    
+    // Create alert content with just the transaction hash
+    const alertContent = (
+      <div className="flex flex-col">
+        <div>{message}</div>
+        {txHash && (
+          <div className="mt-2 text-xs font-mono bg-gray-800 p-2 rounded overflow-auto">
+            Transaction Hash: {txHash}
+          </div>
+        )}
+      </div>
+    );
+    
+    setAlertMessage(alertContent);
+    setAlertType(type);
+    
+    // Clear any existing timeout
+    if (alertTimeoutRef.current) {
+      clearTimeout(alertTimeoutRef.current);
+    }
+    
+    // Set a timeout to clear the alert
+    alertTimeoutRef.current = setTimeout(() => {
+      setAlertMessage(null);
+    }, 15000);
+  };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (alertTimeoutRef.current) {
+        clearTimeout(alertTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleVoteSubmit = async () => {
+    console.log('Vote submit button clicked');
+    
+    if (!userTopicId) {
+      console.log('No user topic ID found');
+      showAlert('You need to create a user topic first. Please use the DAO Testing Controls.', 'error');
+      return;
+    }
+    
+    if (!desiredComposition) {
+      console.log('No composition changes to submit');
+      showAlert('No composition changes to submit.', 'error');
+      return;
+    }
+    
     try {
-      // In a real implementation, this would submit to an API
-      console.log('Submitting vote with composition:', desiredComposition);
-      alert('Your vote has been submitted successfully!');
-      setShowVoteButton(false);
-    } catch (error) {
-      console.error('Error submitting vote:', error);
-      alert('Failed to submit vote. Please try again.');
+      console.log('Starting submission process');
+      setIsSubmitting(true);
+      
+      // For demo purposes, use the topic ID as the user ID
+      const userId = userTopicId;
+      const lynxStake = 1000;
+      
+      console.log('Using user ID:', userId);
+      
+      // Submit preference to the actual API endpoint
+      const response = await fetch('/api/governance/submit-preferences/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userTopicId,
+          userId,
+          composition: desiredComposition,
+          lynxStake
+        }),
+      });
+      
+      // Check if response is OK before trying to parse JSON
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Extract transaction ID from the response
+        const txId = data.transactionId;
+        console.log("Transaction ID from API:", txId);
+        showAlert(`Your preference has been submitted successfully!`, 'success', txId);
+        setShowVoteButton(false);
+        
+        // Fetch the actual consensus data
+        try {
+          const consensusResponse = await fetch('/api/governance/get-consensus');
+          
+          if (consensusResponse.ok) {
+            const consensusData = await consensusResponse.json();
+            
+            if (consensusData.success && consensusData.consensus) {
+              setConsensusComposition(consensusData.consensus);
+            } else {
+              // If consensus data isn't available, use the current selection
+              setConsensusComposition({
+                sectors: { ...desiredComposition.sectors }
+              });
+            }
+          } else {
+            // If consensus endpoint fails, use the current selection
+            setConsensusComposition({
+              sectors: { ...desiredComposition.sectors }
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching consensus:', error);
+          // Fallback to current selection
+          setConsensusComposition({
+            sectors: { ...desiredComposition.sectors }
+          });
+        }
+      } else {
+        throw new Error(data.error || 'Failed to submit preference');
+      }
+    } catch (error: any) {
+      console.error('Error submitting preference:', error);
+      showAlert(`Failed to submit preference: ${error.message}`, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleSuggestCategory = () => {
+  const handleSuggestSector = () => {
     // In a real implementation, this would open a modal or navigate to a form
-    alert('This would open a form to suggest a new token category');
+    alert('This would open a form to suggest a new sector');
   };
 
-  const renderTokenCategory = (categoryName: string, categoryData: CategoryData, isEditable: boolean = false) => {
-    return (
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
-        <h3 className="text-xl font-semibold text-white mb-4">{categoryName}</h3>
-        <div className="space-y-4">
-          {Object.entries(categoryData.tokens).map(([tokenName, tokenData]) => (
-            <div key={tokenName} className="flex justify-between items-center">
-              {isEditable ? (
-                <select 
-                  className="bg-gray-700 text-white p-2 rounded w-1/2"
-                  value={tokenName}
-                  onChange={(e) => handleTokenChange(categoryName, tokenName, e.target.value)}
-                >
-                  {categoryData.allTokens.map(token => (
-                    <option key={token} value={token}>{token}</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-gray-300">{tokenName}</span>
-              )}
-              <span className="font-medium text-white">{tokenData.allocation}%</span>
-            </div>
-          ))}
+  const TokenImage = ({ symbol, size = 80 }: { symbol: string; size?: number }) => {
+    const [imageError, setImageError] = useState(false);
+    
+    if (imageError) {
+      return (
+        <div 
+          className="rounded-full bg-gray-700 flex items-center justify-center"
+          style={{ width: size, height: size }}
+        >
+          <span className="text-white font-medium text-sm">
+            {symbol.substring(0, 2)}
+          </span>
         </div>
+      );
+    }
+    
+    return (
+      <Image
+        src={getTokenIconUrl(symbol)}
+        alt={symbol}
+        width={size}
+        height={size}
+        className="object-contain"
+        onError={() => setImageError(true)}
+      />
+    );
+  };
+
+  const renderTokenSector = (sectorName: string, sectorData: SectorData, isEditable: boolean = false) => {
+    // Round the allocation to a whole number for display
+    const allocation = Math.round(sectorData.allocations?.[sectorData.selectedToken] || 0);
+    const isNativeToken = sectorName === "Native Token";
+    
+    // Mock market cap data - in a real app, this would come from an API
+    const getMarketCap = (symbol: string): string => {
+      const marketCaps: Record<string, string> = {
+        'HBAR': '$1.2B',
+        'WETH': '$320B',
+        'WBTC': '$1.1T',
+        'WAVAX': '$8.5B',
+        'WSOL': '$42B',
+        'SAUCE': '$15M',
+        'xSAUCE': '$8M',
+        'HBARX': '$120M',
+        'HLQT': '$5M',
+        'SGB': '$22M',
+        'USDC': '$28B',
+        'USDT': '$95B',
+        'DAI': '$5.2B',
+        'HCHF': '$3M',
+        'BUSD': '$2.1B',
+        'CLXY': '$85M',
+        'DOVU': '$12M',
+        'HST': '$18M',
+        'HBAR+': '$4M',
+        'ATMA': '$7M',
+        'JAM': '$25M',
+        'KARATE': '$9M',
+        'PACK': '$14M',
+        'GRELF': '$6M',
+        'STEAM': '$11M',
+      };
+      
+      return marketCaps[symbol] || 'N/A';
+    };
+    
+    return (
+      <div 
+        key={sectorName} 
+        className={`${isNativeToken ? 'border border-gray-600' : 'bg-gray-800'} rounded-lg p-6 mb-6 flex flex-col items-center justify-between w-[180px] h-[280px]`}
+      >
+        {isEditable && !isNativeToken ? (
+          <div className="relative group">
+            <div 
+              className="flex flex-col items-center cursor-pointer"
+              onClick={() => document.getElementById(`dropdown-${sectorName}`)?.classList.toggle('hidden')}
+            >
+              <div className="rounded-full p-2 mb-2 relative">
+                <TokenImage symbol={sectorData.selectedToken} />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-gray-900/70 rounded-full w-full h-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-white font-medium">{sectorData.selectedToken}</div>
+              </div>
+            </div>
+            
+            <div 
+              id={`dropdown-${sectorName}`} 
+              className="absolute z-10 hidden bg-gray-700 rounded-lg shadow-lg mt-2 py-1 w-48 left-1/2 transform -translate-x-1/2"
+            >
+              {sectorData.tokens.map(token => (
+                <button
+                  key={token}
+                  className={`block px-4 py-2 text-sm text-white hover:bg-gray-600 w-full text-left ${
+                    token === sectorData.selectedToken ? 'bg-gray-600' : ''
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent event bubbling
+                    handleTokenChange(sectorName, token);
+                    document.getElementById(`dropdown-${sectorName}`)?.classList.add('hidden');
+                  }}
+                >
+                  <div className="flex items-center">
+                    <TokenImage symbol={token} size={24} />
+                    <span className="ml-2">{token}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            <div className="rounded-full p-2 mb-2">
+              <TokenImage symbol={sectorData.selectedToken} />
+            </div>
+            <div className="text-center">
+              <div className="text-white font-medium">{sectorData.selectedToken}</div>
+            </div>
+          </div>
+        )}
+        
+        <h3 className="text-sm text-gray-400 font-normal text-center min-h-[40px] flex items-center">{sectorName}</h3>
+        
+        {/* Market Cap and Allocation Info */}
+        <div className="w-full mt-4 space-y-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Market Cap</span>
+            <span className="text-white">{getMarketCap(sectorData.selectedToken)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Allocation</span>
+            <span className="text-white">{allocation}%</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSuggestSectorBox = () => {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6 mb-6 flex flex-col items-center justify-between cursor-pointer w-[180px] h-[280px]" onClick={handleSuggestSector}>
+        <div className="border-2 border-dashed border-purple-500 rounded-full p-3 flex items-center justify-center" style={{ width: '80px', height: '80px' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </div>
+        
+        <div className="text-center">
+          <div className="text-purple-400 font-medium">Add Sector</div>
+        </div>
+        
+        <h3 className="text-sm text-gray-400 font-normal text-center min-h-[40px] flex items-center">Suggest New Sector</h3>
       </div>
     );
   };
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-900/30 border border-red-500 text-red-200 p-4 rounded mb-6">
+      <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 mx-auto my-8 max-w-2xl text-white">
         {error}
       </div>
     );
   }
 
   return (
-    <div className="w-full">
+    <div className="min-h-screen text-white">
       <TestnetAlert />
       <GovernanceNav currentSection="composition" />
+      
+      {/* Add DAO Test Controls in development mode */}
+      {process.env.NODE_ENV !== 'production' && !userTopicId && (
+        <div className="container mx-auto px-4 mt-4">
+          <DaoTestControls onPreferenceSubmit={(topicId) => {
+            console.log('User topic created:', topicId);
+            setUserTopicId(topicId);
+            localStorage.setItem('lynx-user-topic-id', topicId);
+            showAlert(`User topic created: ${topicId}`, 'success');
+          }} />
+        </div>
+      )}
+      
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-white mb-8">Token Composition Governance</h1>
+        {alertMessage && (
+          <div className="fixed bottom-4 left-4 z-50 max-w-md">
+            <Alert 
+              className="mb-4 shadow-lg" 
+              color={alertType === "error" ? "danger" : alertType}
+              onClose={() => setAlertMessage(null)}
+            >
+              {alertMessage}
+            </Alert>
+          </div>
+        )}
         
         <div className="grid grid-cols-1 gap-8">
-          {/* Current Composition */}
-          <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-2xl font-semibold text-white mb-6">Current Composition</h2>
-            
-            {compositionData && Object.entries(compositionData.categories).map(([categoryName, categoryData]) => (
-              renderTokenCategory(categoryName, categoryData, true)
-            ))}
-            
-            {showVoteButton && (
-              <button 
-                onClick={handleVoteSubmit}
-                className="mt-6 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold"
-              >
-                Submit Vote
-              </button>
-            )}
-            
-            <div className="mt-8">
-              <button 
-                onClick={handleSuggestCategory}
-                className="bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-lg font-semibold"
-              >
-                Suggest New Category
-              </button>
-            </div>
-          </div>
-          
           {/* AI Recommended Composition */}
-          <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-2xl font-semibold text-white mb-6">AI Recommended Composition</h2>
+          <div className="mb-8">
+            <h2 className={`text-xl text-white mb-6 ${vt323.className}`}>AI Recommended Composition</h2>
             
-            {compositionData?.aiRecommendation && Object.entries(compositionData.aiRecommendation.categories).map(([categoryName, categoryData]) => (
-              renderTokenCategory(categoryName, categoryData)
-            ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full pr-0">
+              {compositionData?.aiRecommendation && Object.entries(compositionData.aiRecommendation.sectors).map(([sectorName, sectorData]) => (
+                renderTokenSector(sectorName, sectorData)
+              ))}
+            </div>
             
             <div className="mt-6 bg-blue-900/30 border border-blue-800 p-4 rounded-lg">
               <h3 className="text-lg font-medium text-white mb-2">AI Reasoning</h3>
@@ -285,8 +796,56 @@ export default function CompositionPage() {
               </p>
             </div>
           </div>
+          
+          {/* Current Composition */}
+          <div className="mb-8">
+            <h2 className={`text-xl text-white mb-6 ${vt323.className}`}>Current Composition</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full pr-0">
+              {desiredComposition && Object.entries(desiredComposition.sectors).map(([sectorName, sectorData]) => (
+                renderTokenSector(sectorName, sectorData, true)
+              ))}
+              {renderSuggestSectorBox()}
+            </div>
+            
+            {showVoteButton && (
+              <div className="flex justify-end mt-4">
+                <button 
+                  onClick={handleVoteSubmit}
+                  disabled={isSubmitting}
+                  className={`border border-white text-white py-1 px-4 rounded-md text-sm font-medium hover:bg-white/10 transition-colors ${
+                    isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Vote'}
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* Add Consensus Composition section */}
+          {consensusComposition && (
+            <div className="mb-8">
+              <h2 className={`text-xl text-white mb-6 ${vt323.className}`}>DAO Consensus Composition</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full pr-0">
+                {Object.entries(consensusComposition.sectors).map(([sectorName, sectorData]) => (
+                  renderTokenSector(sectorName, sectorData as SectorData)
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+      
+      <DaoTestControls 
+        onPreferenceSubmit={(topicId) => {
+          console.log('User topic created:', topicId);
+          setUserTopicId(topicId);
+          localStorage.setItem('lynx-user-topic-id', topicId);
+          showAlert(`User topic created: ${topicId}`, 'success');
+        }}
+      />
     </div>
   );
 } 
