@@ -38,10 +38,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
-      name: "IERC20",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC20__factory>;
-    getContractFactory(
       name: "IHederaTokenService",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IHederaTokenService__factory>;
@@ -49,6 +45,14 @@ declare module "hardhat/types/runtime" {
       name: "LynxMinter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.LynxMinter__factory>;
+    getContractFactory(
+      name: "MockHederaTokenService",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockHederaTokenService__factory>;
+    getContractFactory(
+      name: "MockHTS",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockHTS__factory>;
     getContractFactory(
       name: "NFTSale",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -97,11 +101,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
-      name: "IERC20",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IERC20>;
-    getContractAt(
       name: "IHederaTokenService",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -111,6 +110,16 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.LynxMinter>;
+    getContractAt(
+      name: "MockHederaTokenService",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockHederaTokenService>;
+    getContractAt(
+      name: "MockHTS",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockHTS>;
     getContractAt(
       name: "NFTSale",
       address: string | ethers.Addressable,
@@ -157,10 +166,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
-      name: "IERC20",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20>;
-    deployContract(
       name: "IHederaTokenService",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IHederaTokenService>;
@@ -168,6 +173,14 @@ declare module "hardhat/types/runtime" {
       name: "LynxMinter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.LynxMinter>;
+    deployContract(
+      name: "MockHederaTokenService",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockHederaTokenService>;
+    deployContract(
+      name: "MockHTS",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockHTS>;
     deployContract(
       name: "NFTSale",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -216,11 +229,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
-      name: "IERC20",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20>;
-    deployContract(
       name: "IHederaTokenService",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -230,6 +238,16 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.LynxMinter>;
+    deployContract(
+      name: "MockHederaTokenService",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockHederaTokenService>;
+    deployContract(
+      name: "MockHTS",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockHTS>;
     deployContract(
       name: "NFTSale",
       args: any[],

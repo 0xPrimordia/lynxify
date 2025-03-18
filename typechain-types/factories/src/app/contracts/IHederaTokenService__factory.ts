@@ -6,7 +6,7 @@ import { Contract, Interface, type ContractRunner } from "ethers";
 import type {
   IHederaTokenService,
   IHederaTokenServiceInterface,
-} from "../../../../../src/app/contracts/LynxMinter.sol/IHederaTokenService";
+} from "../../../../src/app/contracts/IHederaTokenService";
 
 const _abi = [
   {
@@ -30,9 +30,9 @@ const _abi = [
     name: "allowance",
     outputs: [
       {
-        internalType: "int64",
+        internalType: "uint256",
         name: "",
-        type: "int64",
+        type: "uint256",
       },
     ],
     stateMutability: "view",
@@ -78,9 +78,9 @@ const _abi = [
     name: "balanceOf",
     outputs: [
       {
-        internalType: "int64",
+        internalType: "uint256",
         name: "",
-        type: "int64",
+        type: "uint256",
       },
     ],
     stateMutability: "view",
@@ -90,24 +90,29 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
-        name: "account",
-        type: "address",
-      },
-      {
-        internalType: "address",
         name: "token",
         type: "address",
       },
+      {
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+      {
+        internalType: "bytes[]",
+        name: "metadata",
+        type: "bytes[]",
+      },
     ],
-    name: "isTokenAssociated",
+    name: "burnToken",
     outputs: [
       {
-        internalType: "bool",
+        internalType: "int64",
         name: "",
-        type: "bool",
+        type: "int64",
       },
     ],
-    stateMutability: "view",
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -118,9 +123,9 @@ const _abi = [
         type: "address",
       },
       {
-        internalType: "int64",
+        internalType: "uint256",
         name: "amount",
-        type: "int64",
+        type: "uint256",
       },
       {
         internalType: "bytes[]",
@@ -157,9 +162,9 @@ const _abi = [
         type: "address",
       },
       {
-        internalType: "int64",
+        internalType: "uint256",
         name: "amount",
-        type: "int64",
+        type: "uint256",
       },
     ],
     name: "transferToken",

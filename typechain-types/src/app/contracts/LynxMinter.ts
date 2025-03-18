@@ -21,26 +21,36 @@ import type {
   TypedLogDescription,
   TypedListener,
   TypedContractMethod,
-} from "../../../../common";
+} from "../../../common";
 
 export interface LynxMinterInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "CLXY_RATIO"
       | "CLXY_TOKEN"
+      | "HBAR_RATIO"
       | "HTS_PRECOMPILE"
       | "LYNX_TOKEN"
+      | "SAUCE_RATIO"
       | "SAUCE_TOKEN"
       | "associateTokens"
       | "burn"
       | "hts"
       | "mint"
-      | "setMockHtsPrecompile"
   ): FunctionFragment;
 
   getEvent(nameOrSignatureOrTopic: "LynxBurned" | "LynxMinted"): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "CLXY_RATIO",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "CLXY_TOKEN",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "HBAR_RATIO",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -49,6 +59,10 @@ export interface LynxMinterInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "LYNX_TOKEN",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "SAUCE_RATIO",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -62,17 +76,19 @@ export interface LynxMinterInterface extends Interface {
   encodeFunctionData(functionFragment: "burn", values: [BigNumberish]): string;
   encodeFunctionData(functionFragment: "hts", values?: undefined): string;
   encodeFunctionData(functionFragment: "mint", values: [BigNumberish]): string;
-  encodeFunctionData(
-    functionFragment: "setMockHtsPrecompile",
-    values: [AddressLike]
-  ): string;
 
+  decodeFunctionResult(functionFragment: "CLXY_RATIO", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "CLXY_TOKEN", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "HBAR_RATIO", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "HTS_PRECOMPILE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "LYNX_TOKEN", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "SAUCE_RATIO",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "SAUCE_TOKEN",
     data: BytesLike
@@ -84,10 +100,6 @@ export interface LynxMinterInterface extends Interface {
   decodeFunctionResult(functionFragment: "burn", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "hts", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "setMockHtsPrecompile",
-    data: BytesLike
-  ): Result;
 }
 
 export namespace LynxBurnedEvent {
@@ -189,41 +201,50 @@ export interface LynxMinter extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  CLXY_RATIO: TypedContractMethod<[], [bigint], "view">;
+
   CLXY_TOKEN: TypedContractMethod<[], [string], "view">;
+
+  HBAR_RATIO: TypedContractMethod<[], [bigint], "view">;
 
   HTS_PRECOMPILE: TypedContractMethod<[], [string], "view">;
 
   LYNX_TOKEN: TypedContractMethod<[], [string], "view">;
 
+  SAUCE_RATIO: TypedContractMethod<[], [bigint], "view">;
+
   SAUCE_TOKEN: TypedContractMethod<[], [string], "view">;
 
   associateTokens: TypedContractMethod<[], [void], "nonpayable">;
 
-  burn: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  burn: TypedContractMethod<[lynxAmount: BigNumberish], [void], "nonpayable">;
 
   hts: TypedContractMethod<[], [string], "view">;
 
-  mint: TypedContractMethod<[amount: BigNumberish], [void], "payable">;
-
-  setMockHtsPrecompile: TypedContractMethod<
-    [mockHtsPrecompile: AddressLike],
-    [void],
-    "nonpayable"
-  >;
+  mint: TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
+    nameOrSignature: "CLXY_RATIO"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "CLXY_TOKEN"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "HBAR_RATIO"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "HTS_PRECOMPILE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "LYNX_TOKEN"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "SAUCE_RATIO"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "SAUCE_TOKEN"
   ): TypedContractMethod<[], [string], "view">;
@@ -232,20 +253,13 @@ export interface LynxMinter extends BaseContract {
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "burn"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<[lynxAmount: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "hts"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "mint"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "payable">;
-  getFunction(
-    nameOrSignature: "setMockHtsPrecompile"
-  ): TypedContractMethod<
-    [mockHtsPrecompile: AddressLike],
-    [void],
-    "nonpayable"
-  >;
+  ): TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
 
   getEvent(
     key: "LynxBurned"

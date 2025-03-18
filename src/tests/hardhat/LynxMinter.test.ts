@@ -1,189 +1,228 @@
-/**
- * Contract Test Flow:
- * 1. Deploy contract first using: `npx ts-node scripts/deployMinter.ts`
- * 2. Contract address will be saved in .env.local
- * 3. Run tests against deployed contract: `npx hardhat test src/tests/hardhat/LynxMinter.test.ts`
- */
+import { expect } from "chai";
+import { Contract } from "ethers";
+import "@nomicfoundation/hardhat-chai-matchers";
 
-const { expect: lynxExpect } = require("chai");
-const {
-    Client: LynxTestClient,
-    ContractCallQuery: LynxCallQuery,
-    ContractExecuteTransaction: LynxExecuteTx,
-    ContractId: LynxContractId,
-    AccountId: LynxAccountId,
-    PrivateKey: LynxPrivateKey,
-    ContractFunctionParameters: LynxFunctionParams,
-    TokenAssociateTransaction,
-    TransferTransaction,
-    TokenId: LynxTokenId,
-    ContractCreateTransaction: LynxContractCreate,
-    FileCreateTransaction: LynxFileCreate,
-    FileAppendTransaction: LynxFileAppend,
-    AccountBalanceQuery,
-    TokenMintTransaction,
-    Hbar
-} = require("@hashgraph/sdk");
-const lynxDotenv = require("dotenv");
-const lynxFs = require("fs");
-const lynxHre = require("hardhat");
+const hre = require("hardhat");
+const { ethers } = hre;
 
-lynxDotenv.config({ path: '.env.local' });
+describe("LynxMinter", function () {
+  let lynxMinter: Contract;
+  let mockHts: Contract;
+  let operator: any;
+  let lynxTokenAddress: string;
+  let sauceTokenAddress: string;
+  let clxyTokenAddress: string;
 
-describe("LynxMinter", function(this: Mocha.Suite) {
-    this.timeout(120000); // Increase timeout to 2 minutes
-    let client: typeof LynxTestClient;
-    let contractId: typeof LynxContractId;
-    let lynxTokenId: string;
-    let sauceTokenId: string;
-    let clxyTokenId: string;
-    let operatorId: typeof LynxAccountId;
-    let operatorKey: typeof LynxPrivateKey;
-    let inAppAccount: string;
+  beforeEach(async function () {
+    // Get operator account
+    [operator] = await ethers.getSigners();
+    console.log("Operator address:", operator.address);
 
-    beforeEach(async function(this: Mocha.Context) {
-        this.timeout(120000); // Increase timeout for beforeEach
-        // Compile first using Hardhat
-        await lynxHre.run('compile');
+    // Deploy mock HTS precompile
+    const MockHTS = await ethers.getContractFactory("MockHederaTokenService");
+    mockHts = await MockHTS.deploy();
+    await mockHts.waitForDeployment();
+    const mockHtsAddress = await mockHts.getAddress();
+    console.log("Mock HTS deployed to:", mockHtsAddress);
 
-        // Initialize client with multiple nodes
-        client = LynxTestClient.forName('testnet');
-        client.setNetwork({
-            "0.testnet.hedera.com:50211": new LynxAccountId(3),
-            "1.testnet.hedera.com:50211": new LynxAccountId(4),
-            "2.testnet.hedera.com:50211": new LynxAccountId(5),
-            "3.testnet.hedera.com:50211": new LynxAccountId(6)
-        });
-        operatorId = LynxAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
-        operatorKey = LynxPrivateKey.fromString(process.env.OPERATOR_KEY!);
-        inAppAccount = process.env.NEXT_PUBLIC_OPERATOR_ID!;
-        client.setOperator(operatorId, operatorKey);
+    // Set token addresses
+    // In test environment, we'll use mock addresses
+    // In production, these will be replaced with actual token addresses
+    lynxTokenAddress = "0x0000000000000000000000000000000000000001";
+    sauceTokenAddress = "0x0000000000000000000000000000000000000002";
+    clxyTokenAddress = "0x0000000000000000000000000000000000000003";
 
-        // Convert token IDs to Solidity addresses
-        lynxTokenId = LynxAccountId.fromString(process.env.LYNX_TOKEN_ID!).toSolidityAddress();
-        sauceTokenId = LynxAccountId.fromString(process.env.SAUCE_TOKEN_ID!).toSolidityAddress();
-        clxyTokenId = LynxAccountId.fromString(process.env.CLXY_TOKEN_ID!).toSolidityAddress();
-
-        if (!process.env.LYNX_CONTRACT_ADDRESS) {
-            throw new Error('Contract not deployed. Please run `npx ts-node scripts/deployMinter.ts` first');
-        }
-
-        // Use the deployed contract
-        contractId = LynxContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS);
-        console.log(`Using deployed contract with ID: ${contractId}`);
-        console.log(`Contract EVM address: ${contractId?.toSolidityAddress()}`);
-
-        // Check if tokens are already associated with contract
-        const contractBalance = await new AccountBalanceQuery()
-            .setAccountId(LynxAccountId.fromString(contractId.toString()))
-            .execute(client);
-        const contractTokens = contractBalance.tokens?.toJSON() || {};
-        console.log("Contract token balances:", contractTokens);
-        console.log("Contract HBAR balance:", contractBalance.hbars.toString());
-
-        // Check if we're the owner
-        const ownerQuery = new LynxCallQuery()
-            .setContractId(contractId)
-            .setGas(100000)
-            .setFunction("owner");
-        const ownerResult = await ownerQuery.execute(client);
-        const ownerAddress = ownerResult.getAddress(0);
-        console.log("Contract owner:", ownerAddress);
-        console.log("Operator address:", LynxAccountId.fromString(operatorId.toString()).toSolidityAddress());
-
-        // Check operator account balance
-        const balance = await new AccountBalanceQuery()
-            .setAccountId(operatorId)
-            .execute(client);
-        console.log(`Operator account ${operatorId} balance: ${balance.hbars.toString()}`);
-
-        // Get token addresses from contract
-        const lynxTokenQuery = new LynxCallQuery()
-            .setContractId(contractId)
-            .setGas(100000)
-            .setFunction("lynxToken");
-        const sauceTokenQuery = new LynxCallQuery()
-            .setContractId(contractId)
-            .setGas(100000)
-            .setFunction("sauceToken");
-        const clxyTokenQuery = new LynxCallQuery()
-            .setContractId(contractId)
-            .setGas(100000)
-            .setFunction("clxyToken");
-
-        const lynxTokenAddress = (await lynxTokenQuery.execute(client)).getAddress(0);
-        const sauceTokenAddress = (await sauceTokenQuery.execute(client)).getAddress(0);
-        const clxyTokenAddress = (await clxyTokenQuery.execute(client)).getAddress(0);
-
-        console.log("Contract token addresses:", {
-            lynx: lynxTokenAddress,
-            sauce: sauceTokenAddress,
-            clxy: clxyTokenAddress
-        });
-        console.log("Token IDs:", {
-            lynx: lynxTokenId,
-            sauce: sauceTokenId,
-            clxy: clxyTokenId
-        });
+    console.log("Using token addresses:", {
+      LYNX: lynxTokenAddress,
+      SAUCE: sauceTokenAddress,
+      CLXY: clxyTokenAddress
     });
 
-    describe("Minting", function() {
-        it("Should mint LYNX tokens when depositing equal amounts", async function() {
-            // Execute mint first with a small amount
-            const hbarAmount = new Hbar(0.05);
-            const tinybars = hbarAmount.toTinybars();
-            console.log("Minting amount (tinybars):", tinybars.toString());
+    // Deploy contract
+    const LynxMinter = await ethers.getContractFactory("LynxMinter");
+    lynxMinter = await LynxMinter.deploy(
+      lynxTokenAddress,
+      sauceTokenAddress,
+      clxyTokenAddress,
+      mockHtsAddress
+    );
+    await lynxMinter.waitForDeployment();
+    const lynxMinterAddress = await lynxMinter.getAddress();
+    console.log("Contract deployed to:", lynxMinterAddress);
 
-            // Execute mint transaction
-            const mintTx = new LynxExecuteTx()
-                .setContractId(contractId)
-                .setGas(1000000)
-                .setPayableAmount(hbarAmount)
-                .setFunction(
-                    "mint",
-                    new LynxFunctionParams()
-                        .addUint256(tinybars)
-                );
+    // Associate tokens with the contract
+    const associateTx = await lynxMinter.associateTokens();
+    await associateTx.wait();
+    console.log("Tokens associated with contract");
+  });
 
-            console.log("Executing mint transaction...");
-            const mintResponse = await mintTx.execute(client);
-            console.log("Mint transaction ID:", mintResponse.transactionId.toString());
-            const mintReceipt = await mintResponse.getReceipt(client);
-            console.log("Mint receipt status:", mintReceipt.status.toString());
+  describe("Minting", function () {
+    const LYNX_AMOUNT = 1000n;
+    const HBAR_RATIO = 10n;
+    const SAUCE_RATIO = 5n;
+    const CLXY_RATIO = 2n;
 
-            // Get current nonce
-            const nonceQuery = new LynxCallQuery()
-                .setContractId(contractId)
-                .setGas(100000)
-                .setFunction("mintNonce");
-
-            const currentNonce = (await nonceQuery.execute(client)).getUint256(0);
-            console.log("Current nonce:", currentNonce.toString());
-
-            // Call confirmMint
-            const confirmMintTx = new LynxExecuteTx()
-                .setContractId(contractId)
-                .setGas(1000000)
-                .setFunction(
-                    "confirmMint",
-                    new LynxFunctionParams()
-                        .addUint256(currentNonce.toString() - 1) // Use current nonce - 1 since nonce was incremented in mint
-                        .addUint256(tinybars)
-                );
-
-            console.log("Executing confirmMint transaction...");
-            const confirmMintResponse = await confirmMintTx.execute(client);
-            const confirmMintReceipt = await confirmMintResponse.getReceipt(client);
-            console.log("ConfirmMint receipt status:", confirmMintReceipt.status.toString());
-
-            // Check total minted
-            const totalMintedQuery = new LynxCallQuery()
-                .setContractId(contractId)
-                .setGas(100000)
-                .setFunction("totalLynxMinted");
-
-            const totalMinted = (await totalMintedQuery.execute(client)).getUint256(0);
-            lynxExpect(totalMinted.toString()).to.equal(tinybars.toString());
-        });
+    it("Should revert when sending insufficient HBAR", async function () {
+      const requiredHbar = LYNX_AMOUNT * HBAR_RATIO;
+      try {
+        await lynxMinter.mint(LYNX_AMOUNT, { value: requiredHbar - 1n });
+        expect.fail("Expected transaction to revert");
+      } catch (error: any) {
+        expect(error.message).to.include("InsufficientHBAR");
+      }
     });
-}); 
+
+    it("Should revert with insufficient SAUCE allowance", async function () {
+      const requiredHbar = LYNX_AMOUNT * HBAR_RATIO;
+      const requiredSauce = LYNX_AMOUNT * SAUCE_RATIO;
+      const requiredClxy = LYNX_AMOUNT * CLXY_RATIO;
+
+      // Mock token associations
+      await mockHts.setTokenAssociated(operator.address, lynxTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, sauceTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, clxyTokenAddress, true);
+
+      // Mock zero allowance for SAUCE but sufficient for CLXY
+      await mockHts.setAllowance(sauceTokenAddress, operator.address, await lynxMinter.getAddress(), 0);
+      await mockHts.setAllowance(clxyTokenAddress, operator.address, await lynxMinter.getAddress(), requiredClxy);
+
+      try {
+        await lynxMinter.mint(LYNX_AMOUNT, { value: requiredHbar });
+        expect.fail("Expected transaction to revert");
+      } catch (error: any) {
+        expect(error.message).to.include("InsufficientSauceAllowance");
+      }
+    });
+
+    it("Should revert with insufficient CLXY allowance", async function () {
+      const requiredHbar = LYNX_AMOUNT * HBAR_RATIO;
+      const requiredSauce = LYNX_AMOUNT * SAUCE_RATIO;
+      const requiredClxy = LYNX_AMOUNT * CLXY_RATIO;
+
+      // Mock token associations
+      await mockHts.setTokenAssociated(operator.address, lynxTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, sauceTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, clxyTokenAddress, true);
+
+      // Mock allowances - sufficient SAUCE but zero CLXY
+      await mockHts.setAllowance(sauceTokenAddress, operator.address, await lynxMinter.getAddress(), requiredSauce);
+      await mockHts.setAllowance(clxyTokenAddress, operator.address, await lynxMinter.getAddress(), 0);
+
+      try {
+        await lynxMinter.mint(LYNX_AMOUNT, { value: requiredHbar });
+        expect.fail("Expected transaction to revert");
+      } catch (error: any) {
+        expect(error.message).to.include("InsufficientClxyAllowance");
+      }
+    });
+
+    it("Should successfully mint LYNX tokens", async function () {
+      const requiredHbar = LYNX_AMOUNT * HBAR_RATIO;
+      const requiredSauce = LYNX_AMOUNT * SAUCE_RATIO;
+      const requiredClxy = LYNX_AMOUNT * CLXY_RATIO;
+      
+      // Mock token associations
+      await mockHts.setTokenAssociated(operator.address, lynxTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, sauceTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, clxyTokenAddress, true);
+
+      // Mock balances and allowances with required amounts
+      await mockHts.setBalance(sauceTokenAddress, operator.address, requiredSauce);
+      await mockHts.setBalance(clxyTokenAddress, operator.address, requiredClxy);
+      await mockHts.setAllowance(sauceTokenAddress, operator.address, await lynxMinter.getAddress(), requiredSauce);
+      await mockHts.setAllowance(clxyTokenAddress, operator.address, await lynxMinter.getAddress(), requiredClxy);
+
+      // Get initial balances
+      const initialSauceBalance = await mockHts.balanceOf(sauceTokenAddress, operator.address);
+      const initialClxyBalance = await mockHts.balanceOf(clxyTokenAddress, operator.address);
+      const initialLynxBalance = await mockHts.balanceOf(lynxTokenAddress, operator.address);
+      const initialContractHbar = await ethers.provider.getBalance(await lynxMinter.getAddress());
+
+      // Perform mint
+      await expect(lynxMinter.mint(LYNX_AMOUNT, { value: requiredHbar }))
+        .to.emit(lynxMinter, "LynxMinted")
+        .withArgs(operator.address, LYNX_AMOUNT, requiredHbar, requiredSauce, requiredClxy);
+
+      // Check final balances
+      expect(await mockHts.balanceOf(sauceTokenAddress, operator.address)).to.equal(initialSauceBalance - requiredSauce);
+      expect(await mockHts.balanceOf(clxyTokenAddress, operator.address)).to.equal(initialClxyBalance - requiredClxy);
+      expect(await mockHts.balanceOf(lynxTokenAddress, operator.address)).to.equal(initialLynxBalance + LYNX_AMOUNT);
+      expect(await ethers.provider.getBalance(await lynxMinter.getAddress())).to.equal(initialContractHbar + requiredHbar);
+    });
+  });
+
+  describe("Burning", function () {
+    const LYNX_AMOUNT = 1000n;
+    const HBAR_RATIO = 10n;
+    const SAUCE_RATIO = 5n;
+    const CLXY_RATIO = 2n;
+
+    it("Should revert when burning zero amount", async function () {
+      try {
+        await lynxMinter.burn(0n);
+        expect.fail("Expected transaction to revert");
+      } catch (error: any) {
+        expect(error.message).to.include("InvalidAmount");
+      }
+    });
+
+    it("Should revert when burning more than balance", async function () {
+      // Mock token associations
+      await mockHts.setTokenAssociated(operator.address, lynxTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, sauceTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, clxyTokenAddress, true);
+
+      // Mock zero LYNX balance
+      await mockHts.setBalance(lynxTokenAddress, operator.address, 0);
+
+      try {
+        await lynxMinter.burn(2000n);
+        expect.fail("Expected transaction to revert");
+      } catch (error: any) {
+        expect(error.message).to.include("InsufficientLynxBalance");
+      }
+    });
+
+    it("Should successfully burn LYNX tokens", async function () {
+      const requiredHbar = LYNX_AMOUNT * HBAR_RATIO;
+      const requiredSauce = LYNX_AMOUNT * SAUCE_RATIO;
+      const requiredClxy = LYNX_AMOUNT * CLXY_RATIO;
+      
+      // Mock token associations
+      await mockHts.setTokenAssociated(operator.address, lynxTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, sauceTokenAddress, true);
+      await mockHts.setTokenAssociated(operator.address, clxyTokenAddress, true);
+
+      // Mock balances with required amounts
+      await mockHts.setBalance(lynxTokenAddress, operator.address, LYNX_AMOUNT);
+      await mockHts.setBalance(sauceTokenAddress, await lynxMinter.getAddress(), requiredSauce);
+      await mockHts.setBalance(clxyTokenAddress, await lynxMinter.getAddress(), requiredClxy);
+
+      // Send HBAR to contract
+      await operator.sendTransaction({
+        to: await lynxMinter.getAddress(),
+        value: requiredHbar
+      });
+
+      // Get initial balances
+      const initialSauceBalance = await mockHts.balanceOf(sauceTokenAddress, operator.address);
+      const initialClxyBalance = await mockHts.balanceOf(clxyTokenAddress, operator.address);
+      const initialLynxBalance = await mockHts.balanceOf(lynxTokenAddress, operator.address);
+      const initialOperatorHbar = await ethers.provider.getBalance(operator.address);
+
+      // Perform burn
+      const burnTx = await lynxMinter.burn(LYNX_AMOUNT);
+      const burnReceipt = await burnTx.wait();
+      const gasCost = burnReceipt.gasUsed * burnReceipt.gasPrice;
+
+      // Check final balances
+      expect(await mockHts.balanceOf(sauceTokenAddress, operator.address)).to.equal(initialSauceBalance + requiredSauce);
+      expect(await mockHts.balanceOf(clxyTokenAddress, operator.address)).to.equal(initialClxyBalance + requiredClxy);
+      expect(await mockHts.balanceOf(lynxTokenAddress, operator.address)).to.equal(initialLynxBalance - LYNX_AMOUNT);
+      
+      // Check HBAR balance (accounting for gas costs)
+      const finalOperatorHbar = await ethers.provider.getBalance(operator.address);
+      expect(finalOperatorHbar).to.equal(initialOperatorHbar + requiredHbar - gasCost);
+    });
+  });
+});

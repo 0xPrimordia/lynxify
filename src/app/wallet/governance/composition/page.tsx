@@ -306,86 +306,74 @@ export default function CompositionPage() {
   };
 
   useEffect(() => {
-    // Check for existing topic ID in localStorage
-    const savedTopicId = localStorage.getItem('lynx-user-topic-id');
-    if (savedTopicId) {
-      setUserTopicId(savedTopicId);
-    }
-    
-    const fetchCompositionData = async () => {
+    const fetchData = async () => {
+      console.log("Starting fetchData()");
+      setIsLoading(true);
       try {
-        // In a real implementation, this would fetch from an API
-        // For now, we'll use mock data based on the notepad
-        const mockData: CompositionData = {
-          sectors: {
-            "Native Token": {
-              name: "Native Token",
-              selectedToken: "HBAR", // Only option
-              tokens: ["HBAR"], // Only one token in this sector
-            },
-            "Smart Contract Platforms": {
-              name: "Smart Contract Platforms",
-              selectedToken: "WETH", // Default selected token
-              tokens: ["WETH", "WBTC", "WAVAX", "WSOL"],
-            },
-            "DeFi & DEX Tokens": {
-              name: "DeFi & DEX Tokens",
-              selectedToken: "SAUCE", // Default selected token
-              tokens: ["SAUCE", "xSAUCE", "HBARX", "HLQT", "SGB"],
-            },
-            "Stablecoins": {
-              name: "Stablecoins",
-              selectedToken: "USDC", // Default selected token
-              tokens: ["USDC", "USDT", "DAI", "HCHF", "BUSD"],
-            },
-            "Enterprise & Utility Tokens": {
-              name: "Enterprise & Utility Tokens",
-              selectedToken: "CLXY", // Default selected token
-              tokens: ["CLXY", "DOVU", "HST", "HBAR+", "ATMA"],
-            },
-            "GameFi & NFT Infrastructure": {
-              name: "GameFi & NFT Infrastructure",
-              selectedToken: "JAM", // Default selected token
-              tokens: ["JAM", "KARATE", "PACK", "GRELF", "STEAM"],
+        // Check for existing topic ID in localStorage
+        const savedTopicId = localStorage.getItem('lynx-user-topic-id');
+        console.log("Saved topic ID:", savedTopicId);
+        if (savedTopicId) {
+          setUserTopicId(savedTopicId);
+        }
+        
+        // Fetch composition data
+        console.log("Fetching composition data...");
+        const response = await fetch('/api/governance/get-composition');
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log("Composition data received:", data);
+        setCompositionData(data);
+        
+        // Initialize desired composition from AI recommendation
+        if (data.aiRecommendation) {
+          setDesiredComposition({
+            sectors: { ...data.aiRecommendation.sectors }
+          });
+        }
+        
+        // Fetch consensus data immediately
+        console.log("Fetching consensus data...");
+        try {
+          const consensusResponse = await fetch('/api/governance/get-consensus');
+          console.log("Consensus response status:", consensusResponse.status);
+          
+          if (consensusResponse.ok) {
+            const consensusData = await consensusResponse.json();
+            console.log("Consensus data received:", consensusData);
+            
+            if (consensusData.success && consensusData.consensus) {
+              console.log("Setting consensus composition:", consensusData.consensus);
+              setConsensusComposition(consensusData.consensus);
+            } else {
+              console.error("Invalid consensus data format:", consensusData);
             }
+          } else {
+            console.error("Failed to fetch consensus data:", consensusResponse.status);
           }
-        };
+        } catch (error) {
+          console.error('Error fetching consensus:', error);
+        }
         
-        // Create AI recommendation with predefined allocations
-        const aiRecommendation = JSON.parse(JSON.stringify(mockData));
-        
-        // For AI recommendation, we'll use predefined allocations
-        aiRecommendation.sectors["Native Token"].allocations = { "HBAR": 20 };
-        aiRecommendation.sectors["Smart Contract Platforms"].allocations = { "WETH": 25 };
-        aiRecommendation.sectors["DeFi & DEX Tokens"].allocations = { "SAUCE": 15 };
-        aiRecommendation.sectors["Stablecoins"].allocations = { "USDC": 20 };
-        aiRecommendation.sectors["Enterprise & Utility Tokens"].allocations = { "CLXY": 10 };
-        aiRecommendation.sectors["GameFi & NFT Infrastructure"].allocations = { "JAM": 10 };
-        
-        // Add reasoning to AI recommendation
-        aiRecommendation.reasoning = "Our AI analysis suggests this composition based on current market conditions, token performance, and ecosystem developments.";
-        
-        // For current composition, calculate allocations with sector caps
-        const currentComposition = calculateSectorCappedAllocations(mockData);
-        
-        // Set composition data with both AI recommendation and sectors
-        setCompositionData({
-          sectors: mockData.sectors,
-          aiRecommendation: aiRecommendation
-        });
-        
-        setDesiredComposition(currentComposition);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error loading composition data:', error);
-        setError('Failed to load composition data');
+      } catch (error: any) {
+        console.error('Error fetching composition data:', error);
+        setError(error.message);
+      } finally {
         setIsLoading(false);
       }
     };
 
-    // Also fetch consensus data
-    fetchCompositionData();
-  }, [tokens]);
+    fetchData();
+    
+    // Check scroll position after component mounts
+    setTimeout(() => {
+      checkScrollPosition();
+    }, 100);
+  }, []);
 
   const handleTokenChange = (sector: string, newToken: string) => {
     if (!desiredComposition) return;
@@ -471,22 +459,11 @@ export default function CompositionPage() {
   }, []);
 
   const handleVoteSubmit = async () => {
-    console.log('Vote submit button clicked');
-    
-    if (!userTopicId) {
-      console.log('No user topic ID found');
-      showAlert('You need to create a user topic first. Please use the DAO Testing Controls.', 'error');
-      return;
-    }
-    
-    if (!desiredComposition) {
-      console.log('No composition changes to submit');
-      showAlert('No composition changes to submit.', 'error');
-      return;
-    }
-    
     try {
-      console.log('Starting submission process');
+      if (!userTopicId) {
+        throw new Error('No user topic ID found. Please create a user topic first.');
+      }
+      
       setIsSubmitting(true);
       
       // For demo purposes, use the topic ID as the user ID
@@ -534,24 +511,10 @@ export default function CompositionPage() {
             
             if (consensusData.success && consensusData.consensus) {
               setConsensusComposition(consensusData.consensus);
-            } else {
-              // If consensus data isn't available, use the current selection
-              setConsensusComposition({
-                sectors: { ...desiredComposition.sectors }
-              });
             }
-          } else {
-            // If consensus endpoint fails, use the current selection
-            setConsensusComposition({
-              sectors: { ...desiredComposition.sectors }
-            });
           }
         } catch (error) {
           console.error('Error fetching consensus:', error);
-          // Fallback to current selection
-          setConsensusComposition({
-            sectors: { ...desiredComposition.sectors }
-          });
         }
       } else {
         throw new Error(data.error || 'Failed to submit preference');
@@ -641,14 +604,14 @@ export default function CompositionPage() {
         className={`${isNativeToken ? 'border border-gray-600' : 'bg-gray-800'} rounded-lg p-6 mb-6 flex flex-col items-center justify-between w-[180px] h-[280px]`}
       >
         {isEditable && !isNativeToken ? (
-          <div className="relative group">
+          <div className="relative">
             <div 
-              className="flex flex-col items-center cursor-pointer"
+              className="flex flex-col items-center cursor-pointer hover:opacity-80"
               onClick={() => document.getElementById(`dropdown-${sectorName}`)?.classList.toggle('hidden')}
             >
               <div className="rounded-full p-2 mb-2 relative">
                 <TokenImage symbol={sectorData.selectedToken} />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                   <div className="bg-gray-900/70 rounded-full w-full h-full flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -731,6 +694,39 @@ export default function CompositionPage() {
     );
   };
 
+  // Add this function to check scroll position and show/hide buttons accordingly
+  const checkScrollPosition = () => {
+    const container = document.getElementById('composition-carousel');
+    const leftButton = document.getElementById('carousel-left-button');
+    const rightButton = document.getElementById('carousel-right-button');
+    
+    if (container && leftButton && rightButton) {
+      // Check if at the start
+      if (container.scrollLeft <= 10) {
+        leftButton.classList.add('hidden');
+      } else {
+        leftButton.classList.remove('hidden');
+      }
+      
+      // Check if at the end
+      const isAtEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 10;
+      if (isAtEnd) {
+        rightButton.classList.add('hidden');
+      } else {
+        rightButton.classList.remove('hidden');
+      }
+    }
+  };
+
+  // Call this function on initial render to set correct button visibility
+  useEffect(() => {
+    if (desiredComposition) {
+      setTimeout(() => {
+        checkScrollPosition();
+      }, 100);
+    }
+  }, [desiredComposition]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -746,6 +742,8 @@ export default function CompositionPage() {
       </div>
     );
   }
+
+  console.log("Rendering with consensusComposition:", consensusComposition);
 
   return (
     <div className="min-h-screen text-white">
@@ -797,16 +795,91 @@ export default function CompositionPage() {
             </div>
           </div>
           
-          {/* Current Composition */}
+          {/* Current Composition with improved horizontal carousel */}
           <div className="mb-8">
             <h2 className={`text-xl text-white mb-6 ${vt323.className}`}>Current Composition</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full pr-0">
-              {desiredComposition && Object.entries(desiredComposition.sectors).map(([sectorName, sectorData]) => (
-                renderTokenSector(sectorName, sectorData, true)
-              ))}
-              {renderSuggestSectorBox()}
+            <div className="relative group">
+              {/* Left scroll button - positioned at 40% from top */}
+              <div 
+                id="carousel-left-button"
+                className="absolute left-0 z-10 px-2 opacity-0 group-hover:opacity-100 transition-opacity hidden"
+                style={{ top: '40%' }} // Position at 40% from the top
+              >
+                <button 
+                  className="bg-gray-900/80 rounded-full p-2 text-white"
+                  onClick={() => {
+                    const container = document.getElementById('composition-carousel');
+                    if (container) {
+                      container.scrollBy({ left: -200, behavior: 'smooth' });
+                      
+                      // Check if we're at the start after scrolling
+                      setTimeout(() => {
+                        checkScrollPosition();
+                      }, 500);
+                    }
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Carousel container */}
+              <div 
+                id="composition-carousel"
+                className="flex overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                onScroll={() => checkScrollPosition()}
+              >
+                {desiredComposition && Object.entries(desiredComposition.sectors).map(([sectorName, sectorData]) => (
+                  <div key={sectorName} className="snap-start flex-shrink-0 mr-4">
+                    {renderTokenSector(sectorName, sectorData, true)}
+                  </div>
+                ))}
+                <div className="snap-start flex-shrink-0">
+                  {renderSuggestSectorBox()}
+                </div>
+              </div>
+              
+              {/* Right scroll button - positioned at 40% from top */}
+              <div 
+                id="carousel-right-button"
+                className="absolute right-0 z-10 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ top: '40%' }} // Position at 40% from the top
+              >
+                <button 
+                  className="bg-gray-900/80 rounded-full p-2 text-white"
+                  onClick={() => {
+                    const container = document.getElementById('composition-carousel');
+                    if (container) {
+                      container.scrollBy({ left: 200, behavior: 'smooth' });
+                      
+                      // Check if we're at the end after scrolling
+                      setTimeout(() => {
+                        checkScrollPosition();
+                      }, 500);
+                    }
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
+            
+            {/* Add CSS to hide scrollbar and handle button visibility */}
+            <style jsx global>{`
+              .hide-scrollbar::-webkit-scrollbar {
+                display: none;
+              }
+              .hide-scrollbar {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+              }
+            `}</style>
             
             {showVoteButton && (
               <div className="flex justify-end mt-4">

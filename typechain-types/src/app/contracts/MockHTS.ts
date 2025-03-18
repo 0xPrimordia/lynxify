@@ -19,16 +19,18 @@ import type {
   TypedEventLog,
   TypedListener,
   TypedContractMethod,
-} from "../../../../common";
+} from "../../../common";
 
-export interface IHederaTokenServiceInterface extends Interface {
+export interface MockHTSInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "allowance"
       | "associateToken"
       | "balanceOf"
       | "isTokenAssociated"
-      | "mintToken"
+      | "setAllowance"
+      | "setBalance"
+      | "setTokenAssociated"
       | "transferToken"
   ): FunctionFragment;
 
@@ -49,8 +51,16 @@ export interface IHederaTokenServiceInterface extends Interface {
     values: [AddressLike, AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "mintToken",
-    values: [AddressLike, BigNumberish, BytesLike[]]
+    functionFragment: "setAllowance",
+    values: [AddressLike, AddressLike, AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setBalance",
+    values: [AddressLike, AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setTokenAssociated",
+    values: [AddressLike, AddressLike, boolean]
   ): string;
   encodeFunctionData(
     functionFragment: "transferToken",
@@ -67,18 +77,26 @@ export interface IHederaTokenServiceInterface extends Interface {
     functionFragment: "isTokenAssociated",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "mintToken", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setAllowance",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "setBalance", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setTokenAssociated",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "transferToken",
     data: BytesLike
   ): Result;
 }
 
-export interface IHederaTokenService extends BaseContract {
-  connect(runner?: ContractRunner | null): IHederaTokenService;
+export interface MockHTS extends BaseContract {
+  connect(runner?: ContractRunner | null): MockHTS;
   waitForDeployment(): Promise<this>;
 
-  interface: IHederaTokenServiceInterface;
+  interface: MockHTSInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -141,9 +159,26 @@ export interface IHederaTokenService extends BaseContract {
     "view"
   >;
 
-  mintToken: TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
-    [bigint],
+  setAllowance: TypedContractMethod<
+    [
+      token: AddressLike,
+      owner: AddressLike,
+      spender: AddressLike,
+      amount: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  setBalance: TypedContractMethod<
+    [token: AddressLike, account: AddressLike, balance: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  setTokenAssociated: TypedContractMethod<
+    [account: AddressLike, token: AddressLike, associated: boolean],
+    [void],
     "nonpayable"
   >;
 
@@ -191,10 +226,29 @@ export interface IHederaTokenService extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "mintToken"
+    nameOrSignature: "setAllowance"
   ): TypedContractMethod<
-    [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
-    [bigint],
+    [
+      token: AddressLike,
+      owner: AddressLike,
+      spender: AddressLike,
+      amount: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setBalance"
+  ): TypedContractMethod<
+    [token: AddressLike, account: AddressLike, balance: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setTokenAssociated"
+  ): TypedContractMethod<
+    [account: AddressLike, token: AddressLike, associated: boolean],
+    [void],
     "nonpayable"
   >;
   getFunction(

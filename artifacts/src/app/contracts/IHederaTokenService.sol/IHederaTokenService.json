@@ -1,10 +1,15 @@
 {
   "_format": "hh-sol-artifact-1",
-  "contractName": "IERC20",
-  "sourceName": "src/app/contracts/LynxMinter.sol",
+  "contractName": "IHederaTokenService",
+  "sourceName": "src/app/contracts/IHederaTokenService.sol",
   "abi": [
     {
       "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
         {
           "internalType": "address",
           "name": "owner",
@@ -33,6 +38,35 @@
           "internalType": "address",
           "name": "account",
           "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        }
+      ],
+      "name": "associateToken",
+      "outputs": [
+        {
+          "internalType": "int64",
+          "name": "",
+          "type": "int64"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
         }
       ],
       "name": "balanceOf",
@@ -50,21 +84,26 @@
       "inputs": [
         {
           "internalType": "address",
-          "name": "to",
+          "name": "token",
           "type": "address"
         },
         {
           "internalType": "uint256",
           "name": "amount",
           "type": "uint256"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "metadata",
+          "type": "bytes[]"
         }
       ],
-      "name": "transfer",
+      "name": "burnToken",
       "outputs": [
         {
-          "internalType": "bool",
+          "internalType": "int64",
           "name": "",
-          "type": "bool"
+          "type": "int64"
         }
       ],
       "stateMutability": "nonpayable",
@@ -72,6 +111,40 @@
     },
     {
       "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "metadata",
+          "type": "bytes[]"
+        }
+      ],
+      "name": "mintToken",
+      "outputs": [
+        {
+          "internalType": "int64",
+          "name": "",
+          "type": "int64"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
         {
           "internalType": "address",
           "name": "from",
@@ -88,12 +161,12 @@
           "type": "uint256"
         }
       ],
-      "name": "transferFrom",
+      "name": "transferToken",
       "outputs": [
         {
-          "internalType": "bool",
+          "internalType": "int64",
           "name": "",
-          "type": "bool"
+          "type": "int64"
         }
       ],
       "stateMutability": "nonpayable",

@@ -1,122 +1,117 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.0;
 
-interface IERC20 {
-    function transfer(address to, uint256 amount) external returns (bool);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-}
+import "./IHederaTokenService.sol";
 
 contract LynxMinter {
-    address public owner;
-    uint256 private _status;
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
+    address public immutable LYNX_TOKEN;
+    address public immutable SAUCE_TOKEN;
+    address public immutable CLXY_TOKEN;
+    address public immutable HTS_PRECOMPILE;
+    IHederaTokenService public immutable hts;
 
-    // Token addresses (Hedera format)
-    address public lynxToken;
-    address public sauceToken;
-    address public clxyToken;
-    
-    uint256 public constant RATIO_PRECISION = 1e8; // 8 decimals to match LYNX
-    
-    event LynxMinted(
-        address indexed user,
-        uint256 hbarAmount,
-        uint256 sauceAmount,
-        uint256 clxyAmount,
-        uint256 lynxMinted,
-        uint256 nonce
-    );
+    event LynxMinted(address indexed user, uint256 lynxAmount, uint256 hbarAmount, uint256 sauceAmount, uint256 clxyAmount);
+    event LynxBurned(address indexed user, uint256 lynxAmount, uint256 hbarAmount, uint256 sauceAmount, uint256 clxyAmount);
 
-    event DebugMint(string message, uint256 value1, uint256 value2);
-    event DebugConfirmMint(string message, address sender, address owner, uint256 nonce, bool isPending);
-    event DebugOwner(string message, address msgSender, address contractOwner);
+    error InsufficientHBAR();
+    error InsufficientSauceAllowance();
+    error InsufficientClxyAllowance();
+    error InsufficientLynxBalance();
+    error InvalidAmount();
+    error TokenAssociationFailed();
+    error TokenTransferFailed();
 
-    // Add tracking for total deposits
-    uint256 public totalHbarDeposited;
-    uint256 public totalLynxMinted;
-    uint256 public mintNonce;
-
-    // Mapping to track pending mints
-    mapping(uint256 => bool) public pendingMints;
-
-    error ReentrancyGuardReentrantCall();
-    error OnlyOwner();
+    // Add ratio constants (these would eventually come from governance)
+    uint256 public constant HBAR_RATIO = 10;
+    uint256 public constant SAUCE_RATIO = 5;
+    uint256 public constant CLXY_RATIO = 2;
 
     constructor(
-        address _lynxToken,
-        address _sauceToken,
-        address _clxyToken
+        address lynxToken,
+        address sauceToken,
+        address clxyToken,
+        address htsPrecompile
     ) {
-        require(_lynxToken != address(0), "LYNX token address cannot be zero");
-        require(_sauceToken != address(0), "SAUCE token address cannot be zero");
-        require(_clxyToken != address(0), "CLXY token address cannot be zero");
-
-        owner = msg.sender;
-        _status = _NOT_ENTERED;
-        lynxToken = _lynxToken;
-        sauceToken = _sauceToken;
-        clxyToken = _clxyToken;
-        mintNonce = 0;
+        LYNX_TOKEN = lynxToken;
+        SAUCE_TOKEN = sauceToken;
+        CLXY_TOKEN = clxyToken;
+        HTS_PRECOMPILE = htsPrecompile;
+        hts = IHederaTokenService(htsPrecompile);
     }
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) {
-            emit DebugOwner("Not owner", msg.sender, owner);
-            revert OnlyOwner();
-        }
-        _;
+    receive() external payable {}
+
+    function associateTokens() external {
+        // Associate LYNX token
+        if (hts.associateToken(address(this), LYNX_TOKEN) != 0) revert TokenAssociationFailed();
+
+        // Associate SAUCE token
+        if (hts.associateToken(address(this), SAUCE_TOKEN) != 0) revert TokenAssociationFailed();
+
+        // Associate CLXY token
+        if (hts.associateToken(address(this), CLXY_TOKEN) != 0) revert TokenAssociationFailed();
     }
 
-    modifier nonReentrant() {
-        if (_status == _ENTERED) {
-            revert ReentrancyGuardReentrantCall();
-        }
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
+    function mint(uint256 lynxAmount) external payable {
+        // Calculate required amounts based on ratios
+        uint256 hbarRequired = lynxAmount * HBAR_RATIO;
+        uint256 sauceRequired = lynxAmount * SAUCE_RATIO;
+        uint256 clxyRequired = lynxAmount * CLXY_RATIO;
+
+        if (msg.value < hbarRequired) revert InsufficientHBAR();
+
+        // Check token allowances with correct ratios
+        uint256 sauceAllowance = hts.allowance(SAUCE_TOKEN, msg.sender, address(this));
+        if (sauceAllowance < sauceRequired) revert InsufficientSauceAllowance();
+
+        uint256 clxyAllowance = hts.allowance(CLXY_TOKEN, msg.sender, address(this));
+        if (clxyAllowance < clxyRequired) revert InsufficientClxyAllowance();
+
+        // Transfer tokens with correct ratios
+        if (hts.transferToken(SAUCE_TOKEN, msg.sender, address(this), sauceRequired) != 0) 
+            revert TokenTransferFailed();
+
+        if (hts.transferToken(CLXY_TOKEN, msg.sender, address(this), clxyRequired) != 0) 
+            revert TokenTransferFailed();
+
+        // Mint LYNX to user (1:1 with lynxAmount)
+        if (hts.mintToken(LYNX_TOKEN, lynxAmount, new bytes[](0)) != 0) 
+            revert TokenTransferFailed();
+
+        if (hts.transferToken(LYNX_TOKEN, address(this), msg.sender, lynxAmount) != 0) 
+            revert TokenTransferFailed();
+
+        emit LynxMinted(msg.sender, lynxAmount, hbarRequired, sauceRequired, clxyRequired);
     }
 
-    function mint(uint256 amount) external payable nonReentrant {
-        require(msg.value >= amount, "Insufficient HBAR sent");
-        require(amount > 0, "Amount must be greater than 0");
+    function burn(uint256 lynxAmount) external {
+        if (lynxAmount == 0) revert InvalidAmount();
 
-        // Increment nonce first
-        uint256 currentNonce = mintNonce;
-        mintNonce = currentNonce + 1;
+        // Calculate return amounts based on ratios
+        uint256 hbarReturn = lynxAmount * HBAR_RATIO;
+        uint256 sauceReturn = lynxAmount * SAUCE_RATIO;
+        uint256 clxyReturn = lynxAmount * CLXY_RATIO;
 
-        // Mark mint as pending
-        pendingMints[currentNonce] = true;
+        // Check LYNX balance
+        uint256 lynxBalance = hts.balanceOf(LYNX_TOKEN, msg.sender);
+        if (lynxBalance < lynxAmount) revert InsufficientLynxBalance();
 
-        emit DebugMint("Mint initiated", amount, currentNonce);
-    }
+        // Transfer and burn LYNX
+        if (hts.transferToken(LYNX_TOKEN, msg.sender, address(this), lynxAmount) != 0) 
+            revert TokenTransferFailed();
+        if (hts.burnToken(LYNX_TOKEN, lynxAmount, new bytes[](0)) != 0) 
+            revert TokenTransferFailed();
 
-    function confirmMint(uint256 nonce, uint256 amount) external onlyOwner nonReentrant {
-        require(pendingMints[nonce], "No pending mint with this nonce");
-        emit DebugConfirmMint("Confirming mint", msg.sender, owner, nonce, pendingMints[nonce]);
+        // Return tokens with correct ratios
+        if (hts.transferToken(SAUCE_TOKEN, address(this), msg.sender, sauceReturn) != 0) 
+            revert TokenTransferFailed();
+        if (hts.transferToken(CLXY_TOKEN, address(this), msg.sender, clxyReturn) != 0) 
+            revert TokenTransferFailed();
 
-        // Clear pending mint
-        pendingMints[nonce] = false;
+        // Return HBAR
+        (bool success,) = payable(msg.sender).call{value: hbarReturn}("");
+        if (!success) revert TokenTransferFailed();
 
-        // Update totals
-        totalHbarDeposited += amount;
-        totalLynxMinted += amount;
-
-        emit LynxMinted(msg.sender, amount, 0, 0, amount, nonce);
-    }
-
-    function getBalance() external view returns (uint256) {
-        return address(this).balance;
-    }
-
-    function getMaxMintableAmount() external view returns (uint256) {
-        return address(this).balance;
-    }
-
-    function withdrawHBAR(uint256 amount) external onlyOwner {
-        require(amount <= address(this).balance, "Insufficient HBAR balance");
-        payable(owner).transfer(amount);
+        emit LynxBurned(msg.sender, lynxAmount, hbarReturn, sauceReturn, clxyReturn);
     }
 } 

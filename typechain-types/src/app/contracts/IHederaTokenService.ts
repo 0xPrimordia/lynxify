@@ -19,7 +19,7 @@ import type {
   TypedEventLog,
   TypedListener,
   TypedContractMethod,
-} from "../../../../common";
+} from "../../../common";
 
 export interface IHederaTokenServiceInterface extends Interface {
   getFunction(
@@ -27,7 +27,7 @@ export interface IHederaTokenServiceInterface extends Interface {
       | "allowance"
       | "associateToken"
       | "balanceOf"
-      | "isTokenAssociated"
+      | "burnToken"
       | "mintToken"
       | "transferToken"
   ): FunctionFragment;
@@ -45,8 +45,8 @@ export interface IHederaTokenServiceInterface extends Interface {
     values: [AddressLike, AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "isTokenAssociated",
-    values: [AddressLike, AddressLike]
+    functionFragment: "burnToken",
+    values: [AddressLike, BigNumberish, BytesLike[]]
   ): string;
   encodeFunctionData(
     functionFragment: "mintToken",
@@ -63,10 +63,7 @@ export interface IHederaTokenServiceInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "isTokenAssociated",
-    data: BytesLike
-  ): Result;
+  decodeFunctionResult(functionFragment: "burnToken", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mintToken", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferToken",
@@ -135,10 +132,10 @@ export interface IHederaTokenService extends BaseContract {
     "view"
   >;
 
-  isTokenAssociated: TypedContractMethod<
-    [account: AddressLike, token: AddressLike],
-    [boolean],
-    "view"
+  burnToken: TypedContractMethod<
+    [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
+    [bigint],
+    "nonpayable"
   >;
 
   mintToken: TypedContractMethod<
@@ -184,11 +181,11 @@ export interface IHederaTokenService extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "isTokenAssociated"
+    nameOrSignature: "burnToken"
   ): TypedContractMethod<
-    [account: AddressLike, token: AddressLike],
-    [boolean],
-    "view"
+    [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
+    [bigint],
+    "nonpayable"
   >;
   getFunction(
     nameOrSignature: "mintToken"

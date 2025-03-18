@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { VT323 } from "next/font/google";
 import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
@@ -8,7 +9,7 @@ import { useRewards } from "../hooks/useRewards";
 import PurchaseNFT from "./purchaseNFT";
 import { useState, useEffect } from "react";
 import { AccountBalanceQuery, AccountId } from "@hashgraph/sdk";
-import { handleDisconnectSessions, clearStoredSession } from '@/utils/supabase/session';
+import { handleDisconnectSessions, clearStoredSession } from '../../utils/supabase/session';
 import { ConnectWallet } from './ConnectWallet';
 import { useSupabase } from "../hooks/useSupabase";
 import { useRouter } from "next/navigation";
@@ -149,7 +150,7 @@ const Header = () => {
             clearStoredSession();
             localStorage.removeItem('walletconnect');  // Clear WalletConnect data
             
-            const promises = [];
+            const promises: Promise<any>[] = [];
             
             // Handle extension wallet
             if (account && !isInAppWallet) {
