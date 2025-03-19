@@ -52,39 +52,12 @@ export async function POST(req: Request) {
             description = `Approve ${clxyAmount} CLXY for LYNX minting`;
         }
         else if (step === 3) {
-            // Let's add clear logging to see exactly what's happening
-            console.log('=== MINT DEBUG: EXACT VALUES ===');
-            console.log('Input values:', { 
-                hbarAmount: hbarAmount,
-                sauceAmount: sauceAmount, 
-                clxyAmount: clxyAmount, 
-                lynxAmount: lynxAmount,
-                accountId: accountId 
-            });
+            // Step 3: Execute mint
             
-            // Calculate the exact Solidity values that match the contract
-            const lynxRaw = lynxValue; // Already scaled to 8 decimals
-            const hbarRequiredByContract = lynxRaw * 10; // HBAR_RATIO = 10
-            const actualHbarSending = new Hbar(parseFloat(hbarAmount)).toTinybars();
-            const actualHbarSendingNumber = Number(actualHbarSending);
+            // Use Hbar.fromTinybars() instead of new Hbar() for exact precision
+            // The contract expects exactly lynxValue * 10 tinybars
+            const payableAmount = Hbar.fromTinybars(lynxValue * 10);
             
-            console.log('Contract parameters:', {
-                // What we're sending to the contract's mint function
-                lynxRaw: lynxRaw,
-                // What the contract will calculate as required HBAR (lynxAmount * 10)
-                hbarRequiredByContract: hbarRequiredByContract,
-                // What we're actually sending
-                hbarAmountOriginal: hbarAmount,
-                actualHbarSending: actualHbarSendingNumber
-            });
-            
-            console.log('Contract expectation check:', {
-                // The key check: is what we're sending equal to what the contract requires?
-                isHbarCorrect: hbarRequiredByContract === actualHbarSendingNumber,
-                difference: hbarRequiredByContract - actualHbarSendingNumber
-            });
-            
-            // Keep the original transaction code exactly as it is
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
                 .setGas(2000000)
@@ -93,11 +66,11 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addUint256(lynxValue)
                 )
-                .setPayableAmount(new Hbar(parseFloat(hbarAmount)))
+                .setPayableAmount(payableAmount)
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
             
-            description = `Mint ${lynxAmount} LYNX tokens (sending ${hbarAmount} HBAR)`;
+            description = `Mint ${lynxAmount} LYNX tokens`;
         }
 
         if (!transaction) {
