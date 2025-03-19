@@ -54,9 +54,33 @@ export async function POST(req: Request) {
         else if (step === 3) {
             // Step 3: Execute mint
             
-            // Use Hbar.fromTinybars() instead of new Hbar() for exact precision
-            // The contract expects exactly lynxValue * 10 tinybars
-            const payableAmount = Hbar.fromTinybars(lynxValue * 10);
+            // Add detailed server-side logs that will appear in your server console
+            console.log('==== MINT DEBUG (SERVER) ====');
+            console.log('Input values:', {
+                lynxAmount,
+                hbarAmount,
+                sauceAmount,
+                clxyAmount,
+                accountId
+            });
+            
+            // Calculate the expected HBAR in tinybars
+            const hbarRequired = lynxValue * 10;
+            
+            // Create Hbar object
+            const payableAmount = Hbar.fromTinybars(hbarRequired);
+            const actualTinybars = payableAmount.toTinybars();
+            
+            console.log('Calculated values:', {
+                lynxValue,
+                hbarRequired,
+                payableAmountString: payableAmount.toString(),
+                actualTinybars: actualTinybars.toString(),
+                isEqual: hbarRequired === Number(actualTinybars)
+            });
+            
+            // Create transaction with extensive logging
+            console.log('Creating transaction with payable amount:', payableAmount.toString());
             
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
@@ -69,6 +93,8 @@ export async function POST(req: Request) {
                 .setPayableAmount(payableAmount)
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
+            
+            console.log('Transaction created successfully');
             
             description = `Mint ${lynxAmount} LYNX tokens`;
         }
