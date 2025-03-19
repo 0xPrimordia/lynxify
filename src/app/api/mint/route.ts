@@ -54,22 +54,23 @@ export async function POST(req: Request) {
         else if (step === 3) {
             // Step 3: Execute mint
             
-            // Calculate the expected HBAR in tinybars
-            const hbarRequired = lynxValue * 10;
+            // Important: The contract expects the LYNX amount in the same unit system as HBAR
+            // Instead of sending lynxValue (20000000), we need to send 2000000000
+            // This is because the contract calculates hbarRequired = lynxAmount * 10
             
-            // Create Hbar object
-            const payableAmount = Hbar.fromTinybars(hbarRequired);
+            // Instead of using lynxValue directly, use hbarRequired / 10 
+            // This keeps the units in tinybars consistent with what the contract expects
+            const contractLynxValue = Math.floor(parseFloat(hbarAmount) * 1e9); // Adjust the scale
             
-            // Create transaction
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
                 .setGas(2000000)
                 .setFunction(
                     "mint",
                     new ContractFunctionParameters()
-                        .addUint256(lynxValue)
+                        .addUint256(contractLynxValue)
                 )
-                .setPayableAmount(payableAmount)
+                .setPayableAmount(new Hbar(parseFloat(hbarAmount)))
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
             
@@ -86,9 +87,10 @@ export async function POST(req: Request) {
                     lynxAmount,
                     hbarAmount,
                     lynxValue,
-                    hbarRequired,
-                    payableAmountString: payableAmount.toString(),
-                    actualTinybars: payableAmount.toTinybars().toString()
+                    contractLynxValue,
+                    hbarRequired: contractLynxValue * 10,
+                    payableAmountString: new Hbar(parseFloat(hbarAmount)).toString(),
+                    actualTinybars: new Hbar(parseFloat(hbarAmount)).toTinybars().toString()
                 }
             });
         }
