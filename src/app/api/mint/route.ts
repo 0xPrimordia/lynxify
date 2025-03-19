@@ -53,6 +53,33 @@ export async function POST(req: Request) {
         }
         else if (step === 3) {
             // Step 3: Execute mint
+            
+            // Add extensive logging to understand the values
+            console.log('=== MINT DEBUG ===');
+            console.log('Input values:', { hbarAmount, sauceAmount, clxyAmount, lynxAmount });
+            console.log('Calculated values:', { hbarValue, sauceValue, clxyValue, lynxValue });
+            
+            // The contract expects HBAR amount to match lynxAmount * 10
+            // But lynxValue is already scaled by 1e8, which might be wrong
+            
+            // Instead, let's directly work with the original amounts from the request
+            const rawLynxAmount = parseFloat(lynxAmount);
+            
+            // Calculate required HBAR amount (in HBAR units, not tinybars)
+            const requiredHbar = rawLynxAmount * 10; // HBAR_RATIO = 10
+            
+            console.log('Required values:', { 
+                rawLynxAmount,
+                requiredHbar,
+                lynxValue8Decimals: lynxValue,
+                hbarValueInTinybars: requiredHbar * 100000000 // Convert to tinybars
+            });
+            
+            // Create HBAR object directly from the required amount
+            const payableAmount = new Hbar(requiredHbar);
+            
+            console.log('Sending payable amount:', payableAmount.toString());
+            
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
                 .setGas(2000000)
@@ -61,11 +88,11 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addUint256(lynxValue)
                 )
-                // Convert lynxAmount to HBAR and multiply by HBAR_RATIO (10)
-                .setPayableAmount(Hbar.fromTinybars(lynxValue * 10))
+                .setPayableAmount(payableAmount)
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
-            description = `Mint ${lynxAmount} LYNX tokens`;
+            
+            description = `Mint ${lynxAmount} LYNX tokens (sending ${payableAmount.toString()})`;
         }
 
         if (!transaction) {
