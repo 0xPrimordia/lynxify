@@ -61,9 +61,8 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addUint256(lynxValue)
                 )
-                // Create a proper Hbar object with the HBAR amount needed
-                // We need to use the original hbarAmount multiplied by the HBAR_RATIO
-                .setPayableAmount(new Hbar(parseFloat(hbarAmount)))
+                // Convert lynxAmount to HBAR and multiply by HBAR_RATIO (10)
+                .setPayableAmount(Hbar.fromTinybars(lynxValue * 10))
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
             description = `Mint ${lynxAmount} LYNX tokens`;
