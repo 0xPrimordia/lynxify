@@ -359,63 +359,76 @@ export default function MintPage() {
                 throw new Error('Insufficient CLXY balance');
             }
 
-            // Get transaction from backend
-            const response = await fetch('/api/mint', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    hbarAmount: amounts.hbar,
-                    sauceAmount: amounts.sauce,
-                    clxyAmount: amounts.clxy,
-                    lynxAmount: amounts.lynx,
-                    accountId: activeAccount
-                })
-            });
+            // Process all 3 steps for minting LYNX
+            let currentStep = 1;
+            let txResult;
 
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to prepare mint transaction');
-            }
+            while (currentStep <= 3) {
+                setSuccess(`Step ${currentStep}/3: ${currentStep === 1 ? 'Approving SAUCE' : currentStep === 2 ? 'Approving CLXY' : 'Minting LYNX'}`);
+                
+                // Get transaction for current step from backend
+                const response = await fetch('/api/mint', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        hbarAmount: amounts.hbar,
+                        sauceAmount: amounts.sauce,
+                        clxyAmount: amounts.clxy,
+                        lynxAmount: amounts.lynx,
+                        accountId: activeAccount,
+                        step: currentStep
+                    })
+                });
 
-            // Execute transaction with connected wallet
-            let result;
-            if (walletType === 'inApp') {
-                result = await handleInAppTransaction(
-                    data.transaction,
-                    signTransaction,
-                    (context) => {
-                        if (typeof context === 'function') {
-                            setPasswordModalContext(context);
-                        } else {
-                            setPasswordModalContext({
-                                isOpen: true,
-                                description: `Mint ${amounts.lynx} LYNX using:\n• ${amounts.hbar} HBAR\n• ${amounts.sauce} SAUCE\n• ${amounts.clxy} CLXY`,
-                                transaction: data.transaction,
-                                transactionPromise: context.transactionPromise
-                            });
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || `Failed to prepare transaction for step ${currentStep}`);
+                }
+
+                // Execute transaction with connected wallet
+                if (walletType === 'inApp') {
+                    txResult = await handleInAppTransaction(
+                        data.transaction,
+                        signTransaction,
+                        (context) => {
+                            if (typeof context === 'function') {
+                                setPasswordModalContext(context);
+                            } else {
+                                setPasswordModalContext({
+                                    isOpen: true,
+                                    description: data.description || `Step ${currentStep}/3 for minting LYNX`,
+                                    transaction: data.transaction,
+                                    transactionPromise: context.transactionPromise
+                                });
+                            }
                         }
+                    );
+                } else if (walletType === 'extension') {
+                    txResult = await handleExtensionTransaction(
+                        data.transaction,
+                        extensionAccount!,
+                        signAndExecuteTransaction
+                    );
+                } else {
+                    throw new Error('No wallet client available');
+                }
+                
+                if (txResult.status !== 'SUCCESS') {
+                    if (txResult.status === 'REJECTED') {
+                        throw new Error(`Transaction for step ${currentStep} was rejected by user`);
+                    } else {
+                        throw new Error(txResult.error || `Transaction for step ${currentStep} failed`);
                     }
-                );
-            } else if (walletType === 'extension') {
-                result = await handleExtensionTransaction(
-                    data.transaction,
-                    extensionAccount!,
-                    signAndExecuteTransaction
-                );
-            } else {
-                throw new Error('No wallet client available');
+                }
+                
+                // Move to next step
+                currentStep++;
             }
             
-            if (result.status === 'SUCCESS') {
-                setSuccess(`Successfully minted ${amounts.lynx} LYNX! Transaction ID: ${result.transactionId}`);
-                await fetchBalances(); // Refresh balances
-                setAmounts({ hbar: '', sauce: '', clxy: '', lynx: '' }); // Reset form
-            } else if (result.status === 'REJECTED') {
-                throw new Error('Transaction rejected by user');
-            } else {
-                throw new Error(result.error || 'Transaction failed');
-            }
+            setSuccess(`Successfully minted ${amounts.lynx} LYNX!`);
+            await fetchBalances(); // Refresh balances
+            setAmounts({ hbar: '', sauce: '', clxy: '', lynx: '' }); // Reset form
 
         } catch (error: any) {
             console.error('Mint error:', error);
