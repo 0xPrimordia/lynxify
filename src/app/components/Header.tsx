@@ -1,6 +1,5 @@
 "use client";
 import React from "react";
-import { VT323 } from "next/font/google";
 import { Button, Navbar, NavbarContent, NavbarItem, NavbarBrand, Link, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, NavbarMenuToggle, NavbarMenu, NavbarMenuItem } from "@nextui-org/react";
 import { useWalletContext } from "../hooks/useWallet";
 import { useInAppWallet } from "../contexts/InAppWalletContext";
@@ -16,8 +15,7 @@ import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
 import { Subject } from 'rxjs';
 import Image from 'next/image';
-
-const vt323 = VT323({ weight: "400", subsets: ["latin"] })
+import { vt323 } from '../fonts';
 
 const balanceSubject = new Subject<void>();
 export let lastFetch = 0;

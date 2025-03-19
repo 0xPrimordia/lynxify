@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
 import { useWalletContext } from '@/app/hooks/useWallet';
@@ -135,6 +135,8 @@ const TokenCard = React.memo(({
     );
 });
 
+TokenCard.displayName = 'TokenCard';
+
 // Mock token prices - move outside component to prevent recreation
 const tokenPrices = {
     HBAR: 0.07,
@@ -174,12 +176,76 @@ export default function MintPage() {
     const { tokens } = useSaucerSwapContext();
 
     const activeAccount = inAppAccount || extensionAccount;
+
+    const fetchBalances = useCallback(async () => {
+        if (!activeAccount) return;
+
+        try {
+            const accountId = AccountId.fromString(activeAccount);
+            
+            // Query account balance using SDK
+            const query = new AccountBalanceQuery()
+                .setAccountId(accountId);
+            const balance = await query.execute(client);
+
+            // Get HBAR balance
+            const hbarBalance = balance.hbars.toString().replace('ℏ', '').trim();
+            
+            let sauceBalance = '0';
+            let clxyBalance = '0';
+            let lynxBalance = '0';
+            
+            // Get token balances
+            if (balance.tokens && balance.tokens.size > 0) {
+                try {
+                    // Hardcoded token IDs as fallback
+                    const SAUCE_TOKEN_ID = process.env.NEXT_PUBLIC_SAUCE_TOKEN_ID || '1183558';
+                    const CLXY_TOKEN_ID = process.env.NEXT_PUBLIC_CLXY_TOKEN_ID || '5365';
+                    
+                    // Get SAUCE balance
+                    const sauceId = TokenId.fromString(`0.0.${SAUCE_TOKEN_ID}`);
+                    const sauceAmount = balance.tokens.get(sauceId);
+                    if (sauceAmount) {
+                        sauceBalance = sauceAmount.toString();
+                    }
+                    
+                    // Get CLXY balance
+                    const clxyId = TokenId.fromString(`0.0.${CLXY_TOKEN_ID}`);
+                    const clxyAmount = balance.tokens.get(clxyId);
+                    if (clxyAmount) {
+                        clxyBalance = clxyAmount.toString();
+                    }
+                    
+                    // Get LYNX balance if token ID exists
+                    if (process.env.NEXT_PUBLIC_LYNX_TOKEN_ID) {
+                        const lynxId = TokenId.fromString(`0.0.${process.env.NEXT_PUBLIC_LYNX_TOKEN_ID}`);
+                        const lynxAmount = balance.tokens.get(lynxId);
+                        if (lynxAmount) {
+                            lynxBalance = lynxAmount.toString();
+                        }
+                    }
+                } catch (tokenError) {
+                    console.error('Error parsing token IDs:', tokenError);
+                }
+            }
+            
+            setBalances({
+                hbar: hbarBalance,
+                sauce: sauceBalance,
+                clxy: clxyBalance,
+                lynx: lynxBalance
+            });
+        } catch (error: any) {
+            console.error('Error fetching balances:', error);
+            setError('Failed to fetch balances');
+        }
+    }, [activeAccount]);
     
     useEffect(() => {
         if (activeAccount) {
             fetchBalances();
         }
-    }, [activeAccount]);
+    }, [activeAccount, fetchBalances]);
 
     const handleAmountChange = React.useCallback((token: keyof TokenBalance, value: string) => {
         console.log('handleAmountChange called:', { token, value });
@@ -200,101 +266,6 @@ export default function MintPage() {
             });
         }
     }, []);
-
-    const fetchBalances = async () => {
-        if (!activeAccount) return;
-
-        try {
-            const accountId = AccountId.fromString(activeAccount);
-            
-            // Query account balance using SDK
-            const query = new AccountBalanceQuery()
-                .setAccountId(accountId);
-            const balance = await query.execute(client);
-
-            // Get HBAR balance
-            const hbarBalance = balance.hbars.toString().replace('ℏ', '').trim();
-            
-            let sauceBalance = '0';
-            let clxyBalance = '0';
-            let lynxBalance = '0';
-            
-            // Get token balances
-            if (balance.tokens && balance.tokens.size > 0) {
-                console.log('Available tokens:', Array.from(balance.tokens._map.entries()));
-                
-                try {
-                    // Hardcoded token IDs as fallback
-                    const SAUCE_TOKEN_ID = process.env.NEXT_PUBLIC_SAUCE_TOKEN_ID || '1183558';
-                    const CLXY_TOKEN_ID = process.env.NEXT_PUBLIC_CLXY_TOKEN_ID || '5365';
-                    
-                    // Helper function to get token decimals
-                    const getTokenDecimals = async (tokenId: string): Promise<number> => {
-                        try {
-                            const response = await fetch(
-                                `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/tokens/${tokenId}`
-                            );
-                            const tokenData = await response.json();
-                            console.log(`Token ${tokenId} data:`, tokenData);
-                            return tokenData.decimals || 8;
-                        } catch (error) {
-                            console.error(`Error fetching decimals for token ${tokenId}:`, error);
-                            return 8; // Default to 8 decimals if fetch fails
-                        }
-                    };
-
-                    // Get SAUCE balance
-                    const sauceId = TokenId.fromString(`0.0.${SAUCE_TOKEN_ID}`);
-                    const sauceAmount = balance.tokens.get(sauceId);
-                    if (sauceAmount) {
-                        const sauceDecimals = await getTokenDecimals(SAUCE_TOKEN_ID);
-                        sauceBalance = (Number(sauceAmount) / Math.pow(10, sauceDecimals)).toFixed(sauceDecimals);
-                    }
-                    
-                    // Get CLXY balance
-                    const clxyId = TokenId.fromString(`0.0.${CLXY_TOKEN_ID}`);
-                    const clxyAmount = balance.tokens.get(clxyId);
-                    if (clxyAmount) {
-                        const clxyDecimals = await getTokenDecimals(CLXY_TOKEN_ID);
-                        clxyBalance = (Number(clxyAmount) / Math.pow(10, clxyDecimals)).toFixed(clxyDecimals);
-                    }
-                    
-                    // Get LYNX balance if token ID exists
-                    if (process.env.NEXT_PUBLIC_LYNX_TOKEN_ID) {
-                        const lynxId = TokenId.fromString(`0.0.${process.env.NEXT_PUBLIC_LYNX_TOKEN_ID}`);
-                        const lynxAmount = balance.tokens.get(lynxId);
-                        if (lynxAmount) {
-                            const lynxDecimals = await getTokenDecimals(process.env.NEXT_PUBLIC_LYNX_TOKEN_ID);
-                            lynxBalance = (Number(lynxAmount) / Math.pow(10, lynxDecimals)).toFixed(lynxDecimals);
-                        }
-                    }
-                    
-                    console.log('Token balances:', {
-                        SAUCE: sauceBalance,
-                        CLXY: clxyBalance,
-                        LYNX: lynxBalance
-                    });
-                } catch (tokenError) {
-                    console.error('Error parsing token IDs:', tokenError);
-                    console.log('Token IDs:', {
-                        SAUCE: process.env.NEXT_PUBLIC_SAUCE_TOKEN_ID,
-                        CLXY: process.env.NEXT_PUBLIC_CLXY_TOKEN_ID,
-                        LYNX: process.env.NEXT_PUBLIC_LYNX_TOKEN_ID
-                    });
-                }
-            }
-            
-            setBalances({
-                hbar: hbarBalance,
-                sauce: sauceBalance,
-                clxy: clxyBalance,
-                lynx: lynxBalance
-            });
-        } catch (error: any) {
-            console.error('Error fetching balances:', error);
-            setError('Failed to fetch balances');
-        }
-    };
 
     const handleMint = async (e: React.FormEvent) => {
         e.preventDefault();

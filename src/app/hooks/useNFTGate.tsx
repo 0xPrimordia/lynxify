@@ -29,7 +29,7 @@ export const useNFTGate = (accountId: string) => {
     };
 
     checkNFTAccess();
-  }, [accountId]);
+  }, [accountId, NFT_TOKEN_ID]);
 
   return { hasAccess, isLoading };
 };

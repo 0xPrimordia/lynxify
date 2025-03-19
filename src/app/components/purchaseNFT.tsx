@@ -194,11 +194,11 @@ function PurchaseNFT({
                 
                 console.log('NFT Balance check:', {
                     nftBalance,
-                    hasNFT: nftBalance > 0,
+                    hasNFT: nftBalance ? nftBalance.toNumber() > 0 : false,
                     timestamp: new Date().toISOString()
                 });
 
-                return nftBalance > 0;
+                return nftBalance ? nftBalance.toNumber() > 0 : false;
             }
             return false;
         } catch (error) {

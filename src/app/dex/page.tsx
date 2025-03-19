@@ -127,13 +127,13 @@ export default function DexPage() {
         resetPasswordModal 
     } = usePasswordModal();
 
-    const timeRanges = [
+    const timeRanges = useMemo(() => [
         { id: '1H', label: '1H', value: 60 * 60 },
         { id: '1D', label: '1D', value: 24 * 60 * 60 },
         { id: '1W', label: '1W', value: 7 * 24 * 60 * 60 },
         { id: '1M', label: '1M', value: 30 * 24 * 60 * 60 },
         { id: 'ALL', label: 'All', value: 365 * 24 * 60 * 60 }
-    ];
+    ], []);
 
     const handleTimeRangeChange = (seconds: number, rangeId: string) => {
         const to = Math.floor(Date.now() / 1000);

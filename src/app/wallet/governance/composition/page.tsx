@@ -767,7 +767,7 @@ export default function CompositionPage() {
           <div className="fixed bottom-4 left-4 z-50 max-w-md">
             <Alert 
               className="mb-4 shadow-lg" 
-              color={alertType === "error" ? "danger" : alertType}
+              color={alertType === "error" ? "danger" : alertType === "info" ? "primary" : alertType}
               onClose={() => setAlertMessage(null)}
             >
               {alertMessage}

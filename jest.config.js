@@ -1,27 +1,47 @@
 module.exports = {
   testEnvironment: 'jsdom',
-  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
-  transform: {
-    '^.+\\.(ts|tsx)$': ['babel-jest', {
-      presets: [
-        ['@babel/preset-env', { targets: { node: 'current' } }],
-        '@babel/preset-typescript',
-        ['@babel/preset-react', { runtime: 'automatic' }],
-      ],
-    }],
-  },
+  setupFiles: [
+    '<rootDir>/src/tests/setup.js',
+    '<rootDir>/src/tests/hardhat/setup.js'
+  ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1'
+    '^next/font/google$': '<rootDir>/src/app/__mocks__/next/font/google.js',
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@hashgraph/hedera-wallet-connect$': '<rootDir>/src/app/__mocks__/@hashgraph/hedera-wallet-connect.js'
+  },
+  transform: {
+    '^.+\\.(t|j)sx?$': ['@swc/jest', {
+      jsc: {
+        parser: {
+          syntax: 'typescript',
+          tsx: true,
+          decorators: true
+        },
+        transform: {
+          react: {
+            runtime: 'automatic'
+          }
+        },
+        target: 'es2020'
+      }
+    }]
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!(@hashgraph/sdk|@hashgraph/hedera-wallet-connect)/)'
+    'node_modules/(?!(@hashgraph/hedera-wallet-connect)/)'
   ],
-  testMatch: ['**/*.test.tsx', '**/*.test.ts'],
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.json'
+    }
+  },
+  setupFilesAfterEnv: ['<rootDir>/src/tests/setupTests.js'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    '/.next/',
-    '/hardhat/',
-    '\\.hardhat\\.',
-  ],
+  testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
+  maxWorkers: 1,
+  testTimeout: 30000,
+  verbose: true,
+  workerIdleMemoryLimit: '512MB',
+  maxConcurrency: 1,
+  forceExit: true,
+  detectOpenHandles: true
 }; 

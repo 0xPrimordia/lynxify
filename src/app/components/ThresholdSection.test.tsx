@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThresholdSection, ThresholdSectionProps } from './ThresholdSection';
 import { verifyThresholdTokens } from '@/app/lib/tokens/thresholdAssociation';
 import { associateToken } from '@/app/lib/utils/tokens';
@@ -9,7 +9,7 @@ import Image from 'next/image';
 jest.mock('next/image', () => ({
     __esModule: true,
     default: (props: any) => {
-        return <img {...props} src={props.src || ''} />
+        return <img {...props} src={props.src || ''} alt={props.alt || 'Mock image'} />
     },
 }));
 
@@ -311,18 +311,18 @@ describe('ThresholdSection', () => {
         const [priceInput, capInput] = inputs;
 
         // Set values directly
-        await act(async () => {
+        await waitFor(async () => {
             fireEvent.change(priceInput, { target: { value: '1.5' } });
             fireEvent.blur(priceInput);
         });
 
-        await act(async () => {
+        await waitFor(async () => {
             fireEvent.change(capInput, { target: { value: '100' } });
             fireEvent.blur(capInput);
         });
 
         // Submit form
-        await act(async () => {
+        await waitFor(async () => {
             fireEvent.click(getByText('Set Limit Order'));
         });
 
@@ -359,10 +359,10 @@ describe('ThresholdSection', () => {
         const [priceInput, capInput] = inputs;
 
         // Need to wait for state updates
-        await act(async () => {
+        await waitFor(async () => {
             fireEvent.change(priceInput, { target: { value: '-1' } });
         });
-        await act(async () => {
+        await waitFor(async () => {
             fireEvent.change(capInput, { target: { value: '0' } });
         });
 
@@ -371,7 +371,7 @@ describe('ThresholdSection', () => {
         mockVerifyThresholdTokens.mockRejectedValue(new Error('Invalid input values'));
 
         // Submit form
-        await act(async () => {
+        await waitFor(async () => {
             fireEvent.click(getByText('Set Limit Order'));
         });
 
