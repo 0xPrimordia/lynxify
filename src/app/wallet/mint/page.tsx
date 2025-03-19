@@ -18,6 +18,27 @@ import { PasswordModal } from '@/app/components/PasswordModal';
 
 const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 
+// Utility function to format token balances for display
+const formatTokenBalance = (balance: string, symbol?: string): string => {
+    const num = parseFloat(balance);
+    if (isNaN(num)) return '0';
+    
+    // For very small numbers, show full precision
+    if (num < 0.01 && num > 0) return num.toString();
+    
+    // Show different precision depending on token
+    if (symbol === 'LYNX') {
+        // Higher value tokens with 8 decimals
+        return num.toFixed(4);
+    } else if (symbol === 'SAUCE' || symbol === 'CLXY') {
+        // Medium value tokens with 6 decimals
+        return num.toFixed(2);
+    } else {
+        // Default to 2 decimal places for other tokens like HBAR
+        return num.toFixed(2);
+    }
+};
+
 interface TokenBalance {
     hbar: string;
     sauce: string;
@@ -97,7 +118,7 @@ const TokenCard = React.memo(({
                 {!isOutput && (
                     <div>
                         <label className="block text-sm text-gray-400 mb-1">Balance</label>
-                        <div className="text-xl font-semibold">{balance}</div>
+                        <div className="text-xl font-semibold">{formatTokenBalance(balance, symbol)}</div>
                     </div>
                 )}
                 
@@ -117,7 +138,7 @@ const TokenCard = React.memo(({
                         />
                     ) : (
                         <div className="text-xl font-semibold text-blue-400">
-                            {amount || '0'}
+                            {isOutput ? formatTokenBalance(amount, symbol) : amount || '0'}
                         </div>
                     )}
                 </div>
@@ -206,14 +227,42 @@ export default function MintPage() {
                     const sauceId = TokenId.fromString(`0.0.${SAUCE_TOKEN_ID}`);
                     const sauceAmount = balance.tokens.get(sauceId);
                     if (sauceAmount) {
-                        sauceBalance = sauceAmount.toString();
+                        try {
+                            // Fetch token data from mirror node
+                            const response = await fetch(
+                                `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/tokens/${sauceId}`
+                            );
+                            const tokenData = await response.json();
+                            
+                            // Simply convert raw amount to number directly, then divide by decimals
+                            // Exactly like wallet page does it
+                            sauceBalance = (Number(sauceAmount) / Math.pow(10, tokenData.decimals)).toString();
+                        } catch (error) {
+                            console.error('Error fetching SAUCE token data:', error);
+                            // Fallback to using 6 decimals
+                            sauceBalance = (Number(sauceAmount) / Math.pow(10, 6)).toString();
+                        }
                     }
                     
                     // Get CLXY balance
                     const clxyId = TokenId.fromString(`0.0.${CLXY_TOKEN_ID}`);
                     const clxyAmount = balance.tokens.get(clxyId);
                     if (clxyAmount) {
-                        clxyBalance = clxyAmount.toString();
+                        try {
+                            // Fetch token data from mirror node
+                            const response = await fetch(
+                                `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/tokens/${clxyId}`
+                            );
+                            const tokenData = await response.json();
+                            
+                            // Simply convert raw amount to number directly, then divide by decimals
+                            // Exactly like wallet page does it
+                            clxyBalance = (Number(clxyAmount) / Math.pow(10, tokenData.decimals)).toString();
+                        } catch (error) {
+                            console.error('Error fetching CLXY token data:', error);
+                            // Fallback to using 6 decimals
+                            clxyBalance = (Number(clxyAmount) / Math.pow(10, 6)).toString();
+                        }
                     }
                     
                     // Get LYNX balance if token ID exists
@@ -221,7 +270,21 @@ export default function MintPage() {
                         const lynxId = TokenId.fromString(`0.0.${process.env.NEXT_PUBLIC_LYNX_TOKEN_ID}`);
                         const lynxAmount = balance.tokens.get(lynxId);
                         if (lynxAmount) {
-                            lynxBalance = lynxAmount.toString();
+                            try {
+                                // Fetch token data from mirror node
+                                const response = await fetch(
+                                    `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/tokens/${lynxId}`
+                                );
+                                const tokenData = await response.json();
+                                
+                                // Simply convert raw amount to number directly, then divide by decimals
+                                // Exactly like wallet page does it
+                                lynxBalance = (Number(lynxAmount) / Math.pow(10, tokenData.decimals)).toString();
+                            } catch (error) {
+                                console.error('Error fetching LYNX token data:', error);
+                                // Fallback to using 8 decimals
+                                lynxBalance = (Number(lynxAmount) / Math.pow(10, 8)).toString();
+                            }
                         }
                     }
                 } catch (tokenError) {
