@@ -53,6 +53,10 @@ export async function POST(req: Request) {
         }
         else if (step === 3) {
             // Step 3: Execute mint
+            // The contract expects HBAR in the smallest unit (tinybars)
+            // lynxValue is the amount of LYNX tokens to mint
+            // We don't need to send the hbarValue as payable amount because the contract
+            // calculates it based on lynxValue * HBAR_RATIO
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
                 .setGas(2000000)
@@ -61,7 +65,9 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addUint256(lynxValue)
                 )
-                .setPayableAmount(hbarValue)
+                // Send required HBAR: contract expects lynxAmount * HBAR_RATIO
+                // HBAR_RATIO is 10 in the contract
+                .setPayableAmount(lynxValue * 10)
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
             description = `Mint ${lynxAmount} LYNX tokens`;
