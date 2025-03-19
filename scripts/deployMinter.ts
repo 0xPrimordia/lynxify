@@ -17,8 +17,9 @@ const path = require('path');
 
 async function deployMinterMain() {
     if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY ||
-        !process.env.LYNX_TOKEN_ID || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID) {
-        throw new Error('Missing environment variables. Required: NEXT_PUBLIC_OPERATOR_ID, OPERATOR_KEY, LYNX_TOKEN_ID, SAUCE_TOKEN_ID, CLXY_TOKEN_ID');
+        !process.env.LYNX_TOKEN_ID || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID ||
+        !process.env.NEXT_PUBLIC_OPERATOR_EVM_ID) {
+        throw new Error('Missing environment variables. Required: NEXT_PUBLIC_OPERATOR_ID, OPERATOR_KEY, LYNX_TOKEN_ID, SAUCE_TOKEN_ID, CLXY_TOKEN_ID, NEXT_PUBLIC_OPERATOR_EVM_ID');
     }
 
     // Compile first using Hardhat
@@ -52,16 +53,31 @@ async function deployMinterMain() {
     const fileAppendSubmit = await fileAppendTx.execute(client);
     await fileAppendSubmit.getReceipt(client);
 
+    // Get the operator's EVM address
+    const operatorEvmAddress = process.env.NEXT_PUBLIC_OPERATOR_EVM_ID!;
+    console.log("Operator EVM address:", operatorEvmAddress);
+
+    // Convert token IDs to EVM addresses
+    const lynxTokenId = MinterAccountId.fromString(process.env.LYNX_TOKEN_ID!);
+    const sauceTokenId = MinterAccountId.fromString(process.env.SAUCE_TOKEN_ID!);
+    const clxyTokenId = MinterAccountId.fromString(process.env.CLXY_TOKEN_ID!);
+
+    console.log("Token addresses:");
+    console.log("LYNX:", lynxTokenId.toSolidityAddress());
+    console.log("SAUCE:", sauceTokenId.toSolidityAddress());
+    console.log("CLXY:", clxyTokenId.toSolidityAddress());
+
     console.log("Creating contract...");
     const contractCreateTx = new MinterContractCreate()
         .setBytecodeFileId(bytecodeFileId!)
-        .setGas(3000000)
+        .setGas(8000000) // Increased gas limit
         .setConstructorParameters(
             new MinterFunctionParams()
-                .addAddress(MinterAccountId.fromString(process.env.LYNX_TOKEN_ID!).toSolidityAddress())
-                .addAddress(MinterAccountId.fromString(process.env.SAUCE_TOKEN_ID!).toSolidityAddress())
-                .addAddress(MinterAccountId.fromString(process.env.CLXY_TOKEN_ID!).toSolidityAddress())
-        );
+                .addAddress(lynxTokenId.toSolidityAddress())
+                .addAddress(sauceTokenId.toSolidityAddress())
+                .addAddress(clxyTokenId.toSolidityAddress())
+        )
+        .setAdminKey(operatorKey);
 
     const contractCreateSubmit = await contractCreateTx.execute(client);
     const contractCreateRx = await contractCreateSubmit.getReceipt(client);

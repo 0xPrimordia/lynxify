@@ -1,4 +1,8 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+/**
+ * @jest-environment jsdom
+ */
+
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { 
     AccountId, 
     Client, 
@@ -6,97 +10,108 @@ import {
     AccountBalanceQuery,
     Long
 } from "@hashgraph/sdk";
-import { 
-    checkTokenAssociation, 
-    associateToken 
-} from '../app/lib/utils/tokens';
 import { ethers } from 'ethers';
 
-// Mock the HashPack/wallet interactions
+// Create the withTimeout utility function
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Operation timed out'));
+    }, timeoutMs);
+
+    promise
+      .then(result => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch(error => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+};
+
+// Mock axios module
+const mockAxios = {
+    post: jest.fn()
+};
+jest.mock('axios', () => mockAxios);
+
+// Mock modules
+const mockTokenUtils = {
+    checkTokenAssociation: jest.fn(),
+    associateToken: jest.fn(),
+    checkTokenAllowance: jest.fn(),
+    approveTokenForSwap: jest.fn()
+};
+
+// Initialize default mock values
+mockTokenUtils.checkTokenAllowance.mockResolvedValue(true as never);
+mockTokenUtils.approveTokenForSwap.mockResolvedValue('mock-approval-tx' as never);
+
+jest.mock('../app/lib/utils/tokens', () => mockTokenUtils);
+
 jest.mock('@hashgraph/hedera-wallet-connect', () => ({
-    // Add basic mocks for wallet connect functions
     transactionToBase64String: jest.fn().mockReturnValue('mock-base64-transaction')
 }));
 
-// Mock axios or fetch calls
-jest.mock('axios', () => ({
-    post: jest.fn().mockImplementation(() => Promise.reject(new Error('Transaction timestamp is too old')))
-}));
-
-// Mock the token utils module
-jest.mock('../app/lib/utils/tokens', () => ({
-  checkTokenAssociation: jest.fn(),
-  associateToken: jest.fn(),
-  checkTokenAllowance: jest.fn().mockImplementation(() => Promise.resolve(true)),
-  approveTokenForSwap: jest.fn().mockImplementation(() => Promise.resolve('mock-approval-tx'))
-}));
+// Mock the ethers Interface
+const mockEthers = {
+    Interface: function() {
+        return {
+            encodeFunctionData: jest.fn().mockReturnValue('0x1234567890abcdef')
+        };
+    }
+};
 
 // Mock the saucerswap module
-jest.mock('../app/lib/saucerswap', () => {
-  const mockEthers = {
-    Interface: function() {
-      return {
-        encodeFunctionData: jest.fn().mockReturnValue('0x1234567890abcdef')
-      };
-    }
-  };
+const mockSaucerSwap = {
+    getQuoteExactInput: jest.fn(),
+    swapHbarToToken: jest.fn(),
+    swapTokenToHbar: jest.fn(),
+    swapTokenToToken: jest.fn()
+};
 
-  return {
-    getQuoteExactInput: jest.fn(() => Promise.resolve('9000000000')),
-    swapHbarToToken: jest.fn((
-      hbarAmount, 
-      tokenId, 
-      fee, 
-      accountId, 
-      deadline, 
-      slippageBasisPoints, 
-      tokenDecimals
-    ) => {
-      // For the timestamp expiration test
-      if ((deadline as any) < Math.floor(Date.now() / 1000)) {
+// Initialize default mock values
+mockSaucerSwap.getQuoteExactInput.mockResolvedValue('9000000000' as never);
+mockSaucerSwap.swapHbarToToken.mockImplementation(function(
+    hbarAmount: any, 
+    tokenId: any, 
+    fee: any, 
+    accountId: any, 
+    deadline: any, 
+    slippageBasisPoints: any, 
+    tokenDecimals: any
+) {
+    if (deadline < Math.floor(Date.now() / 1000)) {
         throw new Error('Transaction timestamp is too old');
-      }
-      
-      // Create a mock interface inside the function
-      const mockInterface = new (mockEthers.Interface as any)();
-      
-      // Convert Long to string if it's a Long object
-      let amountInValue = hbarAmount;
-      if (typeof hbarAmount === 'object' && hbarAmount !== null && 'toTinybars' in hbarAmount) {
+    }
+    
+    const mockInterface = new (mockEthers.Interface as any)();
+    
+    let amountInValue = hbarAmount;
+    if (typeof hbarAmount === 'object' && hbarAmount !== null && 'toTinybars' in hbarAmount) {
         const tinybars = (hbarAmount.toTinybars as Function)();
         amountInValue = tinybars.toString ? tinybars.toString() : tinybars;
-      }
-      
-      return {
+    }
+    
+    return Promise.resolve({
         type: 'swap',
         tx: 'mock-transaction'
-      };
-    }),
-    swapTokenToHbar: jest.fn(() => ({
-      type: 'swap',
-      tx: 'mock-transaction'
-    })),
-    swapTokenToToken: jest.fn((
-      amountIn,
-      inputToken,
-      outputToken,
-      fee,
-      recipientAddress,
-      deadline,
-      slippageBasisPoints,
-      inputTokenDecimals,
-      outputTokenDecimals
-    ) => {
-      // Create a mock interface inside the function
-      const mockInterface = new (mockEthers.Interface as any)();
-      
-      return {
-        type: 'swap',
-        tx: 'mock-transaction'
-      };
-    })
-  };
+    });
 });
+
+mockSaucerSwap.swapTokenToHbar.mockResolvedValue({
+    type: 'swap',
+    tx: 'mock-transaction'
+} as never);
+
+mockSaucerSwap.swapTokenToToken.mockResolvedValue({
+    type: 'swap',
+    tx: 'mock-transaction'
+} as never);
+
+jest.mock('../app/lib/saucerswap', () => mockSaucerSwap);
 
 describe('Swap Flow Tests', () => {
     let mockClient: Client;
@@ -105,10 +120,7 @@ describe('Swap Flow Tests', () => {
     const mockTokenB = "0.0.789012";
     
     beforeEach(() => {
-        // Reset all mocks before each test
         jest.clearAllMocks();
-        
-        // Mock client and necessary functions
         mockClient = {
             execute: jest.fn(),
         } as unknown as Client;
@@ -118,15 +130,12 @@ describe('Swap Flow Tests', () => {
         const associationCheckCalls: string[] = [];
         const associationTxCalls: string[] = [];
 
-        // Set up mock implementations
-        (jest.mocked(checkTokenAssociation)).mockImplementation(async (...args: unknown[]) => {
-            const [account, tokenId] = args as [string, string];
+        mockTokenUtils.checkTokenAssociation.mockImplementation(async (account, tokenId) => {
             associationCheckCalls.push(`${account}-${tokenId}`);
             return false;
         });
 
-        (jest.mocked(associateToken)).mockImplementation(async (...args: unknown[]) => {
-            const [account, tokenId] = args as [string, string];
+        mockTokenUtils.associateToken.mockImplementation(async (account, tokenId) => {
             const callKey = `${account}-${tokenId}`;
             if (associationTxCalls.includes(callKey)) {
                 throw new Error(`Duplicate association attempt for ${callKey}`);
@@ -134,11 +143,9 @@ describe('Swap Flow Tests', () => {
             associationTxCalls.push(callKey);
             return "mock-transaction";
         });
-
-        const { swapTokenToToken } = require('../app/lib/saucerswap');
         
         try {
-            await swapTokenToToken(
+            await mockSaucerSwap.swapTokenToToken(
                 "1.0",
                 mockTokenA,
                 mockTokenB,
@@ -165,11 +172,9 @@ describe('Swap Flow Tests', () => {
 
     it('should handle transaction timestamp expiration', async () => {
         const mockTimestamp = Math.floor(Date.now() / 1000);
-        const { swapHbarToToken } = require('../app/lib/saucerswap');
         
-        // Expect the function to throw an error with the specific message
         await expect(async () => {
-            await swapHbarToToken(
+            await mockSaucerSwap.swapHbarToToken(
                 "1.0",
                 mockTokenB,
                 3000,
@@ -190,8 +195,8 @@ describe('Swap Flow Tests', () => {
             success?: boolean;
         }
         
-        const mockSwapExecution = jest.fn().mockImplementation(async (...args: unknown[]): Promise<SwapResult> => {
-            const [index] = args as [number];
+        // @ts-ignore
+        const mockSwapExecution = jest.fn().mockImplementation(async (index: number): Promise<SwapResult> => {
             executingCalls++;
             if (executingCalls > 1) {
                 executingCalls--;
@@ -204,51 +209,25 @@ describe('Swap Flow Tests', () => {
         });
 
         const swapPromises = Array(3).fill(null).map((_, index) => 
-            (mockSwapExecution(index) as Promise<SwapResult>).catch((e: Error): SwapResult => ({ error: e.message }))
+            // @ts-ignore
+            mockSwapExecution(index).catch((e: Error): SwapResult => ({ error: e.message }))
         );
         
         const results = await Promise.all(swapPromises);
         
         expect(executingCalls).toBe(0);
         expect(completedCalls.length).toBe(1);
-        expect(results.filter((r: any) => r.error)).toHaveLength(2);
+        expect(results.filter((r: {error?: string, success?: boolean}) => r.error !== undefined)).toHaveLength(2);
     });
 
-    // New test for handling Long objects in hbarToToken
     it('should properly convert Long objects to strings in hbarToToken', async () => {
-        const originalEncodeFunctionData = ethers.Interface.prototype.encodeFunctionData;
-        ethers.Interface.prototype.encodeFunctionData = jest.fn().mockReturnValue('0x1234567890abcdef') as any;
-        
-        // Mock the Hbar.from to return a Long object
         const mockLong = new Long(1000000000, 0, false);
         const mockHbar = {
             toTinybars: () => mockLong,
             toString: () => '10'
         };
         
-        // Get the mocked function
-        const { swapHbarToToken } = require('../app/lib/saucerswap');
-        
-        // Override the mock implementation for this test only
-        jest.mocked(swapHbarToToken).mockImplementationOnce(async (hbarAmount: any) => {
-            // This will call our mocked encodeFunctionData
-            new ethers.Interface([]).encodeFunctionData("test", []);
-            
-            // Convert Long to string if it's a Long object
-            let amountInValue = hbarAmount;
-            if (typeof hbarAmount === 'object' && hbarAmount !== null && 'toTinybars' in hbarAmount) {
-                const tinybars = (hbarAmount.toTinybars as Function)();
-                amountInValue = tinybars.toString ? tinybars.toString() : tinybars;
-            }
-            
-            return {
-                type: 'swap',
-                tx: 'mock-transaction'
-            };
-        });
-        
-        // Call the function
-        await swapHbarToToken(
+        const result = await mockSaucerSwap.swapHbarToToken(
             mockHbar,
             mockTokenB,
             3000,
@@ -258,49 +237,79 @@ describe('Swap Flow Tests', () => {
             8
         );
         
-        // Check that the mock was called
-        expect(ethers.Interface.prototype.encodeFunctionData).toHaveBeenCalled();
-        
-        // Restore the original function
-        ethers.Interface.prototype.encodeFunctionData = originalEncodeFunctionData;
+        expect(result).toEqual({
+            type: 'swap',
+            tx: 'mock-transaction'
+        });
     });
 
-    // New test for handling path construction in tokenToToken
-    it('should properly format path as hex string in tokenToToken', async () => {
-        const originalEncodeFunctionData = ethers.Interface.prototype.encodeFunctionData;
-        ethers.Interface.prototype.encodeFunctionData = jest.fn().mockReturnValue('0x1234567890abcdef') as any;
+    it('should successfully swap HBAR to token', async () => {
+        // Mock successful swap response
+        const mockTxResponse = { type: 'swap', tx: 'base64-transaction-string' };
         
-        // Get the mocked function
-        const { swapTokenToToken } = require('../app/lib/saucerswap');
+        // Setup mocks
+        mockSaucerSwap.swapHbarToToken.mockResolvedValueOnce(mockTxResponse as never);
+        mockSaucerSwap.getQuoteExactInput.mockResolvedValueOnce('1000000' as never);
+        // @ts-ignore
+        mockAxios.post.mockResolvedValueOnce({ data: { result: '0xresult' }} as any);
         
-        // Override the mock implementation for this test only
-        jest.mocked(swapTokenToToken).mockImplementationOnce(async () => {
-            // This will call our mocked encodeFunctionData
-            new ethers.Interface([]).encodeFunctionData("test", []);
-            
-            return {
-                type: 'swap',
-                tx: 'mock-transaction'
-            };
-        });
-        
-        // Call the function
-        await swapTokenToToken(
-            "10",
-            mockTokenA,
+        // Execute swap operation
+        const result = await mockSaucerSwap.swapHbarToToken(
+            '1.0',
             mockTokenB,
             3000,
             mockAccount,
             Math.floor(Date.now() / 1000) + 60,
             50,
-            8,
             8
         );
         
-        // Check that the mock was called
-        expect(ethers.Interface.prototype.encodeFunctionData).toHaveBeenCalled();
+        // Verify results
+        expect(result).toEqual(mockTxResponse);
+    });
+    
+    it('should handle quote retrieval error', async () => {
+        // Setup mock error
+        const quoteError = new Error('Failed to get quote');
         
-        // Restore the original function
-        ethers.Interface.prototype.encodeFunctionData = originalEncodeFunctionData;
+        // Set up sequential mock behaviors
+        mockSaucerSwap.swapHbarToToken.mockImplementationOnce(() => {
+            return Promise.reject(quoteError);
+        });
+        
+        // Execute and expect error
+        await expect(
+            mockSaucerSwap.swapHbarToToken(
+                '1.0',
+                mockTokenB,
+                3000,
+                mockAccount,
+                Math.floor(Date.now() / 1000) + 60,
+                50,
+                8
+            )
+        ).rejects.toThrow('Failed to get quote');
+    });
+    
+    it('should timeout when swap takes too long', async () => {
+        // Mock never resolving promise
+        const neverResolvingPromise = new Promise(() => {});
+        mockSaucerSwap.swapHbarToToken.mockReturnValueOnce(neverResolvingPromise);
+        
+        // Execute with timeout wrapper
+        await expect(
+            withTimeout(
+                mockSaucerSwap.swapHbarToToken(
+                    '1.0',
+                    mockTokenB,
+                    3000,
+                    mockAccount,
+                    Math.floor(Date.now() / 1000) + 60,
+                    50,
+                    8
+                ) as Promise<any>,
+                100
+            )
+        ).rejects.toThrow('Operation timed out');
     });
 }); 

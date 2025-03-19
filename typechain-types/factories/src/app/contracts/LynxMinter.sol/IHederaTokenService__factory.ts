@@ -13,6 +13,35 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "owner",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "spender",
+        type: "address",
+      },
+    ],
+    name: "allowance",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "",
+        type: "int64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
         name: "account",
         type: "address",
       },
@@ -25,12 +54,36 @@ const _abi = [
     name: "associateToken",
     outputs: [
       {
-        internalType: "int256",
-        name: "responseCode",
-        type: "int256",
+        internalType: "int64",
+        name: "",
+        type: "int64",
       },
     ],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "balanceOf",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "",
+        type: "int64",
+      },
+    ],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -55,6 +108,69 @@ const _abi = [
       },
     ],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        internalType: "int64",
+        name: "amount",
+        type: "int64",
+      },
+      {
+        internalType: "bytes[]",
+        name: "metadata",
+        type: "bytes[]",
+      },
+    ],
+    name: "mintToken",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "",
+        type: "int64",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "from",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "to",
+        type: "address",
+      },
+      {
+        internalType: "int64",
+        name: "amount",
+        type: "int64",
+      },
+    ],
+    name: "transferToken",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "",
+        type: "int64",
+      },
+    ],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;

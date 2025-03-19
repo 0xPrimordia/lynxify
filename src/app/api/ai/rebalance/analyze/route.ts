@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { HCSService } from '@/services/hcsService';
+import { HcsGovernanceService } from '@/services/hcsService';
 
 // Define types for our data structures
 interface TokenRatios {
@@ -106,21 +106,17 @@ export async function POST(request: NextRequest) {
     try {
       if (REBALANCING_TOPIC_ID && !isEthDenverDemo) {
         console.log("Initializing HCS service");
-        hcsService = new HCSService({
-          operatorId: process.env.NEXT_PUBLIC_OPERATOR_ID!,
-          operatorKey: process.env.OPERATOR_KEY!,
-          network: 'testnet'
-        });
+        hcsService = new HcsGovernanceService();
         
         // Record the analysis request on HCS
         console.log("Submitting message to HCS topic:", REBALANCING_TOPIC_ID);
-        await hcsService.submitMessage(REBALANCING_TOPIC_ID, {
+        await hcsService.submitTopicMessage(REBALANCING_TOPIC_ID, JSON.stringify({
           type: 'REBALANCE_REQUEST',
           requestId,
           timestamp: new Date().toISOString(),
           currentRatios,
           marketConditions
-        });
+        }));
         console.log("HCS message submitted successfully");
       } else {
         console.log("Skipping HCS integration - no topic ID provided or EthDenver demo");
@@ -234,7 +230,7 @@ Ensure that all ratios sum to exactly 1.
     try {
       if (REBALANCING_TOPIC_ID && !isEthDenverDemo && hcsService) {
         console.log("Recording recommendation on HCS");
-        await hcsService.submitMessage(REBALANCING_TOPIC_ID, {
+        await hcsService.submitTopicMessage(REBALANCING_TOPIC_ID, JSON.stringify({
           type: 'REBALANCE_RECOMMENDATION',
           requestId,
           timestamp: new Date().toISOString(),
@@ -244,7 +240,7 @@ Ensure that all ratios sum to exactly 1.
           reasoning: recommendation.reasoning,
           marketAnalysis: recommendation.marketAnalysis,
           riskAssessment: recommendation.riskAssessment
-        });
+        }));
         console.log("Recommendation recorded on HCS");
       }
     } catch (hcsError) {

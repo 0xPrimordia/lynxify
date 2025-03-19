@@ -26,170 +26,91 @@ import type {
 export interface LynxMinterInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "RATIO_PRECISION"
-      | "clxyToken"
-      | "confirmMint"
-      | "getBalance"
-      | "getMaxMintableAmount"
-      | "lynxToken"
+      | "CLXY_TOKEN"
+      | "HTS_PRECOMPILE"
+      | "LYNX_TOKEN"
+      | "SAUCE_TOKEN"
+      | "associateTokens"
+      | "burn"
+      | "hts"
       | "mint"
-      | "mintNonce"
-      | "owner"
-      | "pendingMints"
-      | "sauceToken"
-      | "totalHbarDeposited"
-      | "totalLynxMinted"
-      | "withdrawHBAR"
+      | "setMockHtsPrecompile"
   ): FunctionFragment;
 
-  getEvent(
-    nameOrSignatureOrTopic:
-      | "DebugConfirmMint"
-      | "DebugMint"
-      | "DebugOwner"
-      | "LynxMinted"
-  ): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "LynxBurned" | "LynxMinted"): EventFragment;
 
   encodeFunctionData(
-    functionFragment: "RATIO_PRECISION",
-    values?: undefined
-  ): string;
-  encodeFunctionData(functionFragment: "clxyToken", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "confirmMint",
-    values: [BigNumberish, BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "getBalance",
+    functionFragment: "CLXY_TOKEN",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "getMaxMintableAmount",
+    functionFragment: "HTS_PRECOMPILE",
     values?: undefined
   ): string;
-  encodeFunctionData(functionFragment: "lynxToken", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "LYNX_TOKEN",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "SAUCE_TOKEN",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "associateTokens",
+    values?: undefined
+  ): string;
+  encodeFunctionData(functionFragment: "burn", values: [BigNumberish]): string;
+  encodeFunctionData(functionFragment: "hts", values?: undefined): string;
   encodeFunctionData(functionFragment: "mint", values: [BigNumberish]): string;
-  encodeFunctionData(functionFragment: "mintNonce", values?: undefined): string;
-  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "pendingMints",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "sauceToken",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "totalHbarDeposited",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "totalLynxMinted",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "withdrawHBAR",
-    values: [BigNumberish]
+    functionFragment: "setMockHtsPrecompile",
+    values: [AddressLike]
   ): string;
 
+  decodeFunctionResult(functionFragment: "CLXY_TOKEN", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "RATIO_PRECISION",
+    functionFragment: "HTS_PRECOMPILE",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "clxyToken", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "LYNX_TOKEN", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "confirmMint",
+    functionFragment: "SAUCE_TOKEN",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "getBalance", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "getMaxMintableAmount",
+    functionFragment: "associateTokens",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "lynxToken", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "burn", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "hts", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "mintNonce", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "pendingMints",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "sauceToken", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "totalHbarDeposited",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "totalLynxMinted",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "withdrawHBAR",
+    functionFragment: "setMockHtsPrecompile",
     data: BytesLike
   ): Result;
 }
 
-export namespace DebugConfirmMintEvent {
+export namespace LynxBurnedEvent {
   export type InputTuple = [
-    message: string,
-    sender: AddressLike,
-    owner: AddressLike,
-    nonce: BigNumberish,
-    isPending: boolean
+    user: AddressLike,
+    lynxAmount: BigNumberish,
+    hbarAmount: BigNumberish,
+    sauceAmount: BigNumberish,
+    clxyAmount: BigNumberish
   ];
   export type OutputTuple = [
-    message: string,
-    sender: string,
-    owner: string,
-    nonce: bigint,
-    isPending: boolean
+    user: string,
+    lynxAmount: bigint,
+    hbarAmount: bigint,
+    sauceAmount: bigint,
+    clxyAmount: bigint
   ];
   export interface OutputObject {
-    message: string;
-    sender: string;
-    owner: string;
-    nonce: bigint;
-    isPending: boolean;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace DebugMintEvent {
-  export type InputTuple = [
-    message: string,
-    value1: BigNumberish,
-    value2: BigNumberish
-  ];
-  export type OutputTuple = [message: string, value1: bigint, value2: bigint];
-  export interface OutputObject {
-    message: string;
-    value1: bigint;
-    value2: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace DebugOwnerEvent {
-  export type InputTuple = [
-    message: string,
-    msgSender: AddressLike,
-    contractOwner: AddressLike
-  ];
-  export type OutputTuple = [
-    message: string,
-    msgSender: string,
-    contractOwner: string
-  ];
-  export interface OutputObject {
-    message: string;
-    msgSender: string;
-    contractOwner: string;
+    user: string;
+    lynxAmount: bigint;
+    hbarAmount: bigint;
+    sauceAmount: bigint;
+    clxyAmount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -200,27 +121,24 @@ export namespace DebugOwnerEvent {
 export namespace LynxMintedEvent {
   export type InputTuple = [
     user: AddressLike,
+    lynxAmount: BigNumberish,
     hbarAmount: BigNumberish,
     sauceAmount: BigNumberish,
-    clxyAmount: BigNumberish,
-    lynxMinted: BigNumberish,
-    nonce: BigNumberish
+    clxyAmount: BigNumberish
   ];
   export type OutputTuple = [
     user: string,
+    lynxAmount: bigint,
     hbarAmount: bigint,
     sauceAmount: bigint,
-    clxyAmount: bigint,
-    lynxMinted: bigint,
-    nonce: bigint
+    clxyAmount: bigint
   ];
   export interface OutputObject {
     user: string;
+    lynxAmount: bigint;
     hbarAmount: bigint;
     sauceAmount: bigint;
     clxyAmount: bigint;
-    lynxMinted: bigint;
-    nonce: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -271,38 +189,24 @@ export interface LynxMinter extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  RATIO_PRECISION: TypedContractMethod<[], [bigint], "view">;
+  CLXY_TOKEN: TypedContractMethod<[], [string], "view">;
 
-  clxyToken: TypedContractMethod<[], [string], "view">;
+  HTS_PRECOMPILE: TypedContractMethod<[], [string], "view">;
 
-  confirmMint: TypedContractMethod<
-    [nonce: BigNumberish, amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+  LYNX_TOKEN: TypedContractMethod<[], [string], "view">;
 
-  getBalance: TypedContractMethod<[], [bigint], "view">;
+  SAUCE_TOKEN: TypedContractMethod<[], [string], "view">;
 
-  getMaxMintableAmount: TypedContractMethod<[], [bigint], "view">;
+  associateTokens: TypedContractMethod<[], [void], "nonpayable">;
 
-  lynxToken: TypedContractMethod<[], [string], "view">;
+  burn: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+
+  hts: TypedContractMethod<[], [string], "view">;
 
   mint: TypedContractMethod<[amount: BigNumberish], [void], "payable">;
 
-  mintNonce: TypedContractMethod<[], [bigint], "view">;
-
-  owner: TypedContractMethod<[], [string], "view">;
-
-  pendingMints: TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
-
-  sauceToken: TypedContractMethod<[], [string], "view">;
-
-  totalHbarDeposited: TypedContractMethod<[], [bigint], "view">;
-
-  totalLynxMinted: TypedContractMethod<[], [bigint], "view">;
-
-  withdrawHBAR: TypedContractMethod<
-    [amount: BigNumberish],
+  setMockHtsPrecompile: TypedContractMethod<
+    [mockHtsPrecompile: AddressLike],
     [void],
     "nonpayable"
   >;
@@ -312,72 +216,43 @@ export interface LynxMinter extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "RATIO_PRECISION"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "clxyToken"
+    nameOrSignature: "CLXY_TOKEN"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "confirmMint"
-  ): TypedContractMethod<
-    [nonce: BigNumberish, amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+    nameOrSignature: "HTS_PRECOMPILE"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "getBalance"
-  ): TypedContractMethod<[], [bigint], "view">;
+    nameOrSignature: "LYNX_TOKEN"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "getMaxMintableAmount"
-  ): TypedContractMethod<[], [bigint], "view">;
+    nameOrSignature: "SAUCE_TOKEN"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "lynxToken"
+    nameOrSignature: "associateTokens"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "burn"
+  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "hts"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "mint"
   ): TypedContractMethod<[amount: BigNumberish], [void], "payable">;
   getFunction(
-    nameOrSignature: "mintNonce"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "owner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "pendingMints"
-  ): TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "sauceToken"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "totalHbarDeposited"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "totalLynxMinted"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "withdrawHBAR"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+    nameOrSignature: "setMockHtsPrecompile"
+  ): TypedContractMethod<
+    [mockHtsPrecompile: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
   getEvent(
-    key: "DebugConfirmMint"
+    key: "LynxBurned"
   ): TypedContractEvent<
-    DebugConfirmMintEvent.InputTuple,
-    DebugConfirmMintEvent.OutputTuple,
-    DebugConfirmMintEvent.OutputObject
-  >;
-  getEvent(
-    key: "DebugMint"
-  ): TypedContractEvent<
-    DebugMintEvent.InputTuple,
-    DebugMintEvent.OutputTuple,
-    DebugMintEvent.OutputObject
-  >;
-  getEvent(
-    key: "DebugOwner"
-  ): TypedContractEvent<
-    DebugOwnerEvent.InputTuple,
-    DebugOwnerEvent.OutputTuple,
-    DebugOwnerEvent.OutputObject
+    LynxBurnedEvent.InputTuple,
+    LynxBurnedEvent.OutputTuple,
+    LynxBurnedEvent.OutputObject
   >;
   getEvent(
     key: "LynxMinted"
@@ -388,40 +263,18 @@ export interface LynxMinter extends BaseContract {
   >;
 
   filters: {
-    "DebugConfirmMint(string,address,address,uint256,bool)": TypedContractEvent<
-      DebugConfirmMintEvent.InputTuple,
-      DebugConfirmMintEvent.OutputTuple,
-      DebugConfirmMintEvent.OutputObject
+    "LynxBurned(address,uint256,uint256,uint256,uint256)": TypedContractEvent<
+      LynxBurnedEvent.InputTuple,
+      LynxBurnedEvent.OutputTuple,
+      LynxBurnedEvent.OutputObject
     >;
-    DebugConfirmMint: TypedContractEvent<
-      DebugConfirmMintEvent.InputTuple,
-      DebugConfirmMintEvent.OutputTuple,
-      DebugConfirmMintEvent.OutputObject
-    >;
-
-    "DebugMint(string,uint256,uint256)": TypedContractEvent<
-      DebugMintEvent.InputTuple,
-      DebugMintEvent.OutputTuple,
-      DebugMintEvent.OutputObject
-    >;
-    DebugMint: TypedContractEvent<
-      DebugMintEvent.InputTuple,
-      DebugMintEvent.OutputTuple,
-      DebugMintEvent.OutputObject
+    LynxBurned: TypedContractEvent<
+      LynxBurnedEvent.InputTuple,
+      LynxBurnedEvent.OutputTuple,
+      LynxBurnedEvent.OutputObject
     >;
 
-    "DebugOwner(string,address,address)": TypedContractEvent<
-      DebugOwnerEvent.InputTuple,
-      DebugOwnerEvent.OutputTuple,
-      DebugOwnerEvent.OutputObject
-    >;
-    DebugOwner: TypedContractEvent<
-      DebugOwnerEvent.InputTuple,
-      DebugOwnerEvent.OutputTuple,
-      DebugOwnerEvent.OutputObject
-    >;
-
-    "LynxMinted(address,uint256,uint256,uint256,uint256,uint256)": TypedContractEvent<
+    "LynxMinted(address,uint256,uint256,uint256,uint256)": TypedContractEvent<
       LynxMintedEvent.InputTuple,
       LynxMintedEvent.OutputTuple,
       LynxMintedEvent.OutputObject

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@nextui-org/react';
 
 interface ExitPollProps {
@@ -23,8 +23,15 @@ export function ExitPoll({ isOpen, onClose, onSubmit }: ExitPollProps) {
     usageType: 'other',
     willReturn: true
   });
+  const [isTestnet, setIsTestnet] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    // Check if we're on testnet
+    setIsTestnet(process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'testnet');
+  }, []);
+
+  // Don't render the poll on testnet or if it's not open
+  if (isTestnet || !isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

@@ -1,8 +1,9 @@
-require("@nomicfoundation/hardhat-toolbox");
-require("@nomicfoundation/hardhat-ethers");
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-ethers";
 require("dotenv").config({ path: '.env.local' });
 
-const config = {
+const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.20",
     settings: {
@@ -13,25 +14,22 @@ const config = {
     }
   },
   networks: {
-    testnet: {
-      url: process.env.TESTNET_ENDPOINT || "https://testnet.hashio.io/api",
+    hardhat: {
+      chainId: 296,
       accounts: [
-        process.env.OPERATOR_KEY,
-      ],
-      chainId: 296
-    },
-    local: {
-      url: process.env.HEDERA_RPC_URL || "http://localhost:7546",
-      accounts: [process.env.OPERATOR_KEY || ""],
-      chainId: 296
+        {
+          privateKey: "0123456789012345678901234567890123456789012345678901234567890123",
+          balance: "10000000000000000000000"
+        }
+      ]
     }
   },
   paths: {
-    sources: "./src/app/contracts",
-    tests: "./src/tests/hardhat",
+    sources: "./src/contracts",
+    tests: "./src/tests",
     cache: "./cache",
     artifacts: "./artifacts"
   }
 };
 
-module.exports = config; 
+export default config; 

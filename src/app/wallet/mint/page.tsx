@@ -1,157 +1,395 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSupabase } from '@/app/hooks/useSupabase';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
-import { AccountId, AccountBalanceQuery, TokenId } from "@hashgraph/sdk";
-import { handleInAppTransaction, handleInAppPasswordSubmit } from '@/app/lib/transactions/inAppWallet';
-import { PasswordModalContext } from '@/app/types';
-import { usePasswordModal } from '@/app/hooks/usePasswordModal';
-import { PasswordModal } from '@/app/components/PasswordModal';
+import { useWalletContext } from '@/app/hooks/useWallet';
+import { AccountId, TokenId, Client, AccountBalanceQuery } from "@hashgraph/sdk";
+import { Alert } from "@nextui-org/react";
+import { VT323 } from "next/font/google";
 import TestnetAlert from '@/app/components/TestnetAlert';
+import Image from 'next/image';
+import { handleInAppTransaction, handleInAppPasswordSubmit } from '@/app/lib/transactions/inAppWallet';
+import { handleExtensionTransaction } from '@/app/lib/transactions/extensionWallet';
+import { usePasswordModal } from '@/app/hooks/usePasswordModal';
+import { useSaucerSwapContext } from '@/app/hooks/useTokens';
+import { getTokenImageUrl } from '@/app/lib/utils/tokens';
+import { PasswordModal } from '@/app/components/PasswordModal';
+
+const vt323 = VT323({ weight: "400", subsets: ["latin"] });
 
 interface TokenBalance {
     hbar: string;
     sauce: string;
     clxy: string;
+    lynx: string;
 }
 
+const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
+
+// Initial token ratios for LYNX composition
+// These values represent how many tokens are needed to mint 1 LYNX
+const TOKEN_RATIOS = {
+    HBAR: 10,    // 10 HBAR (largest market cap, main network token)
+    SAUCE: 5,    // 5 SAUCE (established DeFi token)
+    CLXY: 2      // 2 CLXY (newer ecosystem token)
+};
+
+// Move TokenCard outside of MintPage
+const TokenCard = React.memo(({ 
+    symbol, 
+    balance, 
+    amount, 
+    onChange, 
+    iconUrl,
+    isOutput = false,
+    usdValue = null 
+}: {
+    symbol: string;
+    balance: string;
+    amount: string;
+    onChange?: (value: string) => void;
+    iconUrl: string;
+    isOutput?: boolean;
+    usdValue?: number | null;
+}) => {
+    console.log(`TokenCard rendering for ${symbol}`, { amount, balance });
+    
+    const [imageError, setImageError] = useState(false);
+
+    const TokenImage = () => {
+        if (imageError) {
+            return (
+                <div 
+                    className="rounded-full bg-gray-700 flex items-center justify-center"
+                    style={{ width: 32, height: 32 }}
+                >
+                    <span className="text-white font-medium text-sm">
+                        {symbol.substring(0, 2)}
+                    </span>
+                </div>
+            );
+        }
+        
+        return (
+            <Image
+                src={iconUrl}
+                alt={symbol}
+                width={32}
+                height={32}
+                className="rounded-full"
+                onError={() => setImageError(true)}
+            />
+        );
+    };
+
+    return (
+        <div className={`bg-gray-800 rounded-lg p-6 ${isOutput ? 'border-2 border-blue-500' : ''}`}>
+            <div className="flex items-center mb-4">
+                <TokenImage />
+                <span className="ml-3 text-lg font-medium">{symbol}</span>
+                {isOutput && (
+                    <span className="ml-auto text-sm text-blue-400">Expected Output</span>
+                )}
+            </div>
+            
+            <div className="space-y-4">
+                {!isOutput && (
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">Balance</label>
+                        <div className="text-xl font-semibold">{balance}</div>
+                    </div>
+                )}
+                
+                <div>
+                    <label className="block text-sm text-gray-400 mb-1">
+                        {isOutput ? 'Expected Output' : 'Amount'}
+                    </label>
+                    {onChange ? (
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            value={amount}
+                            onChange={(e) => onChange(e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            placeholder={`Enter ${symbol} amount`}
+                            className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white"
+                        />
+                    ) : (
+                        <div className="text-xl font-semibold text-blue-400">
+                            {amount || '0'}
+                        </div>
+                    )}
+                </div>
+
+                {usdValue !== null && (
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">USD Value</label>
+                        <div className="text-sm text-gray-300">
+                            ${usdValue.toFixed(2)}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+});
+
+TokenCard.displayName = 'TokenCard';
+
+// Mock token prices - move outside component to prevent recreation
+const tokenPrices = {
+    HBAR: 0.07,
+    SAUCE: 0.15,
+    CLXY: 0.25
+};
+
 export default function MintPage() {
-    const [amounts, setAmounts] = useState<TokenBalance>({
+    console.log('MintPage rendering');
+
+    const [amounts, setAmounts] = useState<TokenBalance>(() => ({
         hbar: '',
         sauce: '',
-        clxy: ''
-    });
+        clxy: '',
+        lynx: ''
+    }));
     const [balances, setBalances] = useState<TokenBalance>({
         hbar: '0',
         sauce: '0',
-        clxy: '0'
+        clxy: '0',
+        lynx: '0'
     });
-    const [estimatedLynx, setEstimatedLynx] = useState<string>('0');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const { supabase } = useSupabase();
-    const { inAppAccount, signTransaction } = useInAppWallet();
+    const { inAppAccount, signTransaction, walletType } = useInAppWallet();
+    const { account: extensionAccount, signAndExecuteTransaction } = useWalletContext();
     const { 
         password, 
         setPassword, 
-        passwordModalContext,
+        passwordModalContext, 
         setPasswordModalContext,
         resetPasswordModal 
     } = usePasswordModal();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    useEffect(() => {
-        fetchBalances();
-    }, []);
+    const { tokens } = useSaucerSwapContext();
 
-    useEffect(() => {
-        // Calculate LYNX output based on equal 1:1:1 ratio
-        if (amounts.hbar) {
-            const inputAmount = parseFloat(amounts.hbar);
-            setEstimatedLynx(inputAmount.toString());
-            
-            // Update other token amounts to maintain 1:1:1 ratio
-            setAmounts(prev => ({
-                hbar: prev.hbar,
-                sauce: prev.hbar,
-                clxy: prev.hbar
-            }));
-        }
-    }, [amounts.hbar]);
+    const activeAccount = inAppAccount || extensionAccount;
 
-    const fetchBalances = async () => {
+    const fetchBalances = useCallback(async () => {
+        if (!activeAccount) return;
+
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user?.user_metadata?.hederaAccountId) return;
-
-            const accountId = AccountId.fromString(session.user.user_metadata.hederaAccountId);
+            const accountId = AccountId.fromString(activeAccount);
             
-            // Fetch HBAR balance
+            // Query account balance using SDK
             const query = new AccountBalanceQuery()
                 .setAccountId(accountId);
+            const balance = await query.execute(client);
+
+            // Get HBAR balance
+            const hbarBalance = balance.hbars.toString().replace('ℏ', '').trim();
             
-            // Fetch token balances from Mirror Node API
-            const mirrorNodeUrl = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet'
-                ? 'https://mainnet-public.mirrornode.hedera.com'
-                : 'https://testnet.mirrornode.hedera.com';
-                
-            const sauceTokenId = process.env.NEXT_PUBLIC_SAUCE_TOKEN_ID || '';
-            const clxyTokenId = process.env.NEXT_PUBLIC_CLXY_TOKEN_ID || '';
-            
-            const response = await fetch(`${mirrorNodeUrl}/api/v1/accounts/${accountId.toString()}`);
-            const accountData = await response.json();
-            
-            const hbarBalance = (accountData.balance.balance / 1e8).toFixed(8);
-            
-            // Find token balances
             let sauceBalance = '0';
             let clxyBalance = '0';
+            let lynxBalance = '0';
             
-            if (accountData.tokens) {
-                const sauceToken = accountData.tokens.find((t: any) => t.token_id === sauceTokenId);
-                const clxyToken = accountData.tokens.find((t: any) => t.token_id === clxyTokenId);
-                
-                if (sauceToken) sauceBalance = (sauceToken.balance / 1e8).toFixed(8);
-                if (clxyToken) clxyBalance = (clxyToken.balance / 1e8).toFixed(8);
+            // Get token balances
+            if (balance.tokens && balance.tokens.size > 0) {
+                try {
+                    // Hardcoded token IDs as fallback
+                    const SAUCE_TOKEN_ID = process.env.NEXT_PUBLIC_SAUCE_TOKEN_ID || '1183558';
+                    const CLXY_TOKEN_ID = process.env.NEXT_PUBLIC_CLXY_TOKEN_ID || '5365';
+                    
+                    // Get SAUCE balance
+                    const sauceId = TokenId.fromString(`0.0.${SAUCE_TOKEN_ID}`);
+                    const sauceAmount = balance.tokens.get(sauceId);
+                    if (sauceAmount) {
+                        sauceBalance = sauceAmount.toString();
+                    }
+                    
+                    // Get CLXY balance
+                    const clxyId = TokenId.fromString(`0.0.${CLXY_TOKEN_ID}`);
+                    const clxyAmount = balance.tokens.get(clxyId);
+                    if (clxyAmount) {
+                        clxyBalance = clxyAmount.toString();
+                    }
+                    
+                    // Get LYNX balance if token ID exists
+                    if (process.env.NEXT_PUBLIC_LYNX_TOKEN_ID) {
+                        const lynxId = TokenId.fromString(`0.0.${process.env.NEXT_PUBLIC_LYNX_TOKEN_ID}`);
+                        const lynxAmount = balance.tokens.get(lynxId);
+                        if (lynxAmount) {
+                            lynxBalance = lynxAmount.toString();
+                        }
+                    }
+                } catch (tokenError) {
+                    console.error('Error parsing token IDs:', tokenError);
+                }
             }
             
             setBalances({
                 hbar: hbarBalance,
                 sauce: sauceBalance,
-                clxy: clxyBalance
+                clxy: clxyBalance,
+                lynx: lynxBalance
             });
         } catch (error: any) {
             console.error('Error fetching balances:', error);
+            setError('Failed to fetch balances');
         }
-    };
+    }, [activeAccount]);
+    
+    useEffect(() => {
+        if (activeAccount) {
+            fetchBalances();
+        }
+    }, [activeAccount, fetchBalances]);
 
-    const handleAmountChange = (token: keyof TokenBalance, value: string) => {
-        // When any token amount changes, update all tokens to maintain 1:1:1 ratio
-        setAmounts({
-            hbar: value,
-            sauce: value,
-            clxy: value
-        });
-    };
+    const handleAmountChange = React.useCallback((token: keyof TokenBalance, value: string) => {
+        console.log('handleAmountChange called:', { token, value });
+        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+            setAmounts(prev => {
+                const newAmounts = { ...prev };
+                if (token === 'hbar') {
+                    // Calculate other token amounts based on ratios
+                    const lynxAmount = parseFloat(value) / TOKEN_RATIOS.HBAR; // How many LYNX this would mint
+                    newAmounts.hbar = value;
+                    newAmounts.sauce = (lynxAmount * TOKEN_RATIOS.SAUCE).toString();
+                    newAmounts.clxy = (lynxAmount * TOKEN_RATIOS.CLXY).toString();
+                    newAmounts.lynx = lynxAmount.toString();
+                } else {
+                    newAmounts[token] = value;
+                }
+                return newAmounts;
+            });
+        }
+    }, []);
 
     const handleMint = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!activeAccount) {
+            setError('Please connect your wallet first');
+            return;
+        }
+
         try {
             setIsLoading(true);
             setError(null);
             setSuccess(null);
 
-            // Use the operator-based endpoint
-            const response = await fetch('/api/mint-with-operator', {
+            // Validate amounts before proceeding
+            const lynxAmount = parseFloat(amounts.lynx);
+            if (isNaN(lynxAmount) || lynxAmount <= 0) {
+                throw new Error('Invalid LYNX amount');
+            }
+
+            // Check user has sufficient balances
+            if (parseFloat(amounts.hbar) > parseFloat(balances.hbar)) {
+                throw new Error('Insufficient HBAR balance');
+            }
+            if (parseFloat(amounts.sauce) > parseFloat(balances.sauce)) {
+                throw new Error('Insufficient SAUCE balance');
+            }
+            if (parseFloat(amounts.clxy) > parseFloat(balances.clxy)) {
+                throw new Error('Insufficient CLXY balance');
+            }
+
+            // Get transaction from backend
+            const response = await fetch('/api/mint', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     hbarAmount: amounts.hbar,
                     sauceAmount: amounts.sauce,
-                    clxyAmount: amounts.clxy
+                    clxyAmount: amounts.clxy,
+                    lynxAmount: amounts.lynx,
+                    accountId: activeAccount
                 })
             });
 
             const data = await response.json();
             
-            if (!data.success) {
-                throw new Error(data.error || 'Mint failed');
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to prepare mint transaction');
+            }
+
+            // Execute transaction with connected wallet
+            let result;
+            if (walletType === 'inApp') {
+                result = await handleInAppTransaction(
+                    data.transaction,
+                    signTransaction,
+                    (context) => {
+                        if (typeof context === 'function') {
+                            setPasswordModalContext(context);
+                        } else {
+                            setPasswordModalContext({
+                                isOpen: true,
+                                description: `Mint ${amounts.lynx} LYNX using:\n• ${amounts.hbar} HBAR\n• ${amounts.sauce} SAUCE\n• ${amounts.clxy} CLXY`,
+                                transaction: data.transaction,
+                                transactionPromise: context.transactionPromise
+                            });
+                        }
+                    }
+                );
+            } else if (walletType === 'extension') {
+                result = await handleExtensionTransaction(
+                    data.transaction,
+                    extensionAccount!,
+                    signAndExecuteTransaction
+                );
+            } else {
+                throw new Error('No wallet client available');
             }
             
-            // Show success message
-            setSuccess(`Mint successful! Transaction ID: ${data.transactionId}`);
-            await fetchBalances();
-            setAmounts({ hbar: '', sauce: '', clxy: '' });
+            if (result.status === 'SUCCESS') {
+                setSuccess(`Successfully minted ${amounts.lynx} LYNX! Transaction ID: ${result.transactionId}`);
+                await fetchBalances(); // Refresh balances
+                setAmounts({ hbar: '', sauce: '', clxy: '', lynx: '' }); // Reset form
+            } else if (result.status === 'REJECTED') {
+                throw new Error('Transaction rejected by user');
+            } else {
+                throw new Error(result.error || 'Transaction failed');
+            }
 
         } catch (error: any) {
             console.error('Mint error:', error);
             setError(error.message);
         } finally {
             setIsLoading(false);
+            setIsSubmitting(false);
         }
     };
+
+    const getTokenIcon = React.useCallback((symbol: string): string => {
+        if (tokens && Array.isArray(tokens)) {
+            const token = tokens.find((t) => t.symbol === symbol);
+            if (token && token.icon) {
+                return getTokenImageUrl(token.icon);
+            }
+        }
+        
+        const tokenMap: Record<string, string> = {
+            'HBAR': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.15058.png',
+            'SAUCE': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1055.png',
+            'CLXY': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/0.0.1130.png',
+            'LYNX': 'https://d1grbdlekdv9wn.cloudfront.net/icons/tokens/lynx.png'
+        };
+        
+        return tokenMap[symbol] || '/images/tokens/default.png';
+    }, [tokens]);
+
+    const getUsdValue = React.useCallback((symbol: string, amount: string): number => {
+        const price = tokenPrices[symbol as keyof typeof tokenPrices] || 0;
+        return parseFloat(amount || '0') * price;
+    }, []);
+
+    // Memoize the onChange handlers for each token
+    const handleHbarChange = React.useCallback((value: string) => {
+        handleAmountChange('hbar', value);
+    }, [handleAmountChange]);
 
     const handlePasswordSubmit = async () => {
         if (!passwordModalContext.transaction || !passwordModalContext.transactionPromise) return;
@@ -167,7 +405,6 @@ export default function MintPage() {
             
             if (result.status === 'SUCCESS') {
                 passwordModalContext.transactionPromise.resolve(result);
-                setAmounts({ hbar: '', sauce: '', clxy: '' });
                 resetPasswordModal();
             } else {
                 throw new Error(result.error || 'Transaction failed');
@@ -176,20 +413,103 @@ export default function MintPage() {
             setError(error.message === 'OperationError' ? 'Invalid password. Please try again.' : error.message);
             if (error.message === 'OperationError') {
                 setIsSubmitting(false);
-                setIsLoading(false);
                 return;
             }
             resetPasswordModal();
         }
         
         setIsSubmitting(false);
-        setIsLoading(false);
     };
 
     return (
-        <div className="w-full mx-auto">
+        <div className="min-h-screen text-white">
             <TestnetAlert />
             
+            <div className="container mx-auto px-4 py-8">
+                <h1 className={`text-2xl mb-8 ${vt323.className}`}>Mint LYNX Index Token</h1>
+                
+                {(success || error) && (
+                    <Alert 
+                        className="mb-6" 
+                        color={success ? "success" : "danger"}
+                    >
+                        {success || error}
+                    </Alert>
+                )}
+                
+                {!activeAccount ? (
+                    <div className="bg-gray-800 rounded-lg p-6 text-center">
+                        <p className="text-gray-400">Please connect your wallet to mint LYNX tokens</p>
+                    </div>
+                ) : (
+                    <form onSubmit={handleMint}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <TokenCard
+                                symbol="HBAR"
+                                balance={balances.hbar}
+                                amount={amounts.hbar}
+                                onChange={handleHbarChange}
+                                iconUrl={getTokenIcon('HBAR')}
+                                usdValue={getUsdValue('HBAR', amounts.hbar)}
+                            />
+                            <TokenCard
+                                symbol="SAUCE"
+                                balance={balances.sauce}
+                                amount={amounts.sauce}
+                                iconUrl={getTokenIcon('SAUCE')}
+                                usdValue={getUsdValue('SAUCE', amounts.sauce)}
+                            />
+                            <TokenCard
+                                symbol="CLXY"
+                                balance={balances.clxy}
+                                amount={amounts.clxy}
+                                iconUrl={getTokenIcon('CLXY')}
+                                usdValue={getUsdValue('CLXY', amounts.clxy)}
+                            />
+                            <TokenCard
+                                symbol="LYNX"
+                                balance=""
+                                amount={amounts.lynx}
+                                iconUrl={getTokenIcon('LYNX')}
+                                isOutput={true}
+                            />
+                        </div>
+
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                className="bg-[#0159E0] hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                                disabled={isLoading || isSubmitting || !amounts.hbar || parseFloat(amounts.hbar) <= 0}
+                            >
+                                {isLoading ? 'Processing...' : 
+                                 isSubmitting ? 'Awaiting Approval...' : 
+                                 'Mint LYNX'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+                
+                <div className="mt-8 bg-gray-900 rounded-lg p-6">
+                    <h2 className={`text-xl mb-4 ${vt323.className}`}>How LYNX Minting Works</h2>
+                    <div className="text-gray-300 space-y-3">
+                        <p>
+                            LYNX is minted using a weighted ratio of HBAR, SAUCE, and CLXY tokens.
+                        </p>
+                        <p>
+                            Current ratio to mint 1 LYNX:
+                        </p>
+                        <ul className="list-disc pl-6">
+                            <li>{TOKEN_RATIOS.HBAR} HBAR</li>
+                            <li>{TOKEN_RATIOS.SAUCE} SAUCE</li>
+                            <li>{TOKEN_RATIOS.CLXY} CLXY</li>
+                        </ul>
+                        <p>
+                            This weighted approach ensures balanced representation of the Hedera ecosystem.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <PasswordModal
                 context={passwordModalContext}
                 password={password}
@@ -198,118 +518,6 @@ export default function MintPage() {
                 setContext={setPasswordModalContext}
                 isSubmitting={isSubmitting}
             />
-            
-            <div className="container mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold mb-6">Mint LYNX Index Token</h1>
-                
-                {success && (
-                    <div className="mb-6 p-3 bg-green-900/50 border border-green-700 rounded text-green-200">
-                        {success}
-                    </div>
-                )}
-                
-                <div className="bg-gray-900 rounded-lg p-6 mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl">Token Balances</h2>
-                        <button 
-                            onClick={fetchBalances}
-                            className="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
-                        >
-                            Refresh
-                        </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-gray-800 p-3 rounded">
-                            <div className="text-gray-400 text-sm">HBAR</div>
-                            <div className="text-xl font-semibold">{balances.hbar}</div>
-                        </div>
-                        <div className="bg-gray-800 p-3 rounded">
-                            <div className="text-gray-400 text-sm">SAUCE</div>
-                            <div className="text-xl font-semibold">{balances.sauce}</div>
-                        </div>
-                        <div className="bg-gray-800 p-3 rounded">
-                            <div className="text-gray-400 text-sm">CLXY</div>
-                            <div className="text-xl font-semibold">{balances.clxy}</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <form onSubmit={handleMint} className="bg-gray-900 rounded-lg p-6 mb-6">
-                    <div className="mb-6">
-                        <label className="block text-sm text-gray-400 mb-1">HBAR Amount</label>
-                        <input
-                            type="number"
-                            value={amounts.hbar}
-                            onChange={(e) => handleAmountChange('hbar', e.target.value)}
-                            placeholder="Enter HBAR amount"
-                            className="w-full bg-gray-800 border border-gray-700 rounded p-2"
-                            min="0"
-                            step="0.000001"
-                        />
-                    </div>
-                    
-                    <div className="mb-6">
-                        <label className="block text-sm text-gray-400 mb-1">SAUCE Amount</label>
-                        <input
-                            type="number"
-                            value={amounts.sauce}
-                            onChange={(e) => handleAmountChange('sauce', e.target.value)}
-                            placeholder="Enter SAUCE amount"
-                            className="w-full bg-gray-800 border border-gray-700 rounded p-2"
-                            min="0"
-                            step="0.000001"
-                        />
-                    </div>
-                    
-                    <div className="mb-6">
-                        <label className="block text-sm text-gray-400 mb-1">CLXY Amount</label>
-                        <input
-                            type="number"
-                            value={amounts.clxy}
-                            onChange={(e) => handleAmountChange('clxy', e.target.value)}
-                            placeholder="Enter CLXY amount"
-                            className="w-full bg-gray-800 border border-gray-700 rounded p-2"
-                            min="0"
-                            step="0.000001"
-                        />
-                    </div>
-                    
-                    <div className="bg-gray-800 p-4 rounded-lg mb-6">
-                        <div className="text-gray-400 text-sm mb-1">Estimated LYNX Output</div>
-                        <div className="text-2xl font-bold">{estimatedLynx} LYNX</div>
-                    </div>
-                    
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold"
-                        disabled={isLoading || !estimatedLynx || parseFloat(estimatedLynx) <= 0}
-                    >
-                        {isLoading ? 'Processing...' : 'Mint LYNX'}
-                    </button>
-                    
-                    {error && (
-                        <div className="mt-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
-                            {error}
-                        </div>
-                    )}
-                </form>
-                
-                <div className="bg-gray-900 rounded-lg p-6">
-                    <h2 className="text-xl mb-4">How LYNX Minting Works</h2>
-                    <div className="text-gray-300 space-y-3">
-                        <p>
-                            LYNX is minted using an equal 1:1:1 ratio of HBAR, SAUCE, and CLXY tokens.
-                        </p>
-                        <p>
-                            For every 1 HBAR, 1 SAUCE, and 1 CLXY deposited, you receive 1 LYNX token.
-                        </p>
-                        <p>
-                            This balanced approach ensures that LYNX maintains stable backing from all three assets.
-                        </p>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 } 

@@ -5,14 +5,22 @@ import { useSupabase } from '@/app/hooks/useSupabase';
 import Link from 'next/link';
 import GovernanceNav from '@/app/components/GovernanceNav';
 import TestnetAlert from '@/app/components/TestnetAlert';
+import DaoTestControls from '@/app/components/governance/DaoTestControls';
 
 export default function GovernanceDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [error, setError] = useState<string | null>(null);
   const { supabase } = useSupabase();
+  const [userTopicId, setUserTopicId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for existing topic ID in localStorage
+    const savedTopicId = localStorage.getItem('lynx-user-topic-id');
+    if (savedTopicId) {
+      setUserTopicId(savedTopicId);
+    }
+    
     const fetchDashboardData = async () => {
       try {
         const response = await fetch('/api/ai/rebalance');
@@ -30,10 +38,24 @@ export default function GovernanceDashboard() {
     fetchDashboardData();
   }, []);
 
+  const handlePreferenceSubmit = async (topicId: string) => {
+    // This will be called from DaoTestControls when submitting preferences
+    alert(`Ready to submit preferences to topic: ${topicId}`);
+    // We'll navigate to the composition page where they can set preferences
+    window.location.href = '/wallet/governance/composition';
+  };
+
   return (
     <div className="w-full">
       <TestnetAlert />
       <GovernanceNav currentSection="dashboard" />
+      
+      {/* Add DAO Test Controls in development mode */}
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="container mx-auto px-4 mt-4">
+          <DaoTestControls onPreferenceSubmit={handlePreferenceSubmit} />
+        </div>
+      )}
       
       {isLoading ? (
         <div className="flex justify-center">

@@ -3,6 +3,7 @@
 /* eslint-disable */
 import type {
   BaseContract,
+  BigNumberish,
   BytesLike,
   FunctionFragment,
   Result,
@@ -22,24 +23,53 @@ import type {
 
 export interface IHederaTokenServiceInterface extends Interface {
   getFunction(
-    nameOrSignature: "associateToken" | "isTokenAssociated"
+    nameOrSignature:
+      | "allowance"
+      | "associateToken"
+      | "balanceOf"
+      | "isTokenAssociated"
+      | "mintToken"
+      | "transferToken"
   ): FunctionFragment;
 
   encodeFunctionData(
+    functionFragment: "allowance",
+    values: [AddressLike, AddressLike, AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "associateToken",
+    values: [AddressLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "balanceOf",
     values: [AddressLike, AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "isTokenAssociated",
     values: [AddressLike, AddressLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "mintToken",
+    values: [AddressLike, BigNumberish, BytesLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "transferToken",
+    values: [AddressLike, AddressLike, AddressLike, BigNumberish]
+  ): string;
 
+  decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "associateToken",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "isTokenAssociated",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "mintToken", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "transferToken",
     data: BytesLike
   ): Result;
 }
@@ -87,10 +117,22 @@ export interface IHederaTokenService extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  allowance: TypedContractMethod<
+    [token: AddressLike, owner: AddressLike, spender: AddressLike],
+    [bigint],
+    "view"
+  >;
+
   associateToken: TypedContractMethod<
     [account: AddressLike, token: AddressLike],
     [bigint],
     "nonpayable"
+  >;
+
+  balanceOf: TypedContractMethod<
+    [token: AddressLike, account: AddressLike],
+    [bigint],
+    "view"
   >;
 
   isTokenAssociated: TypedContractMethod<
@@ -99,10 +141,34 @@ export interface IHederaTokenService extends BaseContract {
     "view"
   >;
 
+  mintToken: TypedContractMethod<
+    [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
+    [bigint],
+    "nonpayable"
+  >;
+
+  transferToken: TypedContractMethod<
+    [
+      token: AddressLike,
+      from: AddressLike,
+      to: AddressLike,
+      amount: BigNumberish
+    ],
+    [bigint],
+    "nonpayable"
+  >;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "allowance"
+  ): TypedContractMethod<
+    [token: AddressLike, owner: AddressLike, spender: AddressLike],
+    [bigint],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "associateToken"
   ): TypedContractMethod<
@@ -111,11 +177,37 @@ export interface IHederaTokenService extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "balanceOf"
+  ): TypedContractMethod<
+    [token: AddressLike, account: AddressLike],
+    [bigint],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "isTokenAssociated"
   ): TypedContractMethod<
     [account: AddressLike, token: AddressLike],
     [boolean],
     "view"
+  >;
+  getFunction(
+    nameOrSignature: "mintToken"
+  ): TypedContractMethod<
+    [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
+    [bigint],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "transferToken"
+  ): TypedContractMethod<
+    [
+      token: AddressLike,
+      from: AddressLike,
+      to: AddressLike,
+      amount: BigNumberish
+    ],
+    [bigint],
+    "nonpayable"
   >;
 
   filters: {};

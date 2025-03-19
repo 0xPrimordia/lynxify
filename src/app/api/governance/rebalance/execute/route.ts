@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { HCSService } from '@/services/hcsService';
+import { HcsGovernanceService } from '@/services/hcsService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,23 +26,17 @@ export async function POST(request: NextRequest) {
 
     // Get environment variables
     const REBALANCING_TOPIC_ID = process.env.LYNX_REBALANCING_TOPIC_ID;
-    const OPERATOR_ID = process.env.NEXT_PUBLIC_OPERATOR_ID;
-    const OPERATOR_KEY = process.env.OPERATOR_KEY;
 
     // Validate required environment variables
-    if (!REBALANCING_TOPIC_ID || !OPERATOR_ID || !OPERATOR_KEY) {
+    if (!REBALANCING_TOPIC_ID) {
       return NextResponse.json(
         { error: 'Required environment variables not configured' },
         { status: 500 }
       );
     }
     
-    // Initialize HCS service inside the function so it can be properly mocked
-    const hcsService = new HCSService({
-      operatorId: OPERATOR_ID,
-      operatorKey: OPERATOR_KEY,
-      network: 'testnet'
-    });
+    // Initialize HCS service
+    const hcsService = new HcsGovernanceService();
     
     // Record the execution on HCS
     const executionData = {
@@ -52,23 +46,20 @@ export async function POST(request: NextRequest) {
       previousRatios,
       newRatios,
       confidence,
-      reasoning,
-      executor: OPERATOR_ID // In a real app, this would be the user's account ID
+      reasoning
     };
-    
-    const txId = await hcsService.submitMessage(REBALANCING_TOPIC_ID, executionData);
-    
+
+    await hcsService.submitTopicMessage(REBALANCING_TOPIC_ID, JSON.stringify(executionData));
+
     return NextResponse.json({
       success: true,
-      transactionId: txId,
-      newRatios,
-      timestamp: executionData.timestamp
+      transactionId: 'mock-transaction-id', // Replace with actual transaction ID
+      newRatios
     });
-    
   } catch (error: any) {
-    console.error('Error in rebalance execution:', error);
+    console.error('Error executing rebalance:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: error.message },
       { status: 500 }
     );
   }

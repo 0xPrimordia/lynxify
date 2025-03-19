@@ -8,10 +8,8 @@ import { persistSession } from '@/utils/supabase/session';
 import { passwordSchema } from '@/lib/utils/validation';
 import { EyeIcon, EyeSlashIcon, ClipboardIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import { VT323 } from "next/font/google";
 import { storePrivateKey } from '@/lib/utils/keyStorage';
-
-const vt323 = VT323({ weight: "400", subsets: ["latin"] });
+import { vt323 } from '../fonts';
 
 export default function CreateWalletForm() {
     const [isLoading, setIsLoading] = useState(false);

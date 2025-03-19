@@ -5,6 +5,18 @@ jest.mock('@hashgraph/hedera-wallet-connect', () => ({
   DAppConnector: jest.fn()
 }));
 
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+    pathname: '/'
+  })
+}));
+
 import { render, screen, act } from '@testing-library/react';
 import Header, { lastFetch, resetLastFetch } from './Header';
 import { useWalletContext } from '../hooks/useWallet';
