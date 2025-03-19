@@ -54,34 +54,13 @@ export async function POST(req: Request) {
         else if (step === 3) {
             // Step 3: Execute mint
             
-            // Add detailed server-side logs that will appear in your server console
-            console.log('==== MINT DEBUG (SERVER) ====');
-            console.log('Input values:', {
-                lynxAmount,
-                hbarAmount,
-                sauceAmount,
-                clxyAmount,
-                accountId
-            });
-            
             // Calculate the expected HBAR in tinybars
             const hbarRequired = lynxValue * 10;
             
             // Create Hbar object
             const payableAmount = Hbar.fromTinybars(hbarRequired);
-            const actualTinybars = payableAmount.toTinybars();
             
-            console.log('Calculated values:', {
-                lynxValue,
-                hbarRequired,
-                payableAmountString: payableAmount.toString(),
-                actualTinybars: actualTinybars.toString(),
-                isEqual: hbarRequired === Number(actualTinybars)
-            });
-            
-            // Create transaction with extensive logging
-            console.log('Creating transaction with payable amount:', payableAmount.toString());
-            
+            // Create transaction
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
                 .setGas(2000000)
@@ -94,9 +73,24 @@ export async function POST(req: Request) {
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
             
-            console.log('Transaction created successfully');
-            
             description = `Mint ${lynxAmount} LYNX tokens`;
+            
+            // Return debug info in the response
+            return NextResponse.json({ 
+                transaction: transactionToBase64String(transaction),
+                step,
+                totalSteps: 3,
+                description,
+                nextStep: step < 3 ? step + 1 : null,
+                debug: {
+                    lynxAmount,
+                    hbarAmount,
+                    lynxValue,
+                    hbarRequired,
+                    payableAmountString: payableAmount.toString(),
+                    actualTinybars: payableAmount.toTinybars().toString()
+                }
+            });
         }
 
         if (!transaction) {
