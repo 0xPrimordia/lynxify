@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar } from '@hashgraph/sdk';
+import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar, ContractCallQuery } from '@hashgraph/sdk';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 
 export async function POST(req: Request) {
@@ -52,44 +52,35 @@ export async function POST(req: Request) {
             description = `Approve ${clxyAmount} CLXY for LYNX minting`;
         }
         else if (step === 3) {
-            // Step 3: Execute mint
+            // First query the contract to get the exact HBAR required
+            const query = new ContractCallQuery()
+                .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
+                .setGas(100000)
+                .setFunction("calculateRequiredHBAR", new ContractFunctionParameters().addUint256(lynxValue))
+                .setQueryPayment(new Hbar(0.01));
             
-            // Use the original lynxValue (0.2 LYNX with 8 decimals = 20000000)
-            // This matches the scale expected by the contract
+            const result = await query.execute(client);
+            const exactHbarRequired = result.getUint256(0);
             
-            // Calculate exactly how much HBAR needs to be sent
-            const hbarRequired = lynxValue * 10; // 20000000 * 10 = 200000000 tinybars
+            console.log('Contract calculation:', {
+                lynxValue,
+                exactHbarRequired: exactHbarRequired.toString()
+            });
             
+            // Create transaction with exact HBAR amount
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
                 .setGas(2000000)
                 .setFunction(
                     "mint",
                     new ContractFunctionParameters()
-                        .addUint256(lynxValue) // Use original lynxValue (20000000)
+                        .addUint256(lynxValue)
                 )
-                .setPayableAmount(Hbar.fromTinybars(hbarRequired)) // Send exactly 200000000 tinybars
+                .setPayableAmount(Hbar.fromTinybars(exactHbarRequired))
                 .setTransactionId(TransactionId.generate(senderAccountId))
                 .freezeWith(client);
             
             description = `Mint ${lynxAmount} LYNX tokens`;
-            
-            // Return debug info in the response
-            return NextResponse.json({ 
-                transaction: transactionToBase64String(transaction),
-                step,
-                totalSteps: 3,
-                description,
-                nextStep: step < 3 ? step + 1 : null,
-                debug: {
-                    lynxAmount,
-                    hbarAmount,
-                    lynxValue,
-                    hbarRequired,
-                    payableAmountString: Hbar.fromTinybars(hbarRequired).toString(),
-                    actualTinybars: hbarRequired.toString()
-                }
-            });
         }
 
         if (!transaction) {

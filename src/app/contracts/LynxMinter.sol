@@ -20,6 +20,7 @@ contract LynxMinter {
     error InvalidAmount();
     error TokenAssociationFailed();
     error TokenTransferFailed();
+    error MustSendExactHBAR(uint256 sent, uint256 required);
 
     // Add ratio constants (these would eventually come from governance)
     uint256 public constant HBAR_RATIO = 10;
@@ -58,7 +59,9 @@ contract LynxMinter {
         uint256 sauceRequired = lynxAmount * SAUCE_RATIO;
         uint256 clxyRequired = lynxAmount * CLXY_RATIO;
 
-        if (msg.value < hbarRequired) revert InsufficientHBAR();
+        if (msg.value != hbarRequired) {
+            revert MustSendExactHBAR(msg.value, hbarRequired);
+        }
 
         // Check token allowances with correct ratios
         uint256 sauceAllowance = hts.allowance(SAUCE_TOKEN, msg.sender, address(this));
@@ -113,5 +116,9 @@ contract LynxMinter {
         if (!success) revert TokenTransferFailed();
 
         emit LynxBurned(msg.sender, lynxAmount, hbarReturn, sauceReturn, clxyReturn);
+    }
+
+    function calculateRequiredHBAR(uint256 lynxAmount) external pure returns (uint256) {
+        return lynxAmount * HBAR_RATIO;
     }
 } 
