@@ -112,6 +112,136 @@
     {
       "inputs": [
         {
+          "components": [
+            {
+              "internalType": "string",
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "symbol",
+              "type": "string"
+            },
+            {
+              "internalType": "address",
+              "name": "treasury",
+              "type": "address"
+            },
+            {
+              "internalType": "string",
+              "name": "memo",
+              "type": "string"
+            },
+            {
+              "internalType": "bool",
+              "name": "supplyType",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint32",
+              "name": "maxSupply",
+              "type": "uint32"
+            },
+            {
+              "internalType": "bool",
+              "name": "freezeDefault",
+              "type": "bool"
+            },
+            {
+              "internalType": "address[]",
+              "name": "freezeKey",
+              "type": "address[]"
+            },
+            {
+              "internalType": "address[]",
+              "name": "wipeKey",
+              "type": "address[]"
+            },
+            {
+              "internalType": "address[]",
+              "name": "supplyKey",
+              "type": "address[]"
+            },
+            {
+              "internalType": "address[]",
+              "name": "adminKey",
+              "type": "address[]"
+            },
+            {
+              "internalType": "address[]",
+              "name": "kycKey",
+              "type": "address[]"
+            },
+            {
+              "internalType": "uint8",
+              "name": "decimals",
+              "type": "uint8"
+            }
+          ],
+          "internalType": "struct IHederaTokenService.HederaToken",
+          "name": "token",
+          "type": "tuple"
+        },
+        {
+          "internalType": "uint256",
+          "name": "initialTotalSupply",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8[]",
+          "name": "keys",
+          "type": "uint8[]"
+        },
+        {
+          "internalType": "address[]",
+          "name": "keyAddresses",
+          "type": "address[]"
+        }
+      ],
+      "name": "createToken",
+      "outputs": [
+        {
+          "internalType": "int64",
+          "name": "responseCode",
+          "type": "int64"
+        },
+        {
+          "internalType": "address",
+          "name": "tokenAddress",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "supplyAddress",
+          "type": "address"
+        }
+      ],
+      "name": "isSupplyKey",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "address",
           "name": "token",
           "type": "address"

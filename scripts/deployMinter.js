@@ -1,3 +1,4 @@
+require('dotenv').config({ path: './.env.local' });
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -34,9 +35,58 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var _a = require("@hashgraph/sdk"), ContractCreateTransaction = _a.ContractCreateTransaction, FileCreateTransaction = _a.FileCreateTransaction, FileAppendTransaction = _a.FileAppendTransaction, ContractFunctionParameters = _a.ContractFunctionParameters, Hbar = _a.Hbar;
+var _a = require("@hashgraph/sdk"), Client = _a.Client, AccountId = _a.AccountId, PrivateKey = _a.PrivateKey, ContractCreateTransaction = _a.ContractCreateTransaction, FileCreateTransaction = _a.FileCreateTransaction, FileAppendTransaction = _a.FileAppendTransaction, ContractFunctionParameters = _a.ContractFunctionParameters, Hbar = _a.Hbar;
 var fs = require("fs");
-dotenv.config({ path: '.env.local' });
+var path = require("path");
+
+function updateEnvFile(contractId) {
+    return __awaiter(this, void 0, void 0, function () {
+        var envPath, envContent, envVars, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    envPath = path.join(process.cwd(), '.env.local');
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 4, , 5]);
+                    return [4 /*yield*/, fs.promises.readFile(envPath, 'utf8')];
+                case 2:
+                    envContent = _a.sent();
+                    envVars = {
+                        'LYNX_CONTRACT_ADDRESS': contractId.toString(),
+                        'LYNX_CONTRACT_EVM_ADDRESS': contractId.toSolidityAddress(),
+                        'NEXT_PUBLIC_LYNX_CONTRACT_ADDRESS': contractId.toString()
+                    };
+                    // Update each environment variable
+                    Object.keys(envVars).forEach(function (key) {
+                        var value = envVars[key];
+                        var regex = new RegExp("".concat(key, "=.*"), 'g');
+                        
+                        if (envContent.match(regex)) {
+                            // Update existing variable
+                            envContent = envContent.replace(regex, "".concat(key, "=").concat(value));
+                        } else {
+                            // Add new variable
+                            envContent += "\n".concat(key, "=").concat(value);
+                        }
+                    });
+                    
+                    // Write the updated content back to the file
+                    return [4 /*yield*/, fs.promises.writeFile(envPath, envContent)];
+                case 3:
+                    _a.sent();
+                    console.log("Updated .env.local file with new contract addresses");
+                    return [3 /*break*/, 5];
+                case 4:
+                    error_1 = _a.sent();
+                    console.error("Error updating .env.local file:", error_1.message);
+                    return [3 /*break*/, 5];
+                case 5: return [2 /*return*/];
+            }
+        });
+    });
+}
+
 function deploymain() {
     return __awaiter(this, void 0, void 0, function () {
         var client, contractBytecode, bytecode, fileCreateTx, fileSubmit, fileCreateRx, bytecodeFileId, fileAppendTx, fileAppendSubmit, contractCreateTx, contractCreateSubmit, contractCreateRx, contractId;
@@ -70,12 +120,14 @@ function deploymain() {
                     _a.sent();
                     console.log("Creating contract...");
                     contractCreateTx = new ContractCreateTransaction()
-                        .setBytecodeFileId(bytecodeFileId)
-                        .setGas(300000)
-                        .setConstructorParameters(new ContractFunctionParameters()
-                        .addAddress(process.env.LYNX_TOKEN_ID)
-                        .addAddress(process.env.SAUCE_TOKEN_ID)
-                        .addAddress(process.env.CLXY_TOKEN_ID));
+                        .setGas(500000)
+                        .setConstructorParameters(
+                            new ContractFunctionParameters()
+                                .addAddress(AccountId.fromString(process.env.LYNX_TOKEN_ID).toSolidityAddress())
+                                .addAddress(AccountId.fromString(process.env.SAUCE_TOKEN_ID).toSolidityAddress())
+                                .addAddress(AccountId.fromString(process.env.CLXY_TOKEN_ID).toSolidityAddress()))
+                        .setBytecode(bytecode)
+                        .setMaxTransactionFee(new Hbar(15));
                     return [4 /*yield*/, contractCreateTx.execute(client)];
                 case 5:
                     contractCreateSubmit = _a.sent();
@@ -85,14 +137,21 @@ function deploymain() {
                     contractId = contractCreateRx.contractId;
                     console.log("Contract created with ID: ".concat(contractId));
                     console.log("Contract EVM address: ".concat(contractId === null || contractId === void 0 ? void 0 : contractId.toSolidityAddress()));
+                    // Update .env.local file with new contract addresses
+                    return [4 /*yield*/, updateEnvFile(contractId)];
+                case 7:
+                    _a.sent();
                     return [2 /*return*/, contractId];
             }
         });
     });
 }
-main()
-    .then(function () { return process.exit(0); })
-    .catch(function (error) {
-    console.error(error);
-    process.exit(1);
-});
+deploymain()
+    .then(contractId => {
+        console.log(`Contract deployed successfully: ${contractId}`);
+        process.exit(0);
+    })
+    .catch(error => {
+        console.error("Deployment failed:", error);
+        process.exit(1);
+    });

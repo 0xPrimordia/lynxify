@@ -21,6 +21,54 @@ import type {
   TypedContractMethod,
 } from "../../../common";
 
+export declare namespace IHederaTokenService {
+  export type HederaTokenStruct = {
+    name: string;
+    symbol: string;
+    treasury: AddressLike;
+    memo: string;
+    supplyType: boolean;
+    maxSupply: BigNumberish;
+    freezeDefault: boolean;
+    freezeKey: AddressLike[];
+    wipeKey: AddressLike[];
+    supplyKey: AddressLike[];
+    adminKey: AddressLike[];
+    kycKey: AddressLike[];
+    decimals: BigNumberish;
+  };
+
+  export type HederaTokenStructOutput = [
+    name: string,
+    symbol: string,
+    treasury: string,
+    memo: string,
+    supplyType: boolean,
+    maxSupply: bigint,
+    freezeDefault: boolean,
+    freezeKey: string[],
+    wipeKey: string[],
+    supplyKey: string[],
+    adminKey: string[],
+    kycKey: string[],
+    decimals: bigint
+  ] & {
+    name: string;
+    symbol: string;
+    treasury: string;
+    memo: string;
+    supplyType: boolean;
+    maxSupply: bigint;
+    freezeDefault: boolean;
+    freezeKey: string[];
+    wipeKey: string[];
+    supplyKey: string[];
+    adminKey: string[];
+    kycKey: string[];
+    decimals: bigint;
+  };
+}
+
 export interface IHederaTokenServiceInterface extends Interface {
   getFunction(
     nameOrSignature:
@@ -28,6 +76,8 @@ export interface IHederaTokenServiceInterface extends Interface {
       | "associateToken"
       | "balanceOf"
       | "burnToken"
+      | "createToken"
+      | "isSupplyKey"
       | "mintToken"
       | "transferToken"
   ): FunctionFragment;
@@ -49,6 +99,19 @@ export interface IHederaTokenServiceInterface extends Interface {
     values: [AddressLike, BigNumberish, BytesLike[]]
   ): string;
   encodeFunctionData(
+    functionFragment: "createToken",
+    values: [
+      IHederaTokenService.HederaTokenStruct,
+      BigNumberish,
+      BigNumberish[],
+      AddressLike[]
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isSupplyKey",
+    values: [AddressLike, AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "mintToken",
     values: [AddressLike, BigNumberish, BytesLike[]]
   ): string;
@@ -64,6 +127,14 @@ export interface IHederaTokenServiceInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "burnToken", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "createToken",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isSupplyKey",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "mintToken", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferToken",
@@ -138,6 +209,23 @@ export interface IHederaTokenService extends BaseContract {
     "nonpayable"
   >;
 
+  createToken: TypedContractMethod<
+    [
+      token: IHederaTokenService.HederaTokenStruct,
+      initialTotalSupply: BigNumberish,
+      keys: BigNumberish[],
+      keyAddresses: AddressLike[]
+    ],
+    [[bigint, string] & { responseCode: bigint; tokenAddress: string }],
+    "payable"
+  >;
+
+  isSupplyKey: TypedContractMethod<
+    [token: AddressLike, supplyAddress: AddressLike],
+    [boolean],
+    "view"
+  >;
+
   mintToken: TypedContractMethod<
     [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
     [bigint],
@@ -186,6 +274,25 @@ export interface IHederaTokenService extends BaseContract {
     [token: AddressLike, amount: BigNumberish, metadata: BytesLike[]],
     [bigint],
     "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "createToken"
+  ): TypedContractMethod<
+    [
+      token: IHederaTokenService.HederaTokenStruct,
+      initialTotalSupply: BigNumberish,
+      keys: BigNumberish[],
+      keyAddresses: AddressLike[]
+    ],
+    [[bigint, string] & { responseCode: bigint; tokenAddress: string }],
+    "payable"
+  >;
+  getFunction(
+    nameOrSignature: "isSupplyKey"
+  ): TypedContractMethod<
+    [token: AddressLike, supplyAddress: AddressLike],
+    [boolean],
+    "view"
   >;
   getFunction(
     nameOrSignature: "mintToken"

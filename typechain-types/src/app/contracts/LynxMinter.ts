@@ -26,21 +26,50 @@ import type {
 export interface LynxMinterInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "ADMIN"
       | "CLXY_RATIO"
       | "CLXY_TOKEN"
       | "HBAR_RATIO"
       | "HTS_PRECOMPILE"
+      | "IS_SUPPLY_TYPE_INFINITE"
       | "LYNX_TOKEN"
       | "SAUCE_RATIO"
       | "SAUCE_TOKEN"
+      | "TOKEN_DECIMALS"
+      | "TOKEN_MAX_SUPPLY"
       | "associateTokens"
       | "burn"
-      | "hts"
+      | "calculateRequiredCLXY"
+      | "calculateRequiredHBAR"
+      | "calculateRequiredSAUCE"
+      | "checkAllowances"
+      | "checkSupplyKey"
+      | "createLynxToken"
+      | "debugAllowances"
+      | "getClxyRatio"
+      | "getHbarRatio"
+      | "getSauceRatio"
+      | "getTokenAddresses"
+      | "hasSupplyKey"
       | "mint"
+      | "setSupplyKeyStatus"
+      | "setTokenService"
+      | "testClxyAllowance"
+      | "updateRatios"
+      | "updateSupplyKeyStatus"
   ): FunctionFragment;
 
-  getEvent(nameOrSignatureOrTopic: "LynxBurned" | "LynxMinted"): EventFragment;
+  getEvent(
+    nameOrSignatureOrTopic:
+      | "LynxBurned"
+      | "LynxMinted"
+      | "LynxTokenCreated"
+      | "RatiosUpdated"
+      | "SupplyKeyVerified"
+      | "TokensAssociated"
+  ): EventFragment;
 
+  encodeFunctionData(functionFragment: "ADMIN", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "CLXY_RATIO",
     values?: undefined
@@ -58,6 +87,10 @@ export interface LynxMinterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "IS_SUPPLY_TYPE_INFINITE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "LYNX_TOKEN",
     values?: undefined
   ): string;
@@ -70,18 +103,98 @@ export interface LynxMinterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "TOKEN_DECIMALS",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "TOKEN_MAX_SUPPLY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "associateTokens",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "burn", values: [BigNumberish]): string;
-  encodeFunctionData(functionFragment: "hts", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "calculateRequiredCLXY",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "calculateRequiredHBAR",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "calculateRequiredSAUCE",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "checkAllowances",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "checkSupplyKey",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "createLynxToken",
+    values: [string, string, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "debugAllowances",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getClxyRatio",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getHbarRatio",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getSauceRatio",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getTokenAddresses",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "hasSupplyKey",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "mint", values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: "setSupplyKeyStatus",
+    values: [boolean]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setTokenService",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "testClxyAllowance",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "updateRatios",
+    values: [BigNumberish, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "updateSupplyKeyStatus",
+    values?: undefined
+  ): string;
 
+  decodeFunctionResult(functionFragment: "ADMIN", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "CLXY_RATIO", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "CLXY_TOKEN", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "HBAR_RATIO", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "HTS_PRECOMPILE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "IS_SUPPLY_TYPE_INFINITE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "LYNX_TOKEN", data: BytesLike): Result;
@@ -94,12 +207,87 @@ export interface LynxMinterInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "TOKEN_DECIMALS",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "TOKEN_MAX_SUPPLY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "associateTokens",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "burn", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "hts", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "calculateRequiredCLXY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "calculateRequiredHBAR",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "calculateRequiredSAUCE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "checkAllowances",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "checkSupplyKey",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "createLynxToken",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "debugAllowances",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getClxyRatio",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getHbarRatio",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getSauceRatio",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getTokenAddresses",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "hasSupplyKey",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setSupplyKeyStatus",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setTokenService",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "testClxyAllowance",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "updateRatios",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "updateSupplyKeyStatus",
+    data: BytesLike
+  ): Result;
 }
 
 export namespace LynxBurnedEvent {
@@ -158,6 +346,69 @@ export namespace LynxMintedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace LynxTokenCreatedEvent {
+  export type InputTuple = [
+    tokenAddress: AddressLike,
+    responseCode: BigNumberish
+  ];
+  export type OutputTuple = [tokenAddress: string, responseCode: bigint];
+  export interface OutputObject {
+    tokenAddress: string;
+    responseCode: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RatiosUpdatedEvent {
+  export type InputTuple = [
+    hbarRatio: BigNumberish,
+    sauceRatio: BigNumberish,
+    clxyRatio: BigNumberish
+  ];
+  export type OutputTuple = [
+    hbarRatio: bigint,
+    sauceRatio: bigint,
+    clxyRatio: bigint
+  ];
+  export interface OutputObject {
+    hbarRatio: bigint;
+    sauceRatio: bigint;
+    clxyRatio: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace SupplyKeyVerifiedEvent {
+  export type InputTuple = [hasKey: boolean];
+  export type OutputTuple = [hasKey: boolean];
+  export interface OutputObject {
+    hasKey: boolean;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokensAssociatedEvent {
+  export type InputTuple = [token: AddressLike, responseCode: BigNumberish];
+  export type OutputTuple = [token: string, responseCode: bigint];
+  export interface OutputObject {
+    token: string;
+    responseCode: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export interface LynxMinter extends BaseContract {
   connect(runner?: ContractRunner | null): LynxMinter;
   waitForDeployment(): Promise<this>;
@@ -201,6 +452,8 @@ export interface LynxMinter extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  ADMIN: TypedContractMethod<[], [string], "view">;
+
   CLXY_RATIO: TypedContractMethod<[], [bigint], "view">;
 
   CLXY_TOKEN: TypedContractMethod<[], [string], "view">;
@@ -209,24 +462,134 @@ export interface LynxMinter extends BaseContract {
 
   HTS_PRECOMPILE: TypedContractMethod<[], [string], "view">;
 
+  IS_SUPPLY_TYPE_INFINITE: TypedContractMethod<[], [boolean], "view">;
+
   LYNX_TOKEN: TypedContractMethod<[], [string], "view">;
 
   SAUCE_RATIO: TypedContractMethod<[], [bigint], "view">;
 
   SAUCE_TOKEN: TypedContractMethod<[], [string], "view">;
 
+  TOKEN_DECIMALS: TypedContractMethod<[], [bigint], "view">;
+
+  TOKEN_MAX_SUPPLY: TypedContractMethod<[], [bigint], "view">;
+
   associateTokens: TypedContractMethod<[], [void], "nonpayable">;
 
   burn: TypedContractMethod<[lynxAmount: BigNumberish], [void], "nonpayable">;
 
-  hts: TypedContractMethod<[], [string], "view">;
+  calculateRequiredCLXY: TypedContractMethod<
+    [lynxAmount: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  calculateRequiredHBAR: TypedContractMethod<
+    [lynxAmount: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  calculateRequiredSAUCE: TypedContractMethod<
+    [lynxAmount: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  checkAllowances: TypedContractMethod<
+    [user: AddressLike, lynxAmount: BigNumberish],
+    [
+      [bigint, bigint, bigint, bigint, boolean, boolean] & {
+        sauceAllowance: bigint;
+        clxyAllowance: bigint;
+        sauceRequired: bigint;
+        clxyRequired: bigint;
+        isSauceAllowanceSufficient: boolean;
+        isClxyAllowanceSufficient: boolean;
+      }
+    ],
+    "view"
+  >;
+
+  checkSupplyKey: TypedContractMethod<[], [void], "nonpayable">;
+
+  createLynxToken: TypedContractMethod<
+    [name: string, symbol: string, memo: string],
+    [void],
+    "nonpayable"
+  >;
+
+  debugAllowances: TypedContractMethod<
+    [user: AddressLike],
+    [
+      [bigint, bigint, bigint] & {
+        sauceAllowance: bigint;
+        clxyAllowance: bigint;
+        lynxAllowance: bigint;
+      }
+    ],
+    "view"
+  >;
+
+  getClxyRatio: TypedContractMethod<[], [bigint], "view">;
+
+  getHbarRatio: TypedContractMethod<[], [bigint], "view">;
+
+  getSauceRatio: TypedContractMethod<[], [bigint], "view">;
+
+  getTokenAddresses: TypedContractMethod<
+    [],
+    [
+      [string, string, string] & {
+        lynxToken: string;
+        sauceToken: string;
+        clxyToken: string;
+      }
+    ],
+    "view"
+  >;
+
+  hasSupplyKey: TypedContractMethod<[], [boolean], "view">;
 
   mint: TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
+
+  setSupplyKeyStatus: TypedContractMethod<
+    [status: boolean],
+    [void],
+    "nonpayable"
+  >;
+
+  setTokenService: TypedContractMethod<
+    [mockHts: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  testClxyAllowance: TypedContractMethod<
+    [lynxAmount: BigNumberish],
+    [void],
+    "payable"
+  >;
+
+  updateRatios: TypedContractMethod<
+    [
+      hbarRatio: BigNumberish,
+      sauceRatio: BigNumberish,
+      clxyRatio: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  updateSupplyKeyStatus: TypedContractMethod<[], [void], "nonpayable">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "ADMIN"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "CLXY_RATIO"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -240,6 +603,9 @@ export interface LynxMinter extends BaseContract {
     nameOrSignature: "HTS_PRECOMPILE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "IS_SUPPLY_TYPE_INFINITE"
+  ): TypedContractMethod<[], [boolean], "view">;
+  getFunction(
     nameOrSignature: "LYNX_TOKEN"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -249,17 +615,116 @@ export interface LynxMinter extends BaseContract {
     nameOrSignature: "SAUCE_TOKEN"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "TOKEN_DECIMALS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "TOKEN_MAX_SUPPLY"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "associateTokens"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "burn"
   ): TypedContractMethod<[lynxAmount: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "hts"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "calculateRequiredCLXY"
+  ): TypedContractMethod<[lynxAmount: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "calculateRequiredHBAR"
+  ): TypedContractMethod<[lynxAmount: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "calculateRequiredSAUCE"
+  ): TypedContractMethod<[lynxAmount: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "checkAllowances"
+  ): TypedContractMethod<
+    [user: AddressLike, lynxAmount: BigNumberish],
+    [
+      [bigint, bigint, bigint, bigint, boolean, boolean] & {
+        sauceAllowance: bigint;
+        clxyAllowance: bigint;
+        sauceRequired: bigint;
+        clxyRequired: bigint;
+        isSauceAllowanceSufficient: boolean;
+        isClxyAllowanceSufficient: boolean;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "checkSupplyKey"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "createLynxToken"
+  ): TypedContractMethod<
+    [name: string, symbol: string, memo: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "debugAllowances"
+  ): TypedContractMethod<
+    [user: AddressLike],
+    [
+      [bigint, bigint, bigint] & {
+        sauceAllowance: bigint;
+        clxyAllowance: bigint;
+        lynxAllowance: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getClxyRatio"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getHbarRatio"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getSauceRatio"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getTokenAddresses"
+  ): TypedContractMethod<
+    [],
+    [
+      [string, string, string] & {
+        lynxToken: string;
+        sauceToken: string;
+        clxyToken: string;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "hasSupplyKey"
+  ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
     nameOrSignature: "mint"
   ): TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
+  getFunction(
+    nameOrSignature: "setSupplyKeyStatus"
+  ): TypedContractMethod<[status: boolean], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setTokenService"
+  ): TypedContractMethod<[mockHts: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "testClxyAllowance"
+  ): TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
+  getFunction(
+    nameOrSignature: "updateRatios"
+  ): TypedContractMethod<
+    [
+      hbarRatio: BigNumberish,
+      sauceRatio: BigNumberish,
+      clxyRatio: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "updateSupplyKeyStatus"
+  ): TypedContractMethod<[], [void], "nonpayable">;
 
   getEvent(
     key: "LynxBurned"
@@ -274,6 +739,34 @@ export interface LynxMinter extends BaseContract {
     LynxMintedEvent.InputTuple,
     LynxMintedEvent.OutputTuple,
     LynxMintedEvent.OutputObject
+  >;
+  getEvent(
+    key: "LynxTokenCreated"
+  ): TypedContractEvent<
+    LynxTokenCreatedEvent.InputTuple,
+    LynxTokenCreatedEvent.OutputTuple,
+    LynxTokenCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RatiosUpdated"
+  ): TypedContractEvent<
+    RatiosUpdatedEvent.InputTuple,
+    RatiosUpdatedEvent.OutputTuple,
+    RatiosUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "SupplyKeyVerified"
+  ): TypedContractEvent<
+    SupplyKeyVerifiedEvent.InputTuple,
+    SupplyKeyVerifiedEvent.OutputTuple,
+    SupplyKeyVerifiedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokensAssociated"
+  ): TypedContractEvent<
+    TokensAssociatedEvent.InputTuple,
+    TokensAssociatedEvent.OutputTuple,
+    TokensAssociatedEvent.OutputObject
   >;
 
   filters: {
@@ -297,6 +790,50 @@ export interface LynxMinter extends BaseContract {
       LynxMintedEvent.InputTuple,
       LynxMintedEvent.OutputTuple,
       LynxMintedEvent.OutputObject
+    >;
+
+    "LynxTokenCreated(address,int64)": TypedContractEvent<
+      LynxTokenCreatedEvent.InputTuple,
+      LynxTokenCreatedEvent.OutputTuple,
+      LynxTokenCreatedEvent.OutputObject
+    >;
+    LynxTokenCreated: TypedContractEvent<
+      LynxTokenCreatedEvent.InputTuple,
+      LynxTokenCreatedEvent.OutputTuple,
+      LynxTokenCreatedEvent.OutputObject
+    >;
+
+    "RatiosUpdated(uint256,uint256,uint256)": TypedContractEvent<
+      RatiosUpdatedEvent.InputTuple,
+      RatiosUpdatedEvent.OutputTuple,
+      RatiosUpdatedEvent.OutputObject
+    >;
+    RatiosUpdated: TypedContractEvent<
+      RatiosUpdatedEvent.InputTuple,
+      RatiosUpdatedEvent.OutputTuple,
+      RatiosUpdatedEvent.OutputObject
+    >;
+
+    "SupplyKeyVerified(bool)": TypedContractEvent<
+      SupplyKeyVerifiedEvent.InputTuple,
+      SupplyKeyVerifiedEvent.OutputTuple,
+      SupplyKeyVerifiedEvent.OutputObject
+    >;
+    SupplyKeyVerified: TypedContractEvent<
+      SupplyKeyVerifiedEvent.InputTuple,
+      SupplyKeyVerifiedEvent.OutputTuple,
+      SupplyKeyVerifiedEvent.OutputObject
+    >;
+
+    "TokensAssociated(address,int64)": TypedContractEvent<
+      TokensAssociatedEvent.InputTuple,
+      TokensAssociatedEvent.OutputTuple,
+      TokensAssociatedEvent.OutputObject
+    >;
+    TokensAssociated: TypedContractEvent<
+      TokensAssociatedEvent.InputTuple,
+      TokensAssociatedEvent.OutputTuple,
+      TokensAssociatedEvent.OutputObject
     >;
   };
 }

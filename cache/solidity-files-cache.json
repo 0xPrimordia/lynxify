@@ -309,6 +309,7 @@
             "enabled": true,
             "runs": 200
           },
+          "evmVersion": "paris",
           "outputSelection": {
             "*": {
               "*": [
@@ -346,6 +347,7 @@
             "enabled": true,
             "runs": 200
           },
+          "evmVersion": "paris",
           "outputSelection": {
             "*": {
               "*": [
@@ -371,8 +373,8 @@
       ]
     },
     "/Users/kevincompton/Sites/lynxify/src/app/contracts/LynxMinter.sol": {
-      "lastModificationDate": 1742306999962,
-      "contentHash": "2d35a05dbe8bd51233509f219b91ff93",
+      "lastModificationDate": 1742512651381,
+      "contentHash": "b62d18afd12e9192a15f6be711e5ee45",
       "sourceName": "src/app/contracts/LynxMinter.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -381,6 +383,7 @@
             "enabled": true,
             "runs": 200
           },
+          "evmVersion": "paris",
           "outputSelection": {
             "*": {
               "*": [
@@ -401,7 +404,7 @@
         "./IHederaTokenService.sol"
       ],
       "versionPragmas": [
-        "^0.8.0"
+        "^0.8.18"
       ],
       "artifacts": [
         "LynxMinter"
@@ -418,6 +421,7 @@
             "enabled": true,
             "runs": 200
           },
+          "evmVersion": "paris",
           "outputSelection": {
             "*": {
               "*": [
@@ -443,8 +447,8 @@
       ]
     },
     "/Users/kevincompton/Sites/lynxify/src/app/contracts/MockHederaTokenService.sol": {
-      "lastModificationDate": 1742252135754,
-      "contentHash": "d0c23b2038e6bce32724fc68cfa31e61",
+      "lastModificationDate": 1742512405400,
+      "contentHash": "6f1f9c4776875b633d07799080f2ad1a",
       "sourceName": "src/app/contracts/MockHederaTokenService.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -453,6 +457,7 @@
             "enabled": true,
             "runs": 200
           },
+          "evmVersion": "paris",
           "outputSelection": {
             "*": {
               "*": [
@@ -470,7 +475,8 @@
         }
       },
       "imports": [
-        "./IHederaTokenService.sol"
+        "./IHederaTokenService.sol",
+        "hardhat/console.sol"
       ],
       "versionPragmas": [
         "^0.8.0"
@@ -480,8 +486,8 @@
       ]
     },
     "/Users/kevincompton/Sites/lynxify/src/app/contracts/IHederaTokenService.sol": {
-      "lastModificationDate": 1742252109372,
-      "contentHash": "71a9f80ebe6839da6ab63f513044cf5b",
+      "lastModificationDate": 1742509584429,
+      "contentHash": "b2b7350ccd0ba2388e8b373656f76280",
       "sourceName": "src/app/contracts/IHederaTokenService.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -490,6 +496,7 @@
             "enabled": true,
             "runs": 200
           },
+          "evmVersion": "paris",
           "outputSelection": {
             "*": {
               "*": [
@@ -512,6 +519,42 @@
       ],
       "artifacts": [
         "IHederaTokenService"
+      ]
+    },
+    "/Users/kevincompton/Sites/lynxify/node_modules/hardhat/console.sol": {
+      "lastModificationDate": 1742311020679,
+      "contentHash": "681c532e816169606d13a5fe8b475074",
+      "sourceName": "hardhat/console.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.4.22 <0.9.0"
+      ],
+      "artifacts": [
+        "console"
       ]
     }
   }
