@@ -26,8 +26,8 @@ async function deployMinterMain() {
     await minterHre.run('compile');
 
     const client = MinterClient.forTestnet();
-    const operatorId = MinterAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID!);
-    const operatorKey = MinterPrivateKey.fromString(process.env.OPERATOR_KEY!);
+    const operatorId = MinterAccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID);
+    const operatorKey = MinterPrivateKey.fromString(process.env.OPERATOR_KEY);
     client.setOperator(operatorId, operatorKey);
 
     // Get compiled contract bytecode
@@ -47,20 +47,20 @@ async function deployMinterMain() {
 
     // Append contents to the file
     const fileAppendTx = new MinterFileAppend()
-        .setFileId(bytecodeFileId!)
+        .setFileId(bytecodeFileId)
         .setContents(contractBytecode)
         .setMaxTransactionFee(new MinterHbar(2));
     const fileAppendSubmit = await fileAppendTx.execute(client);
     await fileAppendSubmit.getReceipt(client);
 
     // Get the operator's EVM address
-    const operatorEvmAddress = process.env.NEXT_PUBLIC_OPERATOR_EVM_ID!;
+    const operatorEvmAddress = process.env.NEXT_PUBLIC_OPERATOR_EVM_ID;
     console.log("Operator EVM address:", operatorEvmAddress);
 
     // Convert token IDs to EVM addresses
-    const lynxTokenId = MinterAccountId.fromString(process.env.LYNX_TOKEN_ID!);
-    const sauceTokenId = MinterAccountId.fromString(process.env.SAUCE_TOKEN_ID!);
-    const clxyTokenId = MinterAccountId.fromString(process.env.CLXY_TOKEN_ID!);
+    const lynxTokenId = MinterAccountId.fromString(process.env.LYNX_TOKEN_ID);
+    const sauceTokenId = MinterAccountId.fromString(process.env.SAUCE_TOKEN_ID);
+    const clxyTokenId = MinterAccountId.fromString(process.env.CLXY_TOKEN_ID);
 
     console.log("Token addresses:");
     console.log("LYNX:", lynxTokenId.toSolidityAddress());
@@ -69,13 +69,15 @@ async function deployMinterMain() {
 
     console.log("Creating contract...");
     const contractCreateTx = new MinterContractCreate()
-        .setBytecodeFileId(bytecodeFileId!)
+        .setBytecodeFileId(bytecodeFileId)
         .setGas(8000000) // Increased gas limit
         .setConstructorParameters(
             new MinterFunctionParams()
                 .addAddress(lynxTokenId.toSolidityAddress())
                 .addAddress(sauceTokenId.toSolidityAddress())
                 .addAddress(clxyTokenId.toSolidityAddress())
+                .addAddress("0x0000000000000000000000000000000000000167") // HTS Precompile address
+                .addAddress(operatorId.toSolidityAddress()) // Treasury account (operator)
         )
         .setAdminKey(operatorKey);
 

@@ -6,25 +6,43 @@ export async function POST(req: Request) {
     try {
         const { hbarAmount, sauceAmount, clxyAmount, lynxAmount, accountId, step = 1 } = await req.json();
 
-        // Convert amounts to contract format (8 decimals as per RATIO_PRECISION)
-        const hbarValue = Math.floor(parseFloat(hbarAmount) * 1e8);
-        const sauceValue = Math.floor(parseFloat(sauceAmount) * 1e8);
-        const clxyValue = Math.floor(parseFloat(clxyAmount) * 1e8);
-        const lynxValue = Math.floor(parseFloat(lynxAmount) * 1e8);
+        // Check if required environment variables are set
+        if (!process.env.LYNX_CONTRACT_ADDRESS || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID) {
+            throw new Error('Missing required environment variables');
+        }
 
+        // Convert amounts to contract format (we use the raw amount as the contract already handles the correct units)
+        const lynxValue = Math.floor(parseFloat(lynxAmount) * 1e8);
+        
         const client = Client.forTestnet();
             
         const senderAccountId = AccountId.fromString(accountId);
-        const contractAddress = ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!).toSolidityAddress();
+        const contractId = ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS);
+        const contractAddress = contractId.toSolidityAddress();
 
         let transaction: ContractExecuteTransaction | null = null;
         let description: string = '';
 
         // Return different transactions based on the step
         if (step === 1) {
+            // Calculate required SAUCE amount using the contract
+            const sauceQuery = new ContractCallQuery()
+                .setContractId(contractId)
+                .setGas(100000)
+                .setFunction("calculateRequiredSAUCE", new ContractFunctionParameters().addUint256(lynxValue))
+                .setQueryPayment(new Hbar(0.01));
+            
+            const sauceResult = await sauceQuery.execute(client);
+            const sauceValue = sauceResult.getUint256(0);
+            
+            console.log('Contract calculation for SAUCE:', {
+                lynxValue,
+                sauceValue: sauceValue.toString()
+            });
+            
             // Step 1: Approve SAUCE tokens
             transaction = new ContractExecuteTransaction()
-                .setContractId(ContractId.fromString(process.env.SAUCE_TOKEN_ID!))
+                .setContractId(ContractId.fromString(process.env.SAUCE_TOKEN_ID))
                 .setGas(1000000)
                 .setFunction(
                     "approve",
@@ -37,9 +55,24 @@ export async function POST(req: Request) {
             description = `Approve ${sauceAmount} SAUCE for LYNX minting`;
         } 
         else if (step === 2) {
+            // Calculate required CLXY amount using the contract
+            const clxyQuery = new ContractCallQuery()
+                .setContractId(contractId)
+                .setGas(100000)
+                .setFunction("calculateRequiredCLXY", new ContractFunctionParameters().addUint256(lynxValue))
+                .setQueryPayment(new Hbar(0.01));
+            
+            const clxyResult = await clxyQuery.execute(client);
+            const clxyValue = clxyResult.getUint256(0);
+            
+            console.log('Contract calculation for CLXY:', {
+                lynxValue,
+                clxyValue: clxyValue.toString()
+            });
+            
             // Step 2: Approve CLXY tokens
             transaction = new ContractExecuteTransaction()
-                .setContractId(ContractId.fromString(process.env.CLXY_TOKEN_ID!))
+                .setContractId(ContractId.fromString(process.env.CLXY_TOKEN_ID))
                 .setGas(1000000)
                 .setFunction(
                     "approve",
@@ -52,24 +85,24 @@ export async function POST(req: Request) {
             description = `Approve ${clxyAmount} CLXY for LYNX minting`;
         }
         else if (step === 3) {
-            // First query the contract to get the exact HBAR required
-            const query = new ContractCallQuery()
-                .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
+            // Calculate required HBAR amount using the contract
+            const hbarQuery = new ContractCallQuery()
+                .setContractId(contractId)
                 .setGas(100000)
                 .setFunction("calculateRequiredHBAR", new ContractFunctionParameters().addUint256(lynxValue))
                 .setQueryPayment(new Hbar(0.01));
             
-            const result = await query.execute(client);
-            const exactHbarRequired = result.getUint256(0);
+            const hbarResult = await hbarQuery.execute(client);
+            const exactHbarRequired = hbarResult.getUint256(0);
             
-            console.log('Contract calculation:', {
+            console.log('Contract calculation for HBAR:', {
                 lynxValue,
                 exactHbarRequired: exactHbarRequired.toString()
             });
             
             // Create transaction with exact HBAR amount
             transaction = new ContractExecuteTransaction()
-                .setContractId(ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS!))
+                .setContractId(contractId)
                 .setGas(2000000)
                 .setFunction(
                     "mint",

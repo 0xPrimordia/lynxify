@@ -8,6 +8,7 @@ import type {
   FunctionFragment,
   Result,
   Interface,
+  EventFragment,
   AddressLike,
   ContractRunner,
   ContractMethod,
@@ -17,9 +18,58 @@ import type {
   TypedContractEvent,
   TypedDeferredTopicFilter,
   TypedEventLog,
+  TypedLogDescription,
   TypedListener,
   TypedContractMethod,
 } from "../../../common";
+
+export declare namespace IHederaTokenService {
+  export type HederaTokenStruct = {
+    name: string;
+    symbol: string;
+    treasury: AddressLike;
+    memo: string;
+    supplyType: boolean;
+    maxSupply: BigNumberish;
+    freezeDefault: boolean;
+    freezeKey: AddressLike[];
+    wipeKey: AddressLike[];
+    supplyKey: AddressLike[];
+    adminKey: AddressLike[];
+    kycKey: AddressLike[];
+    decimals: BigNumberish;
+  };
+
+  export type HederaTokenStructOutput = [
+    name: string,
+    symbol: string,
+    treasury: string,
+    memo: string,
+    supplyType: boolean,
+    maxSupply: bigint,
+    freezeDefault: boolean,
+    freezeKey: string[],
+    wipeKey: string[],
+    supplyKey: string[],
+    adminKey: string[],
+    kycKey: string[],
+    decimals: bigint
+  ] & {
+    name: string;
+    symbol: string;
+    treasury: string;
+    memo: string;
+    supplyType: boolean;
+    maxSupply: bigint;
+    freezeDefault: boolean;
+    freezeKey: string[];
+    wipeKey: string[];
+    supplyKey: string[];
+    adminKey: string[];
+    kycKey: string[];
+    decimals: bigint;
+  };
+}
 
 export interface MockHederaTokenServiceInterface extends Interface {
   getFunction(
@@ -28,15 +78,32 @@ export interface MockHederaTokenServiceInterface extends Interface {
       | "associateToken"
       | "balanceOf"
       | "burnToken"
+      | "createToken"
       | "getMockHtsPrecompile"
+      | "getSupplyKeyHolder"
+      | "isSupplyKey"
       | "isTokenAssociated"
       | "mintToken"
+      | "mockCreateTokenResponse"
+      | "mockIsSupplyKey"
       | "setAllowance"
       | "setBalance"
+      | "setMintingEnabled"
       | "setMockHtsPrecompile"
+      | "setSkipSauceAllowanceCheck"
+      | "setSupplyKeyHolder"
       | "setTokenAssociated"
       | "transferToken"
   ): FunctionFragment;
+
+  getEvent(
+    nameOrSignatureOrTopic:
+      | "TokenAssociated"
+      | "TokenBurned"
+      | "TokenCreated"
+      | "TokenMinted"
+      | "TokenTransferred"
+  ): EventFragment;
 
   encodeFunctionData(
     functionFragment: "allowance",
@@ -55,8 +122,25 @@ export interface MockHederaTokenServiceInterface extends Interface {
     values: [AddressLike, BigNumberish, BytesLike[]]
   ): string;
   encodeFunctionData(
+    functionFragment: "createToken",
+    values: [
+      IHederaTokenService.HederaTokenStruct,
+      BigNumberish,
+      BigNumberish[],
+      AddressLike[]
+    ]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getMockHtsPrecompile",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getSupplyKeyHolder",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isSupplyKey",
+    values: [AddressLike, AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "isTokenAssociated",
@@ -67,6 +151,14 @@ export interface MockHederaTokenServiceInterface extends Interface {
     values: [AddressLike, BigNumberish, BytesLike[]]
   ): string;
   encodeFunctionData(
+    functionFragment: "mockCreateTokenResponse",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "mockIsSupplyKey",
+    values: [AddressLike, AddressLike, boolean]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setAllowance",
     values: [AddressLike, AddressLike, AddressLike, BigNumberish]
   ): string;
@@ -75,8 +167,20 @@ export interface MockHederaTokenServiceInterface extends Interface {
     values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "setMintingEnabled",
+    values: [AddressLike, boolean]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setMockHtsPrecompile",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setSkipSauceAllowanceCheck",
+    values: [boolean]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setSupplyKeyHolder",
+    values: [AddressLike, AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "setTokenAssociated",
@@ -95,7 +199,19 @@ export interface MockHederaTokenServiceInterface extends Interface {
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "burnToken", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "createToken",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getMockHtsPrecompile",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getSupplyKeyHolder",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isSupplyKey",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -104,12 +220,32 @@ export interface MockHederaTokenServiceInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "mintToken", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "mockCreateTokenResponse",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "mockIsSupplyKey",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "setAllowance",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setBalance", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "setMintingEnabled",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "setMockHtsPrecompile",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setSkipSauceAllowanceCheck",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setSupplyKeyHolder",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -120,6 +256,95 @@ export interface MockHederaTokenServiceInterface extends Interface {
     functionFragment: "transferToken",
     data: BytesLike
   ): Result;
+}
+
+export namespace TokenAssociatedEvent {
+  export type InputTuple = [account: AddressLike, token: AddressLike];
+  export type OutputTuple = [account: string, token: string];
+  export interface OutputObject {
+    account: string;
+    token: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokenBurnedEvent {
+  export type InputTuple = [token: AddressLike, amount: BigNumberish];
+  export type OutputTuple = [token: string, amount: bigint];
+  export interface OutputObject {
+    token: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokenCreatedEvent {
+  export type InputTuple = [
+    token: AddressLike,
+    name: string,
+    symbol: string,
+    treasury: AddressLike
+  ];
+  export type OutputTuple = [
+    token: string,
+    name: string,
+    symbol: string,
+    treasury: string
+  ];
+  export interface OutputObject {
+    token: string;
+    name: string;
+    symbol: string;
+    treasury: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokenMintedEvent {
+  export type InputTuple = [token: AddressLike, amount: BigNumberish];
+  export type OutputTuple = [token: string, amount: bigint];
+  export interface OutputObject {
+    token: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokenTransferredEvent {
+  export type InputTuple = [
+    token: AddressLike,
+    from: AddressLike,
+    to: AddressLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [
+    token: string,
+    from: string,
+    to: string,
+    amount: bigint
+  ];
+  export interface OutputObject {
+    token: string;
+    from: string;
+    to: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export interface MockHederaTokenService extends BaseContract {
@@ -189,7 +414,30 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
 
+  createToken: TypedContractMethod<
+    [
+      token: IHederaTokenService.HederaTokenStruct,
+      initialTotalSupply: BigNumberish,
+      keys: BigNumberish[],
+      keyAddresses: AddressLike[]
+    ],
+    [[bigint, string] & { responseCode: bigint; tokenAddress: string }],
+    "payable"
+  >;
+
   getMockHtsPrecompile: TypedContractMethod<[], [string], "view">;
+
+  getSupplyKeyHolder: TypedContractMethod<
+    [token: AddressLike],
+    [string],
+    "view"
+  >;
+
+  isSupplyKey: TypedContractMethod<
+    [token: AddressLike, supplyAddress: AddressLike],
+    [boolean],
+    "view"
+  >;
 
   isTokenAssociated: TypedContractMethod<
     [account: AddressLike, token: AddressLike],
@@ -200,6 +448,18 @@ export interface MockHederaTokenService extends BaseContract {
   mintToken: TypedContractMethod<
     [token: AddressLike, amount: BigNumberish, arg2: BytesLike[]],
     [bigint],
+    "nonpayable"
+  >;
+
+  mockCreateTokenResponse: TypedContractMethod<
+    [responseCode: BigNumberish, tokenAddress: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  mockIsSupplyKey: TypedContractMethod<
+    [token: AddressLike, supplyAddress: AddressLike, result: boolean],
+    [void],
     "nonpayable"
   >;
 
@@ -220,8 +480,26 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
 
+  setMintingEnabled: TypedContractMethod<
+    [token: AddressLike, enabled: boolean],
+    [void],
+    "nonpayable"
+  >;
+
   setMockHtsPrecompile: TypedContractMethod<
     [_mockHtsPrecompile: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  setSkipSauceAllowanceCheck: TypedContractMethod<
+    [skip: boolean],
+    [void],
+    "nonpayable"
+  >;
+
+  setSupplyKeyHolder: TypedContractMethod<
+    [token: AddressLike, supplyKeyHolder: AddressLike],
     [void],
     "nonpayable"
   >;
@@ -276,8 +554,30 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "createToken"
+  ): TypedContractMethod<
+    [
+      token: IHederaTokenService.HederaTokenStruct,
+      initialTotalSupply: BigNumberish,
+      keys: BigNumberish[],
+      keyAddresses: AddressLike[]
+    ],
+    [[bigint, string] & { responseCode: bigint; tokenAddress: string }],
+    "payable"
+  >;
+  getFunction(
     nameOrSignature: "getMockHtsPrecompile"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "getSupplyKeyHolder"
+  ): TypedContractMethod<[token: AddressLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "isSupplyKey"
+  ): TypedContractMethod<
+    [token: AddressLike, supplyAddress: AddressLike],
+    [boolean],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "isTokenAssociated"
   ): TypedContractMethod<
@@ -290,6 +590,20 @@ export interface MockHederaTokenService extends BaseContract {
   ): TypedContractMethod<
     [token: AddressLike, amount: BigNumberish, arg2: BytesLike[]],
     [bigint],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "mockCreateTokenResponse"
+  ): TypedContractMethod<
+    [responseCode: BigNumberish, tokenAddress: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "mockIsSupplyKey"
+  ): TypedContractMethod<
+    [token: AddressLike, supplyAddress: AddressLike, result: boolean],
+    [void],
     "nonpayable"
   >;
   getFunction(
@@ -312,9 +626,26 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "setMintingEnabled"
+  ): TypedContractMethod<
+    [token: AddressLike, enabled: boolean],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "setMockHtsPrecompile"
   ): TypedContractMethod<
     [_mockHtsPrecompile: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setSkipSauceAllowanceCheck"
+  ): TypedContractMethod<[skip: boolean], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setSupplyKeyHolder"
+  ): TypedContractMethod<
+    [token: AddressLike, supplyKeyHolder: AddressLike],
     [void],
     "nonpayable"
   >;
@@ -338,5 +669,96 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
 
-  filters: {};
+  getEvent(
+    key: "TokenAssociated"
+  ): TypedContractEvent<
+    TokenAssociatedEvent.InputTuple,
+    TokenAssociatedEvent.OutputTuple,
+    TokenAssociatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokenBurned"
+  ): TypedContractEvent<
+    TokenBurnedEvent.InputTuple,
+    TokenBurnedEvent.OutputTuple,
+    TokenBurnedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokenCreated"
+  ): TypedContractEvent<
+    TokenCreatedEvent.InputTuple,
+    TokenCreatedEvent.OutputTuple,
+    TokenCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokenMinted"
+  ): TypedContractEvent<
+    TokenMintedEvent.InputTuple,
+    TokenMintedEvent.OutputTuple,
+    TokenMintedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokenTransferred"
+  ): TypedContractEvent<
+    TokenTransferredEvent.InputTuple,
+    TokenTransferredEvent.OutputTuple,
+    TokenTransferredEvent.OutputObject
+  >;
+
+  filters: {
+    "TokenAssociated(address,address)": TypedContractEvent<
+      TokenAssociatedEvent.InputTuple,
+      TokenAssociatedEvent.OutputTuple,
+      TokenAssociatedEvent.OutputObject
+    >;
+    TokenAssociated: TypedContractEvent<
+      TokenAssociatedEvent.InputTuple,
+      TokenAssociatedEvent.OutputTuple,
+      TokenAssociatedEvent.OutputObject
+    >;
+
+    "TokenBurned(address,uint256)": TypedContractEvent<
+      TokenBurnedEvent.InputTuple,
+      TokenBurnedEvent.OutputTuple,
+      TokenBurnedEvent.OutputObject
+    >;
+    TokenBurned: TypedContractEvent<
+      TokenBurnedEvent.InputTuple,
+      TokenBurnedEvent.OutputTuple,
+      TokenBurnedEvent.OutputObject
+    >;
+
+    "TokenCreated(address,string,string,address)": TypedContractEvent<
+      TokenCreatedEvent.InputTuple,
+      TokenCreatedEvent.OutputTuple,
+      TokenCreatedEvent.OutputObject
+    >;
+    TokenCreated: TypedContractEvent<
+      TokenCreatedEvent.InputTuple,
+      TokenCreatedEvent.OutputTuple,
+      TokenCreatedEvent.OutputObject
+    >;
+
+    "TokenMinted(address,uint256)": TypedContractEvent<
+      TokenMintedEvent.InputTuple,
+      TokenMintedEvent.OutputTuple,
+      TokenMintedEvent.OutputObject
+    >;
+    TokenMinted: TypedContractEvent<
+      TokenMintedEvent.InputTuple,
+      TokenMintedEvent.OutputTuple,
+      TokenMintedEvent.OutputObject
+    >;
+
+    "TokenTransferred(address,address,address,uint256)": TypedContractEvent<
+      TokenTransferredEvent.InputTuple,
+      TokenTransferredEvent.OutputTuple,
+      TokenTransferredEvent.OutputObject
+    >;
+    TokenTransferred: TypedContractEvent<
+      TokenTransferredEvent.InputTuple,
+      TokenTransferredEvent.OutputTuple,
+      TokenTransferredEvent.OutputObject
+    >;
+  };
 }

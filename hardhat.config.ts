@@ -1,9 +1,8 @@
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
-import "@nomicfoundation/hardhat-ethers";
+require("@nomicfoundation/hardhat-toolbox");
+require("@nomicfoundation/hardhat-ethers");
 require("dotenv").config({ path: '.env.local' });
 
-const config: HardhatUserConfig = {
+const config = {
   solidity: {
     version: "0.8.20",
     settings: {
@@ -25,11 +24,11 @@ const config: HardhatUserConfig = {
     }
   },
   paths: {
-    sources: "./src/contracts",
+    sources: "./src/app/contracts",
     tests: "./src/tests",
     cache: "./cache",
     artifacts: "./artifacts"
   }
 };
 
-export default config; 
+module.exports = config; 
