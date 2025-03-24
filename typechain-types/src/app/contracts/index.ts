@@ -5,6 +5,6 @@ import type * as userThresholdSol from "./userThreshold.sol";
 export type { userThresholdSol };
 export type { IHederaTokenService } from "./IHederaTokenService";
 export type { LynxMinter } from "./LynxMinter";
-export type { MockHTS } from "./MockHTS";
 export type { MockHederaTokenService } from "./MockHederaTokenService";
+export type { MockToken } from "./MockToken";
 export type { NFTSale } from "./NFTSale";

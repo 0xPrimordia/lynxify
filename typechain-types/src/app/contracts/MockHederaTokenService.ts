@@ -90,7 +90,7 @@ export interface MockHederaTokenServiceInterface extends Interface {
       | "setBalance"
       | "setMintingEnabled"
       | "setMockHtsPrecompile"
-      | "setSkipSauceAllowanceCheck"
+      | "setSkipAllowanceChecks"
       | "setSupplyKeyHolder"
       | "setTokenAssociated"
       | "transferToken"
@@ -175,7 +175,7 @@ export interface MockHederaTokenServiceInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "setSkipSauceAllowanceCheck",
+    functionFragment: "setSkipAllowanceChecks",
     values: [boolean]
   ): string;
   encodeFunctionData(
@@ -241,7 +241,7 @@ export interface MockHederaTokenServiceInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setSkipSauceAllowanceCheck",
+    functionFragment: "setSkipAllowanceChecks",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -492,7 +492,7 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
 
-  setSkipSauceAllowanceCheck: TypedContractMethod<
+  setSkipAllowanceChecks: TypedContractMethod<
     [skip: boolean],
     [void],
     "nonpayable"
@@ -640,7 +640,7 @@ export interface MockHederaTokenService extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "setSkipSauceAllowanceCheck"
+    nameOrSignature: "setSkipAllowanceChecks"
   ): TypedContractMethod<[skip: boolean], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setSupplyKeyHolder"

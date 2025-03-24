@@ -17,9 +17,9 @@ const path = require('path');
 
 async function deployMinterMain() {
     if (!process.env.NEXT_PUBLIC_OPERATOR_ID || !process.env.OPERATOR_KEY ||
-        !process.env.LYNX_TOKEN_ID || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID ||
+        !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID ||
         !process.env.NEXT_PUBLIC_OPERATOR_EVM_ID) {
-        throw new Error('Missing environment variables. Required: NEXT_PUBLIC_OPERATOR_ID, OPERATOR_KEY, LYNX_TOKEN_ID, SAUCE_TOKEN_ID, CLXY_TOKEN_ID, NEXT_PUBLIC_OPERATOR_EVM_ID');
+        throw new Error('Missing environment variables. Required: NEXT_PUBLIC_OPERATOR_ID, OPERATOR_KEY, SAUCE_TOKEN_ID, CLXY_TOKEN_ID, NEXT_PUBLIC_OPERATOR_EVM_ID');
     }
 
     // Compile first using Hardhat
@@ -58,12 +58,10 @@ async function deployMinterMain() {
     console.log("Operator EVM address:", operatorEvmAddress);
 
     // Convert token IDs to EVM addresses
-    const lynxTokenId = MinterAccountId.fromString(process.env.LYNX_TOKEN_ID);
     const sauceTokenId = MinterAccountId.fromString(process.env.SAUCE_TOKEN_ID);
     const clxyTokenId = MinterAccountId.fromString(process.env.CLXY_TOKEN_ID);
 
     console.log("Token addresses:");
-    console.log("LYNX:", lynxTokenId.toSolidityAddress());
     console.log("SAUCE:", sauceTokenId.toSolidityAddress());
     console.log("CLXY:", clxyTokenId.toSolidityAddress());
 
@@ -73,7 +71,7 @@ async function deployMinterMain() {
         .setGas(8000000) // Increased gas limit
         .setConstructorParameters(
             new MinterFunctionParams()
-                .addAddress(lynxTokenId.toSolidityAddress())
+                .addAddress("0x0000000000000000000000000000000000000000") // Use zero address for LYNX initially
                 .addAddress(sauceTokenId.toSolidityAddress())
                 .addAddress(clxyTokenId.toSolidityAddress())
                 .addAddress("0x0000000000000000000000000000000000000167") // HTS Precompile address

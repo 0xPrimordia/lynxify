@@ -1,15 +1,31 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.18;
 
 import "./IHederaTokenService.sol";
 import "hardhat/console.sol";
 
+/**
+ * @title MockHederaTokenService
+ * @dev Comprehensive mock implementation of the Hedera Token Service for testing
+ * This contract implements all the required functionality to test the LynxMinter contract
+ */
 contract MockHederaTokenService is IHederaTokenService {
+    // Storage for token balances
     mapping(address => mapping(address => uint256)) private balances;
+    
+    // Storage for token allowances
     mapping(address => mapping(address => mapping(address => uint256))) private allowances;
+    
+    // Track token associations
     mapping(address => mapping(address => bool)) private tokenAssociations;
+    
+    // Track which tokens have minting enabled
     mapping(address => bool) private mintingEnabled;
+    
+    // Track supply key holders for each token
     mapping(address => address) private tokenSupplyKeyHolders;
+    
+    // Mock HTS precompile address for testing
     address private mockHtsPrecompile;
     
     // Variables for mocking responses
@@ -17,46 +33,68 @@ contract MockHederaTokenService is IHederaTokenService {
     address private mockedCreateTokenAddress;
     mapping(address => mapping(address => bool)) private mockedIsSupplyKeyResults;
     
-    // Special flag for testing purposes to skip SAUCE check
-    bool private skipSauceAllowanceCheck = false;
+    // Special flag for testing purposes to skip token allowance checks
+    bool private skipAllowanceChecks = false;
 
+    // Events
     event TokenMinted(address indexed token, uint256 amount);
     event TokenBurned(address indexed token, uint256 amount);
     event TokenTransferred(address indexed token, address indexed from, address indexed to, uint256 amount);
     event TokenAssociated(address indexed account, address indexed token);
     event TokenCreated(address indexed token, string name, string symbol, address treasury);
 
-    // Error codes to match the ones expected in the contract
-    error InsufficientSauceAllowance(uint256 allowance, uint256 required);
-    error InsufficientClxyAllowance(uint256 allowance, uint256 required);
+    // Custom errors
+    error InsufficientTokenAllowance(address token, uint256 allowance, uint256 required);
     error NoSupplyKeyPermission(address token, address caller);
 
     constructor() {
-        // Make sure all test tokens have minting enabled
+        // Initialize test tokens with minting enabled
         mintingEnabled[0x0000000000000000000000000000000000000001] = true; // LYNX
         mintingEnabled[0x0000000000000000000000000000000000000002] = true; // SAUCE
         mintingEnabled[0x0000000000000000000000000000000000000003] = true; // CLXY
         
-        // Set supply key holders for test tokens
-        tokenSupplyKeyHolders[0x0000000000000000000000000000000000000001] = address(0); // LYNX - No supply key holder by default
-        tokenSupplyKeyHolders[0x0000000000000000000000000000000000000002] = address(0); // SAUCE - No supply key holder by default 
-        tokenSupplyKeyHolders[0x0000000000000000000000000000000000000003] = address(0); // CLXY - No supply key holder by default
+        // Set default supply key holders (none by default)
+        tokenSupplyKeyHolders[0x0000000000000000000000000000000000000001] = address(0);
+        tokenSupplyKeyHolders[0x0000000000000000000000000000000000000002] = address(0);
+        tokenSupplyKeyHolders[0x0000000000000000000000000000000000000003] = address(0);
     }
 
+    /**
+     * @dev Set the mock HTS precompile address
+     * @param _mockHtsPrecompile The address to use as the mock HTS precompile
+     */
     function setMockHtsPrecompile(address _mockHtsPrecompile) external {
         mockHtsPrecompile = _mockHtsPrecompile;
     }
 
+    /**
+     * @dev Get the mock HTS precompile address
+     * @return The mock HTS precompile address
+     */
     function getMockHtsPrecompile() external view returns (address) {
         return mockHtsPrecompile;
     }
 
+    /**
+     * @dev Associate a token with an account
+     * @param account The account to associate the token with
+     * @param token The token to associate
+     * @return A response code (0 = success)
+     */
     function associateToken(address account, address token) external override returns (int64) {
         tokenAssociations[account][token] = true;
         emit TokenAssociated(account, token);
         return 0;
     }
 
+    /**
+     * @dev Transfer tokens from one account to another
+     * @param token The token to transfer
+     * @param from The account to transfer from
+     * @param to The account to transfer to
+     * @param amount The amount to transfer
+     * @return A response code (0 = success)
+     */
     function transferToken(address token, address from, address to, uint256 amount) external override returns (int64) {
         // Check token association
         require(tokenAssociations[from][token], "Token not associated with sender");
@@ -66,32 +104,15 @@ contract MockHederaTokenService is IHederaTokenService {
         require(balances[token][from] >= amount, "Insufficient balance");
         
         // If the sender is not the message sender, check allowance
-        if (from != msg.sender) {
+        if (from != msg.sender && !skipAllowanceChecks) {
             uint256 currentAllowance = allowances[token][from][msg.sender];
             
-            // Special handling for SAUCE token when skipSauceAllowanceCheck is true
-            if (token == 0x0000000000000000000000000000000000000002 && !skipSauceAllowanceCheck) {
-                // SAUCE token allowance check
-                if (currentAllowance < amount) {
-                    revert InsufficientSauceAllowance(currentAllowance, amount);
-                }
-            } 
-            // Special handling for CLXY token
-            else if (token == 0x0000000000000000000000000000000000000003) {
-                // CLXY token allowance check
-                if (currentAllowance < amount) {
-                    revert InsufficientClxyAllowance(currentAllowance, amount);
-                }
-            }
-            // Default allowance check for other tokens
-            else if (token != 0x0000000000000000000000000000000000000002 || !skipSauceAllowanceCheck) {
-                require(currentAllowance >= amount, "Insufficient allowance");
+            if (currentAllowance < amount) {
+                revert InsufficientTokenAllowance(token, currentAllowance, amount);
             }
             
-            // Update allowance - don't update SAUCE allowance if skip flag is set
-            if (!(token == 0x0000000000000000000000000000000000000002 && skipSauceAllowanceCheck)) {
-                allowances[token][from][msg.sender] -= amount;
-            }
+            // Update allowance
+            allowances[token][from][msg.sender] -= amount;
         }
 
         // Transfer tokens
@@ -102,6 +123,12 @@ contract MockHederaTokenService is IHederaTokenService {
         return 0;
     }
 
+    /**
+     * @dev Mint new tokens
+     * @param token The token to mint
+     * @param amount The amount to mint
+     * @return A response code (0 = success)
+     */
     function mintToken(address token, uint256 amount, bytes[] memory) external override returns (int64) {
         // Check if minting is enabled for this token
         require(mintingEnabled[token], "Minting not enabled for this token");
@@ -118,6 +145,12 @@ contract MockHederaTokenService is IHederaTokenService {
         return 0;
     }
 
+    /**
+     * @dev Burn tokens
+     * @param token The token to burn
+     * @param amount The amount to burn
+     * @return A response code (0 = success)
+     */
     function burnToken(address token, uint256 amount, bytes[] memory) external override returns (int64) {
         // Check if caller has the supply key for the token
         address supplyKeyHolder = tokenSupplyKeyHolders[token];
@@ -131,15 +164,36 @@ contract MockHederaTokenService is IHederaTokenService {
         return 0;
     }
 
+    /**
+     * @dev Get the allowance of tokens that a spender can use from an owner
+     * @param token The token to check allowance for
+     * @param owner The owner of the tokens
+     * @param spender The spender who can use the tokens
+     * @return The amount of tokens the spender can use
+     */
     function allowance(address token, address owner, address spender) external view override returns (uint256) {
         return allowances[token][owner][spender];
     }
 
+    /**
+     * @dev Get the balance of tokens for an account
+     * @param token The token to check the balance of
+     * @param account The account to check the balance for
+     * @return The balance of tokens
+     */
     function balanceOf(address token, address account) external view override returns (uint256) {
         return balances[token][account];
     }
     
-    // Implementation of token creation function
+    /**
+     * @dev Create a new token
+     * @param token The token configuration
+     * @param initialTotalSupply The initial supply to mint
+     * @param keys The key types to set
+     * @param keyAddresses The addresses for each key
+     * @return responseCode A response code (0 = success)
+     * @return tokenAddress The address of the created token
+     */
     function createToken(
         IHederaTokenService.HederaToken memory token,
         uint initialTotalSupply,
@@ -202,7 +256,12 @@ contract MockHederaTokenService is IHederaTokenService {
         return (0, tokenAddress);
     }
     
-    // Implement the key check function
+    /**
+     * @dev Check if an address has the supply key for a token
+     * @param token The token to check
+     * @param supplyAddress The address to check
+     * @return True if the address has the supply key
+     */
     function isSupplyKey(address token, address supplyAddress) external view override returns (bool) {
         // Return a specific mocked value if set
         bool mockedValue = mockedIsSupplyKeyResults[token][supplyAddress];
@@ -216,47 +275,76 @@ contract MockHederaTokenService is IHederaTokenService {
     }
 
     // Test helper functions - not part of the real HTS interface
+
+    /**
+     * @dev Set the balance of tokens for an account (test helper)
+     */
     function setBalance(address token, address account, uint256 amount) external {
         balances[token][account] = amount;
     }
 
+    /**
+     * @dev Set the allowance of tokens for a spender (test helper)
+     */
     function setAllowance(address token, address owner, address spender, uint256 amount) external {
         allowances[token][owner][spender] = amount;
     }
 
+    /**
+     * @dev Set a token as associated with an account (test helper)
+     */
     function setTokenAssociated(address account, address token, bool associated) external {
         tokenAssociations[account][token] = associated;
     }
 
+    /**
+     * @dev Check if a token is associated with an account (test helper)
+     */
     function isTokenAssociated(address account, address token) external view returns (bool) {
         return tokenAssociations[account][token];
     }
 
+    /**
+     * @dev Set whether minting is enabled for a token (test helper)
+     */
     function setMintingEnabled(address token, bool enabled) external {
         mintingEnabled[token] = enabled;
     }
     
+    /**
+     * @dev Set the supply key holder for a token (test helper)
+     */
     function setSupplyKeyHolder(address token, address supplyKeyHolder) external {
         tokenSupplyKeyHolders[token] = supplyKeyHolder;
     }
     
+    /**
+     * @dev Get the supply key holder for a token (test helper)
+     */
     function getSupplyKeyHolder(address token) external view returns (address) {
         return tokenSupplyKeyHolders[token];
     }
 
-    // New mock functions for testing
+    /**
+     * @dev Mock the response for createToken (test helper)
+     */
     function mockCreateTokenResponse(int64 responseCode, address tokenAddress) external {
         mockedCreateTokenResponseCode = responseCode;
         mockedCreateTokenAddress = tokenAddress;
     }
     
+    /**
+     * @dev Mock the response for isSupplyKey (test helper)
+     */
     function mockIsSupplyKey(address token, address supplyAddress, bool result) external {
         mockedIsSupplyKeyResults[token][supplyAddress] = result;
     }
 
-    // New function to skip SAUCE allowance check
-    function setSkipSauceAllowanceCheck(bool skip) external {
-        skipSauceAllowanceCheck = skip;
+    /**
+     * @dev Skip allowance checks for testing purposes
+     */
+    function setSkipAllowanceChecks(bool skip) external {
+        skipAllowanceChecks = skip;
     }
 
     receive() external payable {}

@@ -50,9 +50,9 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockHederaTokenService__factory>;
     getContractFactory(
-      name: "MockHTS",
+      name: "MockToken",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.MockHTS__factory>;
+    ): Promise<Contracts.MockToken__factory>;
     getContractFactory(
       name: "NFTSale",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -116,10 +116,10 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.MockHederaTokenService>;
     getContractAt(
-      name: "MockHTS",
+      name: "MockToken",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.MockHTS>;
+    ): Promise<Contracts.MockToken>;
     getContractAt(
       name: "NFTSale",
       address: string | ethers.Addressable,
@@ -178,9 +178,9 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockHederaTokenService>;
     deployContract(
-      name: "MockHTS",
+      name: "MockToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.MockHTS>;
+    ): Promise<Contracts.MockToken>;
     deployContract(
       name: "NFTSale",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -244,10 +244,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockHederaTokenService>;
     deployContract(
-      name: "MockHTS",
+      name: "MockToken",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.MockHTS>;
+    ): Promise<Contracts.MockToken>;
     deployContract(
       name: "NFTSale",
       args: any[],

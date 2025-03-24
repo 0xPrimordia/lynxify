@@ -151,6 +151,27 @@ describe("LynxMinter", function () {
       await expect(lynxMinter.mint(LYNX_AMOUNT, { value: LYNX_AMOUNT * HBAR_RATIO }))
         .to.be.revertedWithCustomError(lynxMinter, "NoSupplyKeyForToken");
     });
+
+    it("Should update the LYNX token ID when using setLynxTokenId", async function() {
+      // Deploy with zero address for LYNX
+      await deployWithoutLynxToken();
+      
+      // Mock the token ID we'll set
+      const expectedLynxAddress = "0x0000000000000000000000000000000000000001";
+      await mockHts.mockIsSupplyKey(expectedLynxAddress, await lynxMinter.getAddress(), true);
+      
+      // Set the LYNX token ID
+      const tx = await lynxMinter.setLynxTokenId(expectedLynxAddress);
+      await tx.wait();
+      
+      // Get the updated token address
+      lynxTokenAddress = await lynxMinter.LYNX_TOKEN();
+      expect(lynxTokenAddress).to.equal(expectedLynxAddress);
+      
+      // Verify the contract has the supply key
+      const hasSupplyKey = await lynxMinter.hasSupplyKey();
+      expect(hasSupplyKey).to.be.true;
+    });
   });
 
   describe("Supply Key Verification", function() {

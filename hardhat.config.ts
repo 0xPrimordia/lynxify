@@ -21,6 +21,11 @@ const config = {
           balance: "10000000000000000000000"
         }
       ]
+    },
+    hedera: {
+      url: 'https://testnet.hashio.io/api',
+      accounts: [process.env.OPERATOR_KEY || ""],
+      chainId: 296
     }
   },
   paths: {

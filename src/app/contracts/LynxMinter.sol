@@ -35,6 +35,7 @@ contract LynxMinter {
     event TokensAssociated(address token, int64 responseCode);
     event LynxTokenCreated(address tokenAddress, int64 responseCode);
     event SupplyKeyVerified(bool hasKey);
+    event LynxTokenSet(address indexed tokenAddress);
 
     // Errors
     error MustSendExactHBAR(uint256 sent, uint256 required);
@@ -155,6 +156,19 @@ contract LynxMinter {
         checkSupplyKey();
         
         emit LynxTokenCreated(tokenAddress, responseCode);
+    }
+    
+    // Update the LYNX token ID after deployment
+    function setLynxTokenId(address newLynxTokenAddress) external onlyAdmin {
+        require(LYNX_TOKEN == address(0), "LYNX token already set");
+        require(newLynxTokenAddress != address(0), "Cannot set to zero address");
+        
+        LYNX_TOKEN = newLynxTokenAddress;
+        
+        // Update supply key status
+        checkSupplyKey();
+        
+        emit LynxTokenSet(newLynxTokenAddress);
     }
     
     // Verify that this contract has the supply key for the LYNX token

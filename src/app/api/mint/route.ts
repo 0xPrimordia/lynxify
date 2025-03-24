@@ -1,24 +1,31 @@
 import { NextResponse } from 'next/server';
 import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar, ContractCallQuery } from '@hashgraph/sdk';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
+import BigNumber from 'bignumber.js';
 
 export async function POST(req: Request) {
     try {
         const { hbarAmount, sauceAmount, clxyAmount, lynxAmount, accountId, step = 1 } = await req.json();
 
         // Check if required environment variables are set
-        if (!process.env.LYNX_CONTRACT_ADDRESS || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID) {
+        if (!process.env.LYNX_CONTRACT_ADDRESS || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID || !process.env.LYNX_TOKEN_ID) {
             throw new Error('Missing required environment variables');
         }
 
-        // Convert amounts to contract format (we use the raw amount as the contract already handles the correct units)
-        const lynxValue = Math.floor(parseFloat(lynxAmount) * 1e8);
+        // Convert amounts to contract format with improved precision handling
+        const rawLynxValue = Math.floor(parseFloat(lynxAmount) * 100000000);
+        const lynxValue = new BigNumber(rawLynxValue);
         
         const client = Client.forTestnet();
             
         const senderAccountId = AccountId.fromString(accountId);
         const contractId = ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS);
         const contractAddress = contractId.toSolidityAddress();
+
+        // Validate contract ID format
+        if (!contractId.toString().match(/^0\.0\.\d+$/)) {
+            throw new Error('Invalid contract ID format');
+        }
 
         let transaction: ContractExecuteTransaction | null = null;
         let description: string = '';
@@ -28,7 +35,7 @@ export async function POST(req: Request) {
             // Calculate required SAUCE amount using the contract
             const sauceQuery = new ContractCallQuery()
                 .setContractId(contractId)
-                .setGas(100000)
+                .setGas(300000) // Increased gas for testnet
                 .setFunction("calculateRequiredSAUCE", new ContractFunctionParameters().addUint256(lynxValue))
                 .setQueryPayment(new Hbar(0.01));
             
@@ -36,14 +43,14 @@ export async function POST(req: Request) {
             const sauceValue = sauceResult.getUint256(0);
             
             console.log('Contract calculation for SAUCE:', {
-                lynxValue,
+                lynxValue: lynxValue.toString(),
                 sauceValue: sauceValue.toString()
             });
             
             // Step 1: Approve SAUCE tokens
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.SAUCE_TOKEN_ID))
-                .setGas(1000000)
+                .setGas(1500000) // Increased gas for testnet
                 .setFunction(
                     "approve",
                     new ContractFunctionParameters()
@@ -58,7 +65,7 @@ export async function POST(req: Request) {
             // Calculate required CLXY amount using the contract
             const clxyQuery = new ContractCallQuery()
                 .setContractId(contractId)
-                .setGas(100000)
+                .setGas(300000) // Increased gas for testnet
                 .setFunction("calculateRequiredCLXY", new ContractFunctionParameters().addUint256(lynxValue))
                 .setQueryPayment(new Hbar(0.01));
             
@@ -66,14 +73,14 @@ export async function POST(req: Request) {
             const clxyValue = clxyResult.getUint256(0);
             
             console.log('Contract calculation for CLXY:', {
-                lynxValue,
+                lynxValue: lynxValue.toString(),
                 clxyValue: clxyValue.toString()
             });
             
             // Step 2: Approve CLXY tokens
             transaction = new ContractExecuteTransaction()
                 .setContractId(ContractId.fromString(process.env.CLXY_TOKEN_ID))
-                .setGas(1000000)
+                .setGas(1500000) // Increased gas for testnet
                 .setFunction(
                     "approve",
                     new ContractFunctionParameters()
@@ -88,7 +95,7 @@ export async function POST(req: Request) {
             // Calculate required HBAR amount using the contract
             const hbarQuery = new ContractCallQuery()
                 .setContractId(contractId)
-                .setGas(100000)
+                .setGas(300000) // Increased gas for testnet
                 .setFunction("calculateRequiredHBAR", new ContractFunctionParameters().addUint256(lynxValue))
                 .setQueryPayment(new Hbar(0.01));
             
@@ -96,14 +103,14 @@ export async function POST(req: Request) {
             const exactHbarRequired = hbarResult.getUint256(0);
             
             console.log('Contract calculation for HBAR:', {
-                lynxValue,
+                lynxValue: lynxValue.toString(),
                 exactHbarRequired: exactHbarRequired.toString()
             });
             
             // Create transaction with exact HBAR amount
             transaction = new ContractExecuteTransaction()
                 .setContractId(contractId)
-                .setGas(2000000)
+                .setGas(3000000) // Increased gas for testnet
                 .setFunction(
                     "mint",
                     new ContractFunctionParameters()
@@ -131,7 +138,18 @@ export async function POST(req: Request) {
         });
 
     } catch (error: any) {
+        // Enhanced error handling
+        let errorMessage = error.message;
+        
+        if (errorMessage.includes("MustSendExactHBAR")) {
+            errorMessage = "You must send exactly the required amount of HBAR for minting.";
+        } else if (errorMessage.includes("InsufficientSauceAllowance")) {
+            errorMessage = "Insufficient SAUCE token allowance. Please try again with step 1.";
+        } else if (errorMessage.includes("InsufficientClxyAllowance")) {
+            errorMessage = "Insufficient CLXY token allowance. Please try again with step 2.";
+        }
+        
         console.error('Mint error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 } 

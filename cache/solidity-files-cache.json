@@ -373,8 +373,8 @@
       ]
     },
     "/Users/kevincompton/Sites/lynxify/src/app/contracts/LynxMinter.sol": {
-      "lastModificationDate": 1742512651381,
-      "contentHash": "b62d18afd12e9192a15f6be711e5ee45",
+      "lastModificationDate": 1742582919393,
+      "contentHash": "a331fd05c782177209d275e70b65408a",
       "sourceName": "src/app/contracts/LynxMinter.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -410,45 +410,9 @@
         "LynxMinter"
       ]
     },
-    "/Users/kevincompton/Sites/lynxify/src/app/contracts/MockHTS.sol": {
-      "lastModificationDate": 1742250414173,
-      "contentHash": "9610f49e4bc578ab655c4752f45e1e43",
-      "sourceName": "src/app/contracts/MockHTS.sol",
-      "solcConfig": {
-        "version": "0.8.20",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "MockHTS"
-      ]
-    },
     "/Users/kevincompton/Sites/lynxify/src/app/contracts/MockHederaTokenService.sol": {
-      "lastModificationDate": 1742512405400,
-      "contentHash": "6f1f9c4776875b633d07799080f2ad1a",
+      "lastModificationDate": 1742596077180,
+      "contentHash": "e33ebd7e9bfca13332e99ffe7cfc21a4",
       "sourceName": "src/app/contracts/MockHederaTokenService.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -479,7 +443,7 @@
         "hardhat/console.sol"
       ],
       "versionPragmas": [
-        "^0.8.0"
+        "^0.8.18"
       ],
       "artifacts": [
         "MockHederaTokenService"
@@ -555,6 +519,42 @@
       ],
       "artifacts": [
         "console"
+      ]
+    },
+    "/Users/kevincompton/Sites/lynxify/src/app/contracts/MockToken.sol": {
+      "lastModificationDate": 1742600017234,
+      "contentHash": "62fd8571e8787048682c9edaf93c1ac2",
+      "sourceName": "src/app/contracts/MockToken.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "MockToken"
       ]
     }
   }

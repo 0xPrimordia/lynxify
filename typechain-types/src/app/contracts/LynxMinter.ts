@@ -52,6 +52,7 @@ export interface LynxMinterInterface extends Interface {
       | "getTokenAddresses"
       | "hasSupplyKey"
       | "mint"
+      | "setLynxTokenId"
       | "setSupplyKeyStatus"
       | "setTokenService"
       | "testClxyAllowance"
@@ -64,6 +65,7 @@ export interface LynxMinterInterface extends Interface {
       | "LynxBurned"
       | "LynxMinted"
       | "LynxTokenCreated"
+      | "LynxTokenSet"
       | "RatiosUpdated"
       | "SupplyKeyVerified"
       | "TokensAssociated"
@@ -164,6 +166,10 @@ export interface LynxMinterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "mint", values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: "setLynxTokenId",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(
     functionFragment: "setSupplyKeyStatus",
     values: [boolean]
@@ -269,6 +275,10 @@ export interface LynxMinterInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "setLynxTokenId",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "setSupplyKeyStatus",
     data: BytesLike
   ): Result;
@@ -355,6 +365,18 @@ export namespace LynxTokenCreatedEvent {
   export interface OutputObject {
     tokenAddress: string;
     responseCode: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace LynxTokenSetEvent {
+  export type InputTuple = [tokenAddress: AddressLike];
+  export type OutputTuple = [tokenAddress: string];
+  export interface OutputObject {
+    tokenAddress: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -553,6 +575,12 @@ export interface LynxMinter extends BaseContract {
 
   mint: TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
 
+  setLynxTokenId: TypedContractMethod<
+    [newLynxTokenAddress: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   setSupplyKeyStatus: TypedContractMethod<
     [status: boolean],
     [void],
@@ -703,6 +731,13 @@ export interface LynxMinter extends BaseContract {
     nameOrSignature: "mint"
   ): TypedContractMethod<[lynxAmount: BigNumberish], [void], "payable">;
   getFunction(
+    nameOrSignature: "setLynxTokenId"
+  ): TypedContractMethod<
+    [newLynxTokenAddress: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "setSupplyKeyStatus"
   ): TypedContractMethod<[status: boolean], [void], "nonpayable">;
   getFunction(
@@ -746,6 +781,13 @@ export interface LynxMinter extends BaseContract {
     LynxTokenCreatedEvent.InputTuple,
     LynxTokenCreatedEvent.OutputTuple,
     LynxTokenCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "LynxTokenSet"
+  ): TypedContractEvent<
+    LynxTokenSetEvent.InputTuple,
+    LynxTokenSetEvent.OutputTuple,
+    LynxTokenSetEvent.OutputObject
   >;
   getEvent(
     key: "RatiosUpdated"
@@ -801,6 +843,17 @@ export interface LynxMinter extends BaseContract {
       LynxTokenCreatedEvent.InputTuple,
       LynxTokenCreatedEvent.OutputTuple,
       LynxTokenCreatedEvent.OutputObject
+    >;
+
+    "LynxTokenSet(address)": TypedContractEvent<
+      LynxTokenSetEvent.InputTuple,
+      LynxTokenSetEvent.OutputTuple,
+      LynxTokenSetEvent.OutputObject
+    >;
+    LynxTokenSet: TypedContractEvent<
+      LynxTokenSetEvent.InputTuple,
+      LynxTokenSetEvent.OutputTuple,
+      LynxTokenSetEvent.OutputObject
     >;
 
     "RatiosUpdated(uint256,uint256,uint256)": TypedContractEvent<

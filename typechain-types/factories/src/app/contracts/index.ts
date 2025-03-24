@@ -4,6 +4,6 @@
 export * as userThresholdSol from "./userThreshold.sol";
 export { IHederaTokenService__factory } from "./IHederaTokenService__factory";
 export { LynxMinter__factory } from "./LynxMinter__factory";
-export { MockHTS__factory } from "./MockHTS__factory";
 export { MockHederaTokenService__factory } from "./MockHederaTokenService__factory";
+export { MockToken__factory } from "./MockToken__factory";
 export { NFTSale__factory } from "./NFTSale__factory";
