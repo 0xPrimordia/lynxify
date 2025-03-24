@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar, ContractCallQuery } from '@hashgraph/sdk';
+import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar, ContractCallQuery, PrivateKey } from '@hashgraph/sdk';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 import BigNumber from 'bignumber.js';
 
 export async function POST(req: Request) {
     try {
-        const { hbarAmount, sauceAmount, clxyAmount, lynxAmount, accountId, step = 1 } = await req.json();
+        const { hbarAmount, sauceAmount, clxyAmount, lynxAmount, accountId, step = 1, isExtensionWallet = false } = await req.json();
 
         // Check if required environment variables are set
         if (!process.env.LYNX_CONTRACT_ADDRESS || !process.env.SAUCE_TOKEN_ID || !process.env.CLXY_TOKEN_ID || !process.env.LYNX_TOKEN_ID) {
@@ -16,8 +16,9 @@ export async function POST(req: Request) {
         const rawLynxValue = Math.floor(parseFloat(lynxAmount) * 100000000);
         const lynxValue = new BigNumber(rawLynxValue);
         
-        const client = Client.forTestnet();
-            
+        // Initialize client
+        const client = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
+        
         const senderAccountId = AccountId.fromString(accountId);
         const contractId = ContractId.fromString(process.env.LYNX_CONTRACT_ADDRESS);
         const contractAddress = contractId.toSolidityAddress();
@@ -29,6 +30,13 @@ export async function POST(req: Request) {
 
         let transaction: ContractExecuteTransaction | null = null;
         let description: string = '';
+
+        // For queries, we need to set an operator if we're handling extension wallet requests
+        if (process.env.NEXT_PUBLIC_OPERATOR_ID && process.env.OPERATOR_KEY) {
+            const operatorId = AccountId.fromString(process.env.NEXT_PUBLIC_OPERATOR_ID);
+            const operatorKey = PrivateKey.fromString(process.env.OPERATOR_KEY);
+            client.setOperator(operatorId, operatorKey);
+        }
 
         // Return different transactions based on the step
         if (step === 1) {
@@ -56,9 +64,18 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addAddress(contractAddress)
                         .addUint256(sauceValue)
-                )
+                );
+            
+            // For ALL transactions, set ID and max fee
+            transaction = transaction
                 .setTransactionId(TransactionId.generate(senderAccountId))
-                .freezeWith(client);
+                .setMaxTransactionFee(new Hbar(5));
+            
+            // Only freeze for in-app wallets
+            if (!isExtensionWallet) {
+                transaction = transaction.freezeWith(client);
+            }
+                
             description = `Approve ${sauceAmount} SAUCE for LYNX minting`;
         } 
         else if (step === 2) {
@@ -86,9 +103,18 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addAddress(contractAddress)
                         .addUint256(clxyValue)
-                )
+                );
+            
+            // For ALL transactions, set ID and max fee
+            transaction = transaction
                 .setTransactionId(TransactionId.generate(senderAccountId))
-                .freezeWith(client);
+                .setMaxTransactionFee(new Hbar(5));
+            
+            // Only freeze for in-app wallets
+            if (!isExtensionWallet) {
+                transaction = transaction.freezeWith(client);
+            }
+                
             description = `Approve ${clxyAmount} CLXY for LYNX minting`;
         }
         else if (step === 3) {
@@ -116,10 +142,18 @@ export async function POST(req: Request) {
                     new ContractFunctionParameters()
                         .addUint256(lynxValue)
                 )
-                .setPayableAmount(Hbar.fromTinybars(exactHbarRequired))
-                .setTransactionId(TransactionId.generate(senderAccountId))
-                .freezeWith(client);
+                .setPayableAmount(Hbar.fromTinybars(exactHbarRequired));
             
+            // For ALL transactions, set ID and max fee
+            transaction = transaction
+                .setTransactionId(TransactionId.generate(senderAccountId))
+                .setMaxTransactionFee(new Hbar(5));
+            
+            // Only freeze for in-app wallets
+            if (!isExtensionWallet) {
+                transaction = transaction.freezeWith(client);
+            }
+                
             description = `Mint ${lynxAmount} LYNX tokens`;
         }
 
@@ -127,14 +161,18 @@ export async function POST(req: Request) {
             throw new Error(`Invalid step: ${step}`);
         }
 
+        // Always encode the transaction, regardless of wallet type
         const encodedTx = transactionToBase64String(transaction);
+        
+        console.log('Prepared transaction for extension wallet:', isExtensionWallet);
         
         return NextResponse.json({ 
             transaction: encodedTx,
             step,
             totalSteps: 3,
             description,
-            nextStep: step < 3 ? step + 1 : null
+            nextStep: step < 3 ? step + 1 : null,
+            isExtensionWallet
         });
 
     } catch (error: any) {

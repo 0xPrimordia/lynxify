@@ -9,6 +9,8 @@ import { Token } from "@/app/types";
 import { Image } from "@nextui-org/react";
 import { getTokenImageUrl } from '@/app/lib/utils/tokens';
 import { useInAppWallet } from '@/app/contexts/InAppWalletContext';
+import { useWalletContext } from '@/app/hooks/useWallet';
+import CreateWalletForm from '@/app/components/CreateWalletForm';
 
 interface TokenBalance {
     token: string;
@@ -28,42 +30,92 @@ export default function WalletPage() {
     const { supabase } = useSupabase();
     const router = useRouter();
     const { tokens } = useSaucerSwapContext();
-    const { inAppAccount } = useInAppWallet();
+    const { inAppAccount, isInAppWallet } = useInAppWallet();
+    const { account } = useWalletContext();
+    const [needsWallet, setNeedsWallet] = useState(false);
+    
+    // Use the same pattern as in Header.tsx
+    const activeAccount = account || inAppAccount;
 
+    // First check if we have any wallet (extension or in-app)
     useEffect(() => {
-        // Check session immediately
-        const checkSession = async () => {
+        const checkWalletAvailability = async () => {
+            console.log('Checking wallet availability, account:', account, 'inAppAccount:', inAppAccount);
+            
+            // If we already know we need a wallet, don't change that decision
+            if (needsWallet && !account && !inAppAccount) {
+                return;
+            }
+            
+            // If we have an extension or in-app wallet, we don't need to create one
+            if (account || inAppAccount) {
+                console.log('Wallet detected:', account || inAppAccount);
+                setNeedsWallet(false);
+                setIsLoading(false);
+                return;
+            }
+
+            // Check auth session
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
                 router.push('/auth/login');
                 return;
             }
-        };
-        checkSession();
-    }, [supabase, router]);
 
+            // No active account, check if user has an in-app wallet in metadata
+            const { data: { user } } = await supabase.auth.getUser();
+            // Only set needsWallet to true if this is a final check (after delay)
+            if (!user?.user_metadata?.hederaAccountId || !user?.user_metadata?.hasStoredPrivateKey) {
+                console.log('User needs to create an in-app wallet');
+                
+                // Add a final check to make sure extension wallet hasn't connected
+                await new Promise(resolve => setTimeout(resolve, 500));
+                if (!account && !inAppAccount) {
+                    setNeedsWallet(true);
+                } else {
+                    setNeedsWallet(false);
+                }
+            } else {
+                setNeedsWallet(false);
+            }
+            
+            setIsLoading(false);
+        };
+
+        checkWalletAvailability();
+    }, [supabase, router, account, inAppAccount, needsWallet]);
+
+    // Fetch balances if we have a wallet
     useEffect(() => {
+        // Skip balance fetching if we need to create a wallet
+        if (needsWallet) {
+            setIsLoading(false);
+            return;
+        }
+        
+        // Skip if we don't have an account yet but we're not in needsWallet state
+        // This means we're still loading the account
+        if (!account && !inAppAccount) {
+            return;
+        }
+
+        // Use account directly rather than activeAccount to avoid race conditions
+        const walletAccount = account || inAppAccount;
+        if (!walletAccount) return;
+        
         async function fetchBalances() {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
-                if (!session) return; // Skip fetching if no session
+                if (!session) return;
 
-                // Get user's Hedera account ID from Supabase
-                const { data: userData, error: userError } = await supabase
-                    .from('Users')
-                    .select('hederaAccountId')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (userError) throw userError;
-                if (!userData?.hederaAccountId) throw new Error('No Hedera account found');
-
-                // Query account balance
-                const accountId = AccountId.fromString(userData.hederaAccountId);
+                console.log('Fetching balances for account:', walletAccount);
+                
+                // Use type assertion since we've already checked walletAccount is not null
+                const accountId = AccountId.fromString(walletAccount!);
                 const query = new AccountBalanceQuery()
                     .setAccountId(accountId);
                 const balance = await query.execute(client);
-
+                
                 // Set HBAR balance first
                 const hbarBalance = balance.hbars.toString();
                 const cleanBalance = hbarBalance.replace('ℏ', '').trim();
@@ -142,7 +194,6 @@ export default function WalletPage() {
                         return currentBalances;
                     });
                 }
-
             } catch (err: any) {
                 console.error('Error fetching balances:', err);
                 setError(err.message);
@@ -152,7 +203,7 @@ export default function WalletPage() {
         }
 
         fetchBalances();
-    }, [supabase, router, tokens]);
+    }, [supabase, router, tokens, account, inAppAccount, needsWallet]);
 
     useEffect(() => {
         // Calculate total value whenever balances change
@@ -176,6 +227,38 @@ export default function WalletPage() {
         );
     }
 
+    // If user needs to create a wallet, show the creation form
+    if (needsWallet) {
+        return (
+            <div>
+                <div className="mb-8">
+                    <h1 className="text-2xl font-bold text-white">Create Wallet</h1>
+                    <p className="mt-2 text-sm text-gray-400">
+                        You need to create a wallet to view your portfolio
+                    </p>
+                </div>
+                
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
+                    <CreateWalletForm />
+                </div>
+                
+                <div className="mt-6 bg-gray-900 rounded-lg border border-gray-800 p-6">
+                    <h3 className="text-lg font-medium text-white mb-4">Connect External Wallet Instead</h3>
+                    <p className="text-sm text-gray-400 mb-4">
+                        If you prefer to use an external wallet like HashPack, you can connect it instead.
+                    </p>
+                    <button
+                        onClick={() => router.push('/')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    >
+                        Connect External Wallet
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Show portfolio if user has a wallet
     return (
         <div>
             <div className="mb-8">
@@ -197,8 +280,18 @@ export default function WalletPage() {
                     <div className="text-right">
                         <h2 className="text-lg font-medium text-white mb-4">Account ID</h2>
                         <div className="font-mono text-gray-300">
-                            {inAppAccount || 'Loading...'}
+                            {activeAccount || 'Loading...'}
                         </div>
+                        {account && (
+                            <div className="mt-2 text-xs text-blue-400">
+                                Connected via Extension Wallet
+                            </div>
+                        )}
+                        {inAppAccount && !account && (
+                            <div className="mt-2 text-xs text-green-400">
+                                In-App Wallet
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

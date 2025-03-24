@@ -10,6 +10,7 @@ import {
     CurrencyDollarIcon,
     PhotoIcon
 } from '@heroicons/react/24/outline';
+import { useWalletContext } from '@/app/hooks/useWallet';
 
 const navigation = [
     { name: 'Portfolio', href: '/wallet', icon: WalletIcon },
@@ -27,10 +28,12 @@ export default function WalletLayout({ children }: { children: React.ReactNode }
     const router = useRouter();
     const { supabase } = useSupabase();
     const [isLoading, setIsLoading] = useState(true);
+    const { account } = useWalletContext();
 
     useEffect(() => {
         const checkWalletStatus = async () => {
             try {
+                // Always allow access to the wallet pages
                 if (pathname === '/wallet/setup') {
                     setIsLoading(false);
                     return;
@@ -43,23 +46,13 @@ export default function WalletLayout({ children }: { children: React.ReactNode }
                     return;
                 }
 
-                const { data: { user } } = await supabase.auth.getUser();
-                console.log('WalletLayout - User metadata:', user?.user_metadata);
-                
-                if (!user?.user_metadata?.hederaAccountId || !user?.user_metadata?.hasStoredPrivateKey) {
-                    console.log('WalletLayout - Missing wallet info:', {
-                        hederaAccountId: user?.user_metadata?.hederaAccountId,
-                        hasStoredPrivateKey: user?.user_metadata?.hasStoredPrivateKey
-                    });
-                    router.push('/wallet/setup');
-                    return;
-                }
-
-                console.log('WalletLayout - Wallet check passed');
+                // User is authenticated, so we allow them access to the wallet section
+                // Specific pages will handle their own rendering logic based on wallet state
+                console.log('WalletLayout - Authentication check passed');
                 setIsLoading(false);
             } catch (error) {
                 console.error('WalletLayout - Error:', error);
-                router.push('/wallet/setup');
+                router.push('/auth/login');
             }
         };
 

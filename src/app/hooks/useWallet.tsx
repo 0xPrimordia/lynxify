@@ -112,6 +112,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       user: null
     }
   });
+  const [walletType, setWalletType] = useState<string | null>(null);
 
   const initializeDAppConnector = async (walletSession: any) => {
     if (!dAppConnector) {
@@ -144,12 +145,10 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
       
       if (!dAppConnector) {
         const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
-        const chainId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet;
         const ledgerId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
-        
         const methods = Object.values(HederaJsonRpcMethod);
         const events = [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged];
-        const chains = [`hedera:${network}`];
+        const chainId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet;
 
         const newDAppConnector = new DAppConnector(
           appMetadata,
@@ -626,6 +625,198 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     }
   }, [dAppConnector, sessions]);
 
+  // Add this debug function
+  const debugHistory = () => {
+    try {
+      // Inspect what's in localStorage
+      console.log("====== DEBUG WalletConnect History ======");
+      const wcHistory = localStorage.getItem('wc@2:core:0.3//history');
+      console.log("History exists in localStorage:", !!wcHistory);
+      if (wcHistory) {
+        try {
+          const parsed = JSON.parse(wcHistory);
+          console.log("History structure:", Object.keys(parsed));
+          // Looking for key 1742850624153140 specifically
+          const hasErrorKey = parsed && typeof parsed === 'object' && '1742850624153140' in parsed;
+          console.log("Has error key 1742850624153140:", hasErrorKey);
+        } catch (e) {
+          console.log("Failed to parse history:", e);
+        }
+      }
+      
+      // Check for any other WalletConnect items
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('wc@') || key.includes('walletconnect')) {
+          console.log("WalletConnect item:", key);
+          try {
+            const content = localStorage.getItem(key);
+            const parsed = JSON.parse(content || '{}');
+            console.log(`${key} structure:`, Object.keys(parsed));
+          } catch (e) {
+            console.log(`Failed to parse ${key}:`, e);
+          }
+        }
+      });
+      console.log("====== END DEBUG ======");
+    } catch (e) {
+      console.error("Debug logging failed:", e);
+    }
+  };
+
+  // Initialize client
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // First try manual reconnect which is more stable
+    forceReconnect();
+    
+    // Debug WalletConnect localStorage state
+    debugHistory();
+    
+    // Clear only problematic WalletConnect localStorage items
+    try {
+      // Only clear history-related items that could be causing issues
+      const historyKey = 'wc@2:core:0.3//history';
+      if (localStorage.getItem(historyKey)) {
+        console.log(`Removing problematic history: ${historyKey}`);
+        localStorage.removeItem(historyKey);
+      }
+      
+      // Also clear any other core items that might be corrupted
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('wc@2:core')) {
+          console.log(`Removing WalletConnect core item: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
+      console.log("Cleared problematic WalletConnect localStorage items");
+    } catch (e) {
+      console.error("Error clearing WalletConnect localStorage:", e);
+    }
+    
+    // Debug again after clearing
+    debugHistory();
+
+    let connector: DAppConnector | null = null;
+    let initializationAttempts = 0;
+    const MAX_ATTEMPTS = 2;
+    
+    const initializeConnector = async () => {
+      try {
+        initializationAttempts++;
+        console.log(`Starting connector initialization (attempt ${initializationAttempts})...`);
+        
+        const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+        const ledgerId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
+        const methods = Object.values(HederaJsonRpcMethod);
+        const events = [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged];
+        const chainId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet;
+
+        console.log("Creating DAppConnector...");
+        
+        try {
+          connector = new DAppConnector(
+            appMetadata,
+            ledgerId,
+            process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
+            methods,
+            events,
+            [chainId]
+          );
+          
+          console.log("About to call init() on connector...");
+          
+          // Add a timeout to prevent hanging
+          const initPromise = connector.init();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("DAppConnector initialization timed out")), 7000)
+          );
+          
+          // Race the initialization against a timeout
+          await Promise.race([initPromise, timeoutPromise]);
+          console.log("DAppConnector init() completed successfully");
+          
+          // Set the connector
+          setDAppConnector(connector);
+        } catch (error) {
+          console.error("Error initializing DAppConnector:", error);
+          
+          if (initializationAttempts < MAX_ATTEMPTS) {
+            // Clear problematic history again and retry
+            try {
+              localStorage.removeItem('wc@2:core:0.3//history');
+              console.log("Cleared history for retry");
+            } catch (e) {
+              console.error("Failed to clear history for retry:", e);
+            }
+            
+            setTimeout(initializeConnector, 1000);
+            return;
+          } else {
+            console.log("Maximum retries reached, proceeding with account only");
+          }
+        }
+        
+        // Skip session restoration and just set account if available
+        const storedSession = getStoredSession();
+        if (storedSession?.wallet?.accountId) {
+          console.log("Using simple account restoration for", storedSession.wallet.accountId);
+          setAccount(storedSession.wallet.accountId);
+          setWalletType('extension');
+          
+          // Skip setting session state completely for now
+          console.log("Setting basic account info without session object");
+        }
+        
+        // Set available signers and extensions if connector succeeded
+        if (connector?.signers) {
+          console.log("Setting signers:", connector.signers.length);
+          setSigners(connector.signers);
+        }
+        
+        if (connector?.extensions) {
+          console.log("Setting extensions:", connector.extensions.length);
+          setExtensions(connector.extensions);
+        }
+        
+      } catch (error) {
+        console.error('Failed to initialize wallet connector:', error);
+        setError('Failed to initialize wallet connector');
+        clearStoredSession();
+      }
+    };
+    
+    initializeConnector();
+    
+    // Cleanup function
+    return () => {
+      if (connector && connector.walletConnectClient) {
+        console.log("Cleaning up connector on unmount");
+        connector = null;
+      }
+    };
+  }, []);
+
+  // Modify forceReconnect to be simpler and not mess with session state
+  const forceReconnect = async () => {
+    try {
+      const storedSession = getStoredSession();
+      const storedAccountId = storedSession?.wallet?.accountId;
+      
+      if (storedAccountId) {
+        console.log("Manually reconnecting wallet (just account ID):", storedAccountId);
+        setAccount(storedAccountId);
+        setWalletType('extension');
+        // Don't touch sessionState at all
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Force reconnect failed:", error);
+      return false;
+    }
+  };
+
   return (
     <WalletContext.Provider
       value={{
@@ -645,7 +836,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
         sessionState,
         handleDisconnect,
         setError: setError,
-        walletType: null,
+        walletType,
         setAccount,
       }}
     >

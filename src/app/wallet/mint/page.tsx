@@ -376,7 +376,8 @@ export default function MintPage() {
                         clxyAmount: amounts.clxy,
                         lynxAmount: amounts.lynx,
                         accountId: activeAccount,
-                        step: currentStep
+                        step: currentStep,
+                        isExtensionWallet: !!extensionAccount  // This tells the API how to prepare the transaction
                     })
                 });
 
@@ -387,7 +388,27 @@ export default function MintPage() {
                 }
 
                 // Execute transaction with connected wallet
-                if (walletType === 'inApp') {
+                console.log('Transaction execution info:', {
+                    extensionAccount,
+                    inAppAccount,
+                    walletType,
+                    usingExtension: !!extensionAccount
+                });
+
+                if (extensionAccount) {
+                    console.log("Using extension wallet for transaction:", extensionAccount);
+                    
+                    // This is what needs fixing - we need to properly call the extension wallet
+                    txResult = await handleExtensionTransaction(
+                        data.transaction,
+                        extensionAccount,
+                        (params) => {
+                            console.log("Calling signAndExecuteTransaction with params:", params);
+                            return signAndExecuteTransaction(params);
+                        }
+                    );
+                } else if (inAppAccount) {
+                    // Use in-app wallet flow
                     txResult = await handleInAppTransaction(
                         data.transaction,
                         signTransaction,
@@ -404,14 +425,8 @@ export default function MintPage() {
                             }
                         }
                     );
-                } else if (walletType === 'extension') {
-                    txResult = await handleExtensionTransaction(
-                        data.transaction,
-                        extensionAccount!,
-                        signAndExecuteTransaction
-                    );
                 } else {
-                    throw new Error('No wallet client available');
+                    throw new Error('No wallet connected');
                 }
                 
                 if (txResult.status !== 'SUCCESS') {
