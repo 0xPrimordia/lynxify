@@ -1,6 +1,6 @@
 "use client";
 import { ReactNode, createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Client, LedgerId } from "@hashgraph/sdk";
+import { Client, LedgerId, AccountId } from "@hashgraph/sdk";
 import {
   HederaSessionEvent,
   HederaJsonRpcMethod,
@@ -8,6 +8,7 @@ import {
   HederaChainId,
   ExtensionData,
   DAppSigner,
+  base64StringToUint8Array
 } from '@hashgraph/hedera-wallet-connect';
 import { SessionTypes } from '@walletconnect/types';
 import { supabase } from '@/utils/supabase';
@@ -26,6 +27,15 @@ const appMetadata = {
     description: "A Dex on Hedera for high volume trading",
     icons: ["/share-image.png"],
     url: process.env.NEXT_PUBLIC_APP_URL as string
+}
+
+interface ModalState {
+  open: boolean;
+}
+
+interface ConnectionAttempt {
+  promise: ((value: void | PromiseLike<void>) => void) | null;
+  reject: ((reason?: any) => void) | null;
 }
 
 interface WalletContextType {
@@ -89,7 +99,7 @@ interface WalletProviderProps {
     children: ReactNode;
 }
 
-export const WalletProvider = ({children}: WalletProviderProps) => {
+export const WalletProvider = ({ children }: WalletProviderProps) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [sessions, setSessions] = useState<SessionTypes.Struct[]>([]);
   const [signers, setSigners] = useState<DAppSigner[]>([]);
@@ -103,7 +113,7 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     wallet: {
       isConnected: false,
       accountId: null,
-      session: null as SessionTypes.Struct | null,
+      session: null
     },
     auth: {
       isAuthenticated: false,
@@ -114,340 +124,142 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
   });
   const [walletType, setWalletType] = useState<string | null>(null);
 
-  const initializeDAppConnector = async (walletSession: any) => {
-    if (!dAppConnector) {
-        console.error('DAppConnector not initialized');
-        return false;
-    }
-    try {
-        const sessions = dAppConnector.walletConnectClient?.session.getAll();
-        const matchingSession = sessions?.find(ws => 
-            ws.topic === walletSession.topic
-        );
-        
-        if (matchingSession) {
-            console.log("Restoring wallet connection...");
-            setSessions([matchingSession]);
-            return true;
-        }
-        return false;
-    } catch (error) {
-        console.error('Failed to initialize DAppConnector:', error);
-        return false;
-    }
-  };
-
   const init = useCallback(async () => {
-    if (isInitialized) return;
+    if (dAppConnector) {
+      console.log("DAppConnector already initialized");
+      return dAppConnector;
+    }
+
+    console.log("Initializing DAppConnector...");
     
     try {
-      const storedSession = getStoredSession();
+      // Create new connector instance
+      const connector = new DAppConnector(
+        appMetadata,
+        process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET,
+        process.env.NEXT_PUBLIC_WALLETCONNECT_ID as string,
+        Object.values(HederaJsonRpcMethod),
+        [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged],
+        [process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet]
+      );
+
+      // Initialize with existing state
+      await connector.init();
+      console.log("DAppConnector initialized successfully");
       
-      if (!dAppConnector) {
-        const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
-        const ledgerId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
-        const methods = Object.values(HederaJsonRpcMethod);
-        const events = [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged];
-        const chainId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet;
+      setDAppConnector(connector);
+      setSigners(connector.signers || []);
+      setIsInitialized(true);
 
-        const newDAppConnector = new DAppConnector(
-          appMetadata,
-          ledgerId,
-          process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
-          methods,
-          events,
-          [chainId]
-        );
+      // Set up event listeners
+      if (connector.walletConnectClient) {
+        connector.walletConnectClient.events.on('session_delete', () => {
+          console.log('Session deleted');
+          handleDisconnectSessions().catch(console.error);
+        });
 
-        await newDAppConnector.init();
+        // Check for existing sessions
+        const existingSessions = connector.walletConnectClient.session.getAll();
+        console.log("All existing sessions:", existingSessions);
         
-        setDAppConnector(newDAppConnector);
-        setSigners(newDAppConnector.signers);
-        setIsInitialized(true);
-
-        if (storedSession?.wallet.session && storedSession?.auth.session) {
-          try {
-            const walletSessions = newDAppConnector.walletConnectClient?.session.getAll();
-            const matchingSession = walletSessions?.find(ws => 
-                ws.topic === storedSession.wallet.session?.topic
-            );
-            
-            if (matchingSession) {
-              setSessions([matchingSession]);
-              setAccount(storedSession.wallet.accountId || "");
-              
-              if (storedSession.auth.session) {
-                const { data, error } = await supabase.auth.setSession({
-                  access_token: storedSession.auth.session.access_token,
-                  refresh_token: storedSession.auth.session.refresh_token
+        if (existingSessions.length > 0) {
+          const validSessions = existingSessions.filter(session => 
+            session.expiry > Math.floor(Date.now() / 1000)
+          );
+          
+          if (validSessions.length > 0) {
+            console.log("Found valid existing sessions:", validSessions);
+            setSessions(validSessions);
+            const accountId = validSessions[0].namespaces?.hedera?.accounts?.[0]?.split(':').pop();
+            if (accountId) {
+              setAccount(accountId);
+              const storedSession = getStoredSession();
+              if (storedSession?.auth?.session) {
+                setSessionState({
+                  wallet: {
+                    isConnected: true,
+                    accountId,
+                    session: validSessions[0]
+                  },
+                  auth: storedSession.auth
                 });
-                
-                if (!error && data.session) {
-                  setUserId(storedSession.auth.userId || null);
-                  setSessionState({
-                    wallet: {
-                      isConnected: true,
-                      accountId: storedSession.wallet.accountId,
-                      session: matchingSession || null
-                    },
-                    auth: {
-                      isAuthenticated: true,
-                      userId: storedSession.auth.userId,
-                      session: data.session,
-                      user: data.session.user
-                    }
-                  });
-                }
+                supabase.auth.setSession(storedSession.auth.session).catch(console.error);
               }
-            } else {
-              clearStoredSession();
             }
-          } catch (error) {
-            console.error('Session restoration failed:', error);
+          } else {
+            // Clean up expired sessions
+            existingSessions.forEach(session => {
+              connector.disconnect(session.topic).catch(console.error);
+            });
             clearStoredSession();
           }
         }
       }
+
+      console.log("Hedera Wallet Connect Initialization Complete");
+      return connector;
     } catch (error) {
-      console.error("Initialization failed:", error);
-      clearStoredSession();
-    }
-  }, [isInitialized, dAppConnector]);
-
-  const restoreSession = useCallback(async (storedSession: SessionState) => {
-    try {
-      if (!dAppConnector) return;
-      
-      if (storedSession.wallet.session) {
-        const walletSessions = dAppConnector.walletConnectClient?.session.getAll();
-        const matchingSession = walletSessions?.find(ws => 
-            ws.topic === storedSession.wallet.session?.topic
-        );
-        
-        if (matchingSession) {
-          setSessions([matchingSession]);
-          setAccount(storedSession.wallet.accountId || "");
-          
-          setSessionState(prevState => ({
-            ...prevState,
-            wallet: {
-              isConnected: true,
-              accountId: storedSession.wallet.accountId,
-              session: matchingSession as SessionTypes.Struct | null
-            }
-          }));
-        } else {
-          throw new Error("No matching wallet session found");
-        }
-      }
-
-      if (storedSession.auth.session) {
-        const { data, error } = await supabase.auth.setSession({
-          access_token: storedSession.auth.session.access_token,
-          refresh_token: storedSession.auth.session.refresh_token
-        });
-        
-        if (error) throw error;
-        
-        setUserId(storedSession.auth.userId || null);
-        
-        setSessionState(prevState => ({
-          ...prevState,
-          auth: {
-            isAuthenticated: true,
-            userId: storedSession.auth.userId,
-            session: data.session,
-            user: data.session?.user || null
-          }
-        }));
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Session restoration failed:", error);
-      clearStoredSession();
+      console.error("Failed to initialize WalletConnect:", error);
+      // Clean up on initialization failure
+      setDAppConnector(null);
+      setIsInitialized(false);
+      setSessions([]);
       setSessionState({
         wallet: { isConnected: false, accountId: null, session: null },
         auth: { isAuthenticated: false, userId: null, session: null, user: null }
       });
-      return false;
+      clearStoredSession();
+      throw error;
     }
-  }, [dAppConnector]);
+  }, []);
 
   useEffect(() => {
-    init();
+    if (!isInitialized) {
+      init().catch(console.error);
+    }
+  }, [isInitialized, init]);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      switch (event) {
-        case 'SIGNED_OUT':
-          setUserId(null);
-          setAccount("");
-          clearStoredSession();
-          break;
-          
-        case 'INITIAL_SESSION':
-        case 'SIGNED_IN': {
-          if (session?.user) {
-            setUserId(session.user.id);
-            
-            if (isInitialized && dAppConnector) {
-              const storedSession = getStoredSession();
-              if (storedSession?.wallet.session) {
-                try {
-                  await restoreSession(storedSession);
-                } catch (error) {
-                  console.error('Failed to restore wallet session:', error);
-                  clearStoredSession();
-                }
-              }
-            }
-          }
-          break;
-        }
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [isInitialized, dAppConnector, init, restoreSession]);
-
-  const handleConnect = async (extensionId?: string) => {
+  const handleConnect = async () => {
     console.log('handleConnect called');
     setIsConnecting(true);
     setError(null);
 
     try {
-        if (!dAppConnector) {
-            await init();
-        }
-
-        if (!dAppConnector) {
+        const connector = dAppConnector || await init();
+        if (!connector) {
             throw new Error("DApp Connector not initiated");
         }
 
-        // Clear any existing sessions first
-        if (sessions?.length > 0) {
-            console.log('Clearing existing sessions before connect');
-            await handleDisconnectSessions();
-        }
+        // Get new WalletConnect session
+        const session = await connector.openModal();
+        console.log("WalletConnect session response:", session);
 
-        // Get session through modal or extension
-        const session = extensionId ? 
-            await dAppConnector.connectExtension(extensionId) : 
-            await dAppConnector.openModal();
+        if (!session?.topic) {
+            throw new Error('Invalid session response');
+        }
 
         const accountId = session.namespaces?.hedera?.accounts?.[0]?.split(':').pop();
         if (!accountId) {
             throw new Error('No account ID in session');
         }
 
-        // Set wallet state
+        // Set up WalletConnect state first
         setSessions([session]);
         setAccount(accountId);
 
-        // Check if we already have a valid auth session
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
-        
-        if (existingSession?.user) {
-            console.log('Found existing auth session, skipping authentication');
-            setUserId(existingSession.user.id);
-            persistSession(session, existingSession);
-            return;
-        }
-
-        console.log('No existing auth session, requesting signature');
-        const message = `Authenticate with Lynxify: ${Date.now()}`;
-        const signedMessage = await dAppConnector.signMessage({
+        // Get signature for auth
+        const message = "Authenticate with Lynxify";
+        const signedMessage = await connector.signMessage({
             signerAccountId: accountId,
             message
         });
 
-        const sessionAccount = session.namespaces?.hedera?.accounts?.[0];
-        if (sessionAccount) {
-            const accountId = sessionAccount.split(':').pop();
-            if (!accountId) throw new Error("Failed to extract account ID");
-            
-            console.log('Account ID:', accountId);
-
-            // First check if user exists in database
-            const { data: users } = await supabase
-                .from('Users')
-                .select('*')
-                .eq('hederaAccountId', accountId);
-            
-            const existingUser = users && users.length > 0 ? users[0] : null;
-            if (!existingUser) {
-                // Only request signature if user doesn't exist
-                const message = "Authenticate with Lynxify";
-                const signParams = {
-                    signerAccountId: accountId,
-                    message: message,
-                };
-
-                console.log('Sign params:', signParams);
-                try {
-                    const signedMessage = await dAppConnector.signMessage(signParams);
-                    console.log('Signed message from dAppConnector:', signedMessage);
-
-                    const dataToSend = { 
-                        accountId, 
-                        signature: signedMessage,
-                        message 
-                    };
-
-                    const response = await fetch('/api/auth/wallet-connect', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(dataToSend),
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to authenticate user');
-                    }
-
-                    const authData = await response.json();
-                    console.log('Auth response data:', authData);
-
-                    if (authData.session) {
-                        await supabase.auth.setSession(authData.session);
-                    }
-
-                    if (authData.token) {
-                        localStorage.setItem('authToken', authData.token);
-                    }
-                } catch (signError: any) {
-                    console.error('Error signing or authenticating:', signError);
-                    setError(signError.message || 'Failed to sign message or authenticate');
-                    return;
-                }
-            }
-
-            // Set the account regardless of whether signature was needed
-            setAccount(accountId);
-            
-            const { data: { session: supabaseSession } } = await supabase.auth.getSession();
-            if (supabaseSession?.user) {
-                console.log('Setting userId from session:', supabaseSession.user.id);
-                setUserId(supabaseSession.user.id);
-            } else {
-                console.log('No valid session found after connection');
-                // Optionally refresh the session
-                const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
-                if (refreshedSession?.user) {
-                    console.log('Setting userId from refreshed session:', refreshedSession.user.id);
-                    setUserId(refreshedSession.user.id);
-                }
-            }
-        }
-
         // Authenticate with backend
         const response = await fetch('/api/auth/wallet-connect', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify({ 
                 accountId, 
                 signature: signedMessage,
@@ -457,54 +269,89 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`Authentication failed: ${errorData.error || 'Unknown error'}`);
+            throw new Error(errorData.error || 'Failed to authenticate user');
         }
 
-        const { session: authSession } = await response.json();
-        setUserId(authSession.user.id);
-        persistSession(session, authSession);
+        const authData = await response.json();
+        console.log('Auth response data:', authData);
+
+        // Set up Supabase session
+        if (authData.session) {
+            // Set up Supabase auth first
+            await supabase.auth.setSession(authData.session);
+            
+            // Then update all state atomically
+            setUserId(authData.session.user.id);
+            setSessionState({
+                wallet: {
+                    isConnected: true,
+                    accountId,
+                    session
+                },
+                auth: {
+                    isAuthenticated: true,
+                    userId: authData.session.user.id,
+                    session: authData.session,
+                    user: authData.session.user
+                }
+            });
+
+            // Persist after everything is set up
+            persistSession(session, authData.session);
+        } else {
+            throw new Error('No session returned from auth endpoint');
+        }
 
     } catch (error: any) {
         console.error('Connection error:', error);
-        setError(error.message);
-        clearStoredSession();
+        await handleDisconnectSessions();
     } finally {
         setIsConnecting(false);
     }
   };
 
-  // Helper function to establish wallet connection
-  const initializeWalletConnection = async () => {
-    if (!dAppConnector) {
-      throw new Error('DApp connector not initialized');
-    }
-
-    // Reuse existing session if available
-    if (sessions?.[0]) {
-      const accountId = sessions[0].namespaces?.hedera?.accounts?.[0]?.split(':').pop();
-      return { session: sessions[0], accountId };
-    }
-
-    try {
-      const session = await dAppConnector.connect((uri) => {
-        if (window.hashpack) {
-          window.hashpack.openWalletConnect(uri);
+  useEffect(() => {
+    const restoreSession = async () => {
+      const storedSession = getStoredSession();
+      if (storedSession?.wallet?.accountId && storedSession?.auth?.session) {
+        try {
+          // Restore Supabase session first
+          await supabase.auth.setSession(storedSession.auth.session);
+          
+          // Then restore wallet state
+          setAccount(storedSession.wallet.accountId);
+          setSessionState(storedSession);
+          setSessions(storedSession.wallet.session ? [storedSession.wallet.session] : []);
+          setUserId(storedSession.auth.userId);
+        } catch (error) {
+          console.error('Failed to restore session:', error);
+          clearStoredSession();
         }
-      });
-
-      const accountId = session.namespaces?.hedera?.accounts?.[0]?.split(':').pop();
-
-      if (!accountId) {
-        throw new Error('No account ID in session');
       }
+    };
 
-      setSessions([session]);
-      return { session, accountId };
+    restoreSession();
+  }, []);
+
+  const handleDisconnect = useCallback(async () => {
+    try {
+      if (dAppConnector && sessions?.[0]) {
+        await dAppConnector.disconnect(sessions[0].topic);
+      }
+      
+      clearStoredSession();
+      setSessions([]);
+      setAccount('');
+      setSessionState({
+        wallet: { isConnected: false, accountId: null, session: null },
+        auth: { isAuthenticated: false, userId: null, session: null, user: null }
+      });
     } catch (error) {
-      console.error('Failed to establish wallet connection:', error);
-      throw error;
+      console.error('Error disconnecting:', error);
+      // Force cleanup even on error
+      clearStoredSession();
     }
-  };
+  }, [dAppConnector, sessions]);
 
   const handleDisconnectSessions = async () => {
     try {
@@ -590,224 +437,21 @@ export const WalletProvider = ({children}: WalletProviderProps) => {
     });
   };
 
-  const handleDisconnect = useCallback(async () => {
-    try {
-        if (dAppConnector && sessions) {
-            // Disconnect WalletConnect sessions
-            for (const session of sessions) {
-                await dAppConnector.disconnect(session.topic);
-            }
-        }
-        
-        // Clear stored session and Supabase auth
-        await clearStoredSession();
-        
-        // Reset local state
-        setAccount('');
-        setUserId(null);
-        setSessions([]);
-        setSessionState({
-            wallet: {
-                isConnected: false,
-                accountId: null,
-                session: null
-            },
-            auth: {
-                isAuthenticated: false,
-                userId: null,
-                session: null,
-                user: null
-            }
-        });
-    } catch (error) {
-        console.error('Error disconnecting:', error);
-        setError(error instanceof Error ? error.message : 'Failed to disconnect');
-    }
-  }, [dAppConnector, sessions]);
-
-  // Add this debug function
-  const debugHistory = () => {
-    try {
-      // Inspect what's in localStorage
-      console.log("====== DEBUG WalletConnect History ======");
-      const wcHistory = localStorage.getItem('wc@2:core:0.3//history');
-      console.log("History exists in localStorage:", !!wcHistory);
-      if (wcHistory) {
-        try {
-          const parsed = JSON.parse(wcHistory);
-          console.log("History structure:", Object.keys(parsed));
-          // Looking for key 1742850624153140 specifically
-          const hasErrorKey = parsed && typeof parsed === 'object' && '1742850624153140' in parsed;
-          console.log("Has error key 1742850624153140:", hasErrorKey);
-        } catch (e) {
-          console.log("Failed to parse history:", e);
-        }
-      }
-      
-      // Check for any other WalletConnect items
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('wc@') || key.includes('walletconnect')) {
-          console.log("WalletConnect item:", key);
-          try {
-            const content = localStorage.getItem(key);
-            const parsed = JSON.parse(content || '{}');
-            console.log(`${key} structure:`, Object.keys(parsed));
-          } catch (e) {
-            console.log(`Failed to parse ${key}:`, e);
-          }
-        }
-      });
-      console.log("====== END DEBUG ======");
-    } catch (e) {
-      console.error("Debug logging failed:", e);
-    }
-  };
-
-  // Initialize client
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    // First try manual reconnect which is more stable
-    forceReconnect();
-    
-    // Debug WalletConnect localStorage state
-    debugHistory();
-    
-    // Clear only problematic WalletConnect localStorage items
-    try {
-      // Only clear history-related items that could be causing issues
-      const historyKey = 'wc@2:core:0.3//history';
-      if (localStorage.getItem(historyKey)) {
-        console.log(`Removing problematic history: ${historyKey}`);
-        localStorage.removeItem(historyKey);
-      }
-      
-      // Also clear any other core items that might be corrupted
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('wc@2:core')) {
-          console.log(`Removing WalletConnect core item: ${key}`);
-          localStorage.removeItem(key);
-        }
-      });
-      console.log("Cleared problematic WalletConnect localStorage items");
-    } catch (e) {
-      console.error("Error clearing WalletConnect localStorage:", e);
-    }
-    
-    // Debug again after clearing
-    debugHistory();
-
-    let connector: DAppConnector | null = null;
-    let initializationAttempts = 0;
-    const MAX_ATTEMPTS = 2;
-    
-    const initializeConnector = async () => {
-      try {
-        initializationAttempts++;
-        console.log(`Starting connector initialization (attempt ${initializationAttempts})...`);
-        
-        const network = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
-        const ledgerId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? LedgerId.MAINNET : LedgerId.TESTNET;
-        const methods = Object.values(HederaJsonRpcMethod);
-        const events = [HederaSessionEvent.ChainChanged, HederaSessionEvent.AccountsChanged];
-        const chainId = process.env.NEXT_PUBLIC_HEDERA_NETWORK === 'mainnet' ? HederaChainId.Mainnet : HederaChainId.Testnet;
-
-        console.log("Creating DAppConnector...");
-        
-        try {
-          connector = new DAppConnector(
-            appMetadata,
-            ledgerId,
-            process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
-            methods,
-            events,
-            [chainId]
-          );
-          
-          console.log("About to call init() on connector...");
-          
-          // Add a timeout to prevent hanging
-          const initPromise = connector.init();
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("DAppConnector initialization timed out")), 7000)
-          );
-          
-          // Race the initialization against a timeout
-          await Promise.race([initPromise, timeoutPromise]);
-          console.log("DAppConnector init() completed successfully");
-          
-          // Set the connector
-          setDAppConnector(connector);
-        } catch (error) {
-          console.error("Error initializing DAppConnector:", error);
-          
-          if (initializationAttempts < MAX_ATTEMPTS) {
-            // Clear problematic history again and retry
-            try {
-              localStorage.removeItem('wc@2:core:0.3//history');
-              console.log("Cleared history for retry");
-            } catch (e) {
-              console.error("Failed to clear history for retry:", e);
-            }
-            
-            setTimeout(initializeConnector, 1000);
-            return;
-          } else {
-            console.log("Maximum retries reached, proceeding with account only");
-          }
-        }
-        
-        // Skip session restoration and just set account if available
-        const storedSession = getStoredSession();
-        if (storedSession?.wallet?.accountId) {
-          console.log("Using simple account restoration for", storedSession.wallet.accountId);
-          setAccount(storedSession.wallet.accountId);
-          setWalletType('extension');
-          
-          // Skip setting session state completely for now
-          console.log("Setting basic account info without session object");
-        }
-        
-        // Set available signers and extensions if connector succeeded
-        if (connector?.signers) {
-          console.log("Setting signers:", connector.signers.length);
-          setSigners(connector.signers);
-        }
-        
-        if (connector?.extensions) {
-          console.log("Setting extensions:", connector.extensions.length);
-          setExtensions(connector.extensions);
-        }
-        
-      } catch (error) {
-        console.error('Failed to initialize wallet connector:', error);
-        setError('Failed to initialize wallet connector');
-        clearStoredSession();
-      }
-    };
-    
-    initializeConnector();
-    
-    // Cleanup function
-    return () => {
-      if (connector && connector.walletConnectClient) {
-        console.log("Cleaning up connector on unmount");
-        connector = null;
-      }
-    };
-  }, []);
-
-  // Modify forceReconnect to be simpler and not mess with session state
+  // Modify forceReconnect to be simpler and provide more debugging info
   const forceReconnect = async () => {
     try {
       const storedSession = getStoredSession();
       const storedAccountId = storedSession?.wallet?.accountId;
       
       if (storedAccountId) {
-        console.log("Manually reconnecting wallet (just account ID):", storedAccountId);
+        console.log("Manually reconnecting wallet:", {
+          accountId: storedAccountId,
+          hasSession: !!storedSession?.wallet?.session,
+          isInApp: storedSession?.wallet?.isInAppWallet
+        });
+        
         setAccount(storedAccountId);
-        setWalletType('extension');
-        // Don't touch sessionState at all
+        setWalletType(storedSession?.wallet?.isInAppWallet ? 'inApp' : 'extension');
         return true;
       }
       return false;

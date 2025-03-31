@@ -388,24 +388,14 @@ export default function MintPage() {
                 }
 
                 // Execute transaction with connected wallet
-                console.log('Transaction execution info:', {
-                    extensionAccount,
-                    inAppAccount,
-                    walletType,
-                    usingExtension: !!extensionAccount
-                });
+                console.log(`Transaction step ${currentStep} - executing with wallet`);
 
                 if (extensionAccount) {
-                    console.log("Using extension wallet for transaction:", extensionAccount);
-                    
-                    // This is what needs fixing - we need to properly call the extension wallet
+                    // Direct call to extension wallet handler
                     txResult = await handleExtensionTransaction(
                         data.transaction,
                         extensionAccount,
-                        (params) => {
-                            console.log("Calling signAndExecuteTransaction with params:", params);
-                            return signAndExecuteTransaction(params);
-                        }
+                        signAndExecuteTransaction
                     );
                 } else if (inAppAccount) {
                     // Use in-app wallet flow
@@ -447,7 +437,7 @@ export default function MintPage() {
 
         } catch (error: any) {
             console.error('Mint error:', error);
-            setError(error.message);
+            setError(error.message || 'An unknown error occurred');
         } finally {
             setIsLoading(false);
             setIsSubmitting(false);

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar, ContractCallQuery, PrivateKey } from '@hashgraph/sdk';
+import { Client, ContractId, ContractExecuteTransaction, ContractFunctionParameters, AccountId, TransactionId, Hbar, ContractCallQuery, PrivateKey, TokenId, TokenAssociateTransaction } from '@hashgraph/sdk';
 import { transactionToBase64String } from '@hashgraph/hedera-wallet-connect';
 import BigNumber from 'bignumber.js';
 
@@ -118,6 +118,123 @@ export async function POST(req: Request) {
             description = `Approve ${clxyAmount} CLXY for LYNX minting`;
         }
         else if (step === 3) {
+            // First check if account is associated with LYNX token
+            const lynxTokenId = process.env.LYNX_TOKEN_ID;
+            console.log('Checking token association for:', lynxTokenId);
+            
+            try {
+                // Format token ID correctly for mirror node API
+                const formattedTokenId = lynxTokenId.includes('.') 
+                    ? lynxTokenId // Already in full format
+                    : `0.0.${lynxTokenId}`; // Add the prefix if needed
+                
+                const mirrorNodeUrl = `https://${process.env.NEXT_PUBLIC_HEDERA_NETWORK}.mirrornode.hedera.com/api/v1/accounts/${accountId}/tokens?token.id=${formattedTokenId}`;
+                console.log('Querying mirror node:', mirrorNodeUrl);
+                
+                const associationCheck = await fetch(mirrorNodeUrl);
+                
+                if (!associationCheck.ok) {
+                    console.error('Mirror node response not ok:', await associationCheck.text());
+                    throw new Error('Failed to check token association status');
+                }
+                
+                const associationData = await associationCheck.json();
+                const needsAssociation = !associationData.tokens || associationData.tokens.length === 0;
+                
+                console.log('Association check result:', {
+                    accountId,
+                    tokenId: formattedTokenId,
+                    needsAssociation,
+                    tokens: associationData.tokens
+                });
+                
+                if (needsAssociation) {
+                    console.log('Account needs token association, creating transaction');
+                    
+                    // Create token association transaction
+                    const tokenId = TokenId.fromString(formattedTokenId);
+                    
+                    const associateTransaction = new TokenAssociateTransaction()
+                        .setAccountId(senderAccountId)
+                        .setTokenIds([tokenId])
+                        .setTransactionId(TransactionId.generate(senderAccountId))
+                        .setMaxTransactionFee(new Hbar(10)); // Higher fee for reliability
+                    
+                    // CRITICAL: DO NOT FREEZE for extension wallets
+                    if (!isExtensionWallet) {
+                        console.log('Freezing association transaction for in-app wallet');
+                        associateTransaction.freezeWith(client);
+                    } else {
+                        console.log('NOT freezing association transaction for extension wallet');
+                    }
+                    
+                    description = `Associate account with LYNX token`;
+                    
+                    console.log('Token association created:', {
+                        accountId,
+                        tokenId: formattedTokenId, 
+                        isExtensionWallet,
+                        isFrozen: !isExtensionWallet,
+                        fee: '10 HBAR'
+                    });
+                    
+                    // Return special step 3.5 to handle association before minting
+                    return NextResponse.json({ 
+                        transaction: transactionToBase64String(associateTransaction),
+                        step: 3.5,
+                        totalSteps: 4,
+                        description,
+                        nextStep: 3.5,
+                        isExtensionWallet
+                    });
+                }
+            } catch (err) {
+                console.error('Error checking token association:', err);
+                // Continue to minting if association check fails
+            }
+            
+            // Calculate required HBAR amount using the contract
+            const hbarQuery = new ContractCallQuery()
+                .setContractId(contractId)
+                .setGas(300000) // Increased gas for testnet
+                .setFunction("calculateRequiredHBAR", new ContractFunctionParameters().addUint256(lynxValue))
+                .setQueryPayment(new Hbar(0.01));
+            
+            const hbarResult = await hbarQuery.execute(client);
+            const exactHbarRequired = hbarResult.getUint256(0);
+            
+            console.log('Contract calculation for HBAR:', {
+                lynxValue: lynxValue.toString(),
+                exactHbarRequired: exactHbarRequired.toString()
+            });
+            
+            // Create transaction with exact HBAR amount
+            transaction = new ContractExecuteTransaction()
+                .setContractId(contractId)
+                .setGas(3000000) // Increased gas for testnet
+                .setFunction(
+                    "mint",
+                    new ContractFunctionParameters()
+                        .addUint256(lynxValue)
+                )
+                .setPayableAmount(Hbar.fromTinybars(exactHbarRequired));
+            
+            // For ALL transactions, set ID and max fee
+            transaction = transaction
+                .setTransactionId(TransactionId.generate(senderAccountId))
+                .setMaxTransactionFee(new Hbar(5));
+            
+            // Only freeze for in-app wallets
+            if (!isExtensionWallet) {
+                transaction = transaction.freezeWith(client);
+            }
+                
+            description = `Mint ${lynxAmount} LYNX tokens`;
+        }
+        else if (step === 3.5) {
+            // Step after token association - proceed with minting
+            console.log('Proceeding with mint after token association');
+            
             // Calculate required HBAR amount using the contract
             const hbarQuery = new ContractCallQuery()
                 .setContractId(contractId)
@@ -169,7 +286,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ 
             transaction: encodedTx,
             step,
-            totalSteps: 3,
+            totalSteps: step === 3.5 ? 4 : 3,
             description,
             nextStep: step < 3 ? step + 1 : null,
             isExtensionWallet

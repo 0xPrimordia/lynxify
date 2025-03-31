@@ -5,6 +5,7 @@ export const handleExtensionTransaction = async (
     account: string,
     signAndExecuteTransaction: (params: SignAndExecuteTransactionParams) => Promise<any>
 ) => {
+    // Simple pass-through implementation matching production
     return signAndExecuteTransaction({
         transactionList: tx,
         signerAccountId: account
